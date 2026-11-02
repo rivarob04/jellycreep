@@ -12,14 +12,15 @@
   {% endfor %}
 </div>
 {% endif %}
-<div class="grid g4 mb">
+<div id="live-streams">{% include "_live.html" %}</div>
+
+<div class="grid g4 mb mt">
   <div class="card tile"><div class="n">{{ streams|length }}</div><div class="l">Streams now</div></div>
   <div class="card tile"><div class="n">{{ streams|selectattr('play_method', 'equalto', 'Transcode')|list|length }}</div><div class="l">Transcoding</div></div>
   <div class="card tile"><div class="n">{{ today.plays }}</div><div class="l">Plays · 24h</div></div>
   <div class="card tile"><div class="n">{{ today.seconds|duration }}</div><div class="l">Watched · 24h</div></div>
 </div>
-<div class="spread mb"><h1 style="margin:0">Now playing</h1><span class="muted small">Live</span></div>
-<div id="live-streams">{% include "_streams.html" %}</div>
+
 
 <div class="spread section-title"><h2 style="margin:0">Recently watched</h2><a class="small" href="/history">All history →</a></div>
 {% if recent %}

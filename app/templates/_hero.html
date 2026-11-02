@@ -1,0 +1,60 @@
+{# Jellyfin-style hero: one slide per stream (swipe), or the last thing watched. #}
+{% if streams %}
+<section class="hero-wrap" aria-label="Now playing">
+  <div class="hero-track" data-hero-track>
+    {% for s in streams %}
+    {% set bd = '/img/' ~ s.server_id ~ '/' ~ s.poster_id %}
+    <article class="hero" id="hero-{{ loop.index }}">
+      {% if s.poster_id %}<div class="hero-bg" style="background-image:url('{{ bd }}?t=Backdrop&h=900')"></div>{% endif %}
+      <div class="hero-shade"></div>
+      <div class="hero-body">
+        {% if s.poster_id %}<img class="hero-poster" src="{{ bd }}?h=420" alt="" onerror="this.remove()">{% endif %}
+        <div class="hero-info">
+          <div class="hero-chips">
+            {% if s.is_paused %}<span class="live-chip paused">❚❚ Paused</span>{% else %}<span class="live-chip"><i></i>Now playing</span>{% endif %}
+            <span class="badge {{ 'b-warn' if s.play_method == 'Transcode' else 'b-ok' }}">{{ s.play_method or '?' }}</span>
+            {% if s.resolution %}<span class="badge">{{ s.resolution }}</span>{% endif %}
+          </div>
+          {% if s.poster_id %}<img class="hero-logo" src="{{ bd }}?t=Logo&h=160" alt="{{ s.series_name or s.title }}"
+               onload="this.closest('.hero-info').classList.add('has-logo')" onerror="this.remove()">{% endif %}
+          <h2 class="hero-title">{{ s.series_name if s.item_type == 'Episode' and s.series_name else s.title }}</h2>
+          <div class="hero-sub">
+            {% if s.item_type == 'Episode' %}{% if s.season is not none %}S{{ '%02d'|format(s.season) }}E{{ '%02d'|format(s.episode or 0) }} · {% endif %}{{ s.title }}
+            {% elif s.item_type == 'Audio' %}{{ s.series_name or '' }}
+            {% else %}{{ s.year or '' }}{% endif %}
+          </div>
+          <div class="hero-who"><a href="/users/{{ s.user_name|urlencode }}">{{ s.user_name }}</a> · {{ s.client or '?' }} on {{ s.device or '?' }}</div>
+          <div class="hero-progress">
+            <div class="bar"><i style="width: {{ s.progress }}%"></i></div>
+            <div class="hero-time"><span>{{ s.position_seconds|duration }} / {{ s.runtime_seconds|duration }}</span>
+              <span>{% if s.ends_at %}ends {{ s.ends_at }}{% elif s.remaining %}{{ s.remaining|duration }} left{% endif %}</span></div>
+          </div>
+        </div>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% if streams|length > 1 %}
+  <div class="hero-dots">{% for s in streams %}<a href="#hero-{{ loop.index }}" aria-label="Stream {{ loop.index }}"{% if loop.first %} class="on"{% endif %}></a>{% endfor %}</div>
+  {% endif %}
+</section>
+{% elif last and last.poster_id %}
+{% set bd = '/img/' ~ last.server_id ~ '/' ~ last.poster_id %}
+<section class="hero-wrap" aria-label="Last watched">
+  <article class="hero idle">
+    <div class="hero-bg" style="background-image:url('{{ bd }}?t=Backdrop&h=900')"></div>
+    <div class="hero-shade"></div>
+    <div class="hero-body">
+      <img class="hero-poster" src="{{ bd }}?h=420" alt="" onerror="this.remove()">
+      <div class="hero-info">
+        <div class="hero-chips"><span class="live-chip idle">Nothing playing · last watched {{ last.stopped_at|ago }}</span></div>
+        <img class="hero-logo" src="{{ bd }}?t=Logo&h=160" alt="{{ last.series_name or last.title }}"
+             onload="this.closest('.hero-info').classList.add('has-logo')" onerror="this.remove()">
+        <h2 class="hero-title">{{ last.series_name if last.item_type == 'Episode' and last.series_name else last.title }}</h2>
+        <div class="hero-sub">{% if last.item_type == 'Episode' %}{% if last.season is not none %}S{{ '%02d'|format(last.season) }}E{{ '%02d'|format(last.episode or 0) }} · {% endif %}{{ last.title }}{% else %}{{ last.year or '' }}{% endif %}</div>
+        <div class="hero-who"><a href="/users/{{ last.user_name|urlencode }}">{{ last.user_name }}</a> · {{ last.client or '?' }} · watched {{ last.watched_seconds|duration }}{% if last.percent is not none %} ({{ last.percent|round|int }}%){% endif %}</div>
+      </div>
+    </div>
+  </article>
+</section>
+{% endif %}

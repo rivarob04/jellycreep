@@ -3,12 +3,36 @@
   const csrf = document.querySelector('meta[name="csrf"]')?.content || "";
 
   const live = document.getElementById("live-streams");
+  let touching = false;
+  const wireHero = () => {
+    const track = live && live.querySelector("[data-hero-track]");
+    if (!track) return;
+    const dots = [...live.querySelectorAll(".hero-dots a")];
+    const sync = () => {
+      const i = Math.round(track.scrollLeft / Math.max(track.clientWidth, 1));
+      dots.forEach((d, n) => d.classList.toggle("on", n === i));
+    };
+    track.addEventListener("scroll", () => requestAnimationFrame(sync), { passive: true });
+    track.addEventListener("touchstart", () => (touching = true), { passive: true });
+    track.addEventListener("touchend", () => setTimeout(() => (touching = false), 400), { passive: true });
+    dots.forEach((d, n) => d.addEventListener("click", (e) => {
+      e.preventDefault(); track.scrollTo({ left: n * track.clientWidth, behavior: "smooth" });
+    }));
+    sync();
+  };
   if (live) {
+    wireHero();
     const refresh = async () => {
-      if (document.hidden || live.querySelector("details[open]")) return;
+      if (document.hidden || touching || live.querySelector("details[open]")) return;
       try {
         const r = await fetch("/partials/activity", { headers: { "X-Requested-With": "fetch" } });
-        if (r.ok) live.innerHTML = await r.text();
+        if (!r.ok) return;
+        const old = live.querySelector("[data-hero-track]");
+        const x = old ? old.scrollLeft : 0;
+        live.innerHTML = await r.text();
+        const track = live.querySelector("[data-hero-track]");
+        if (track && x) track.scrollLeft = x;
+        wireHero();
       } catch (_) { /* keep last view */ }
     };
     setInterval(refresh, 5000);
@@ -172,4 +196,25 @@
     try { localStorage.setItem("jc-fx", get() === "on" ? "off" : "on"); } catch (_) {}
     paint();
   }));
+})();
+
+// Quality scan progress: poll while scanning, reload when done.
+(function () {
+  const box = document.getElementById("q-status");
+  if (!box) return;
+  const bar = document.getElementById("q-bar");
+  let wasRunning = !box.hidden;
+  const tick = async () => {
+    try {
+      const r = await fetch("/media/quality/status");
+      if (!r.ok) return;
+      const s = await r.json();
+      if (s.running) {
+        box.hidden = false; box.textContent = s.message || "Scanning…";
+        if (bar && s.total) bar.style.width = Math.max(3, (s.done / s.total) * 100) + "%";
+        wasRunning = true; setTimeout(tick, 1500);
+      } else if (wasRunning) { location.reload(); }
+    } catch (_) {}
+  };
+  if (wasRunning || document.getElementById("q-bar")) tick();
 })();

@@ -207,6 +207,23 @@ async def check_services() -> None:
             await notify.send("app_down", f"🟢 {svc.name} is back", msg or "", url=svc.link)
 
 
+async def _refresh_quality() -> None:
+    """Re-scan library quality once a day per Jellyfin server."""
+    from datetime import datetime as _dt
+    from . import quality
+    with SessionLocal() as db:
+        ids = [s.id for s in db.scalars(select(Service).where(Service.kind == "jellyfin", Service.enabled.is_(True)))]
+    for sid in ids:
+        rep = quality.cached(sid)
+        try:
+            age = (utcnow() - _dt.fromisoformat(rep["scanned_at"])).total_seconds() if rep else None
+        except (KeyError, ValueError, TypeError):
+            age = None
+        if rep and age is not None and age < 20 * 3600:
+            continue
+        await quality.scan(sid)
+
+
 async def run_forever() -> None:
     log.info("Activity tracker started (every %ss)", settings.poll_interval)
     ticks = 0
@@ -221,6 +238,7 @@ async def run_forever() -> None:
                     await snapshot_now()
                 except Exception:  # noqa: BLE001
                     log.exception("Storage snapshot failed")
+                await _refresh_quality()
             ticks += 1
             if ticks % 360 == 0:
                 await asyncio.to_thread(prune)

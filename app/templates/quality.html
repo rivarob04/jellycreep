@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Quality{% endblock %}
+
+{% macro dist(title, rows, colors=None) -%}
+<div class="card">
+  <h2>{{ title }}</h2>
+  {% for r in rows[:7] %}
+  <div class="qrow">
+    <span class="ql">{{ r.label }}</span>
+    <span class="qbar"><i style="width: {{ [r.pct, 1.5]|max }}%"></i></span>
+    <span class="qn">{{ r.pct|round|int }}%</span>
+    <span class="qs">{{ r.count }} · {{ r.bytes|bytes }}</span>
+  </div>
+  {% else %}<p class="muted small">No data</p>{% endfor %}
+</div>
+{%- endmacro %}
+
+{% block content %}
+<h1>Media</h1>
+<nav class="seg mb">
+  <a href="/media">Overview</a>
+  <a href="/media?tab=quality" class="on">Quality</a>
+</nav>
+
+{% if not svc %}
+<div class="card empty"><div class="empty-icon">🎞️</div>Connect Jellyfin in Settings to analyse your library.</div>
+{% else %}
+
+{% if servers|length > 1 %}
+<div class="tabs">{% for x in servers %}<a href="/media?tab=quality&server={{ x.id }}" class="{{ 'on' if x.id == svc.id }}">{{ x.name }}</a>{% endfor %}</div>
+{% endif %}
+
+<div id="q-status" class="notice small"{% if not status.running %} hidden{% endif %}>{{ status.message or 'Scanning…' }}</div>
+
+{% if not q %}
+<div class="card empty">
+  <div class="empty-icon">🔍</div>
+  <strong>Analysing your library…</strong>
+  <p class="muted small">JellyCreep is reading the video, audio and subtitle details of every movie and episode. Large libraries take a minute or two — this page updates when it's done.</p>
+  <div class="bar" style="max-width:320px;margin:10px auto 0"><i id="q-bar" style="width: {{ (status.done / status.total * 100) if status.total else 3 }}%"></i></div>
+</div>
+{% else %}
+{% set res = {} %}{% for r in q.res %}{% set _ = res.update({r.label: r}) %}{% endfor %}
+{% set hdr_total = q.risk.get('hdr', {}).get('count', 0) %}
+
+<div class="card mb">
+  <div class="spread">
+    <div>
+      <h2 style="margin:0">Library quality</h2>
+      <div class="muted small">{{ q['items'] }} movies &amp; episodes · {{ q.bytes|bytes }} · scanned {{ q.scanned_at|replace('T', ' ')|truncate(16, True, '') }} UTC</div>
+    </div>
+    {% if user.is_admin %}
+    <form method="post" action="/media/quality/scan/{{ svc.id }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm"{% if status.running %} disabled{% endif %}>↻ Rescan</button></form>
+    {% endif %}
+  </div>
+
+  <div class="resbar mt" role="img" aria-label="Resolution breakdown">
+    {% for r in q.res if r.count %}<i class="r-{{ r.label|lower }}" style="flex: {{ r.count }}" title="{{ r.label }}: {{ r.count }} ({{ r.pct }}%)"></i>{% endfor %}
+  </div>
+  <div class="legend">{% for r in q.res if r.count %}<span><i class="r-{{ r.label|lower }}"></i>{{ r.label }} {{ r.pct|round|int }}%</span>{% endfor %}</div>
+
+  <div class="grid g4 mt">
+    <div class="tile"><div class="n">{{ res.get('4K', {}).get('count', 0) }}</div><div class="l">4K · {{ (res.get('4K', {}).get('bytes', 0))|bytes }}</div></div>
+    <div class="tile"><div class="n">{{ res.get('1080p', {}).get('count', 0) }}</div><div class="l">1080p · {{ (res.get('1080p', {}).get('bytes', 0))|bytes }}</div></div>
+    <div class="tile"><div class="n">{{ hdr_total }}</div><div class="l">HDR / DV · {{ q.risk.get('hdr', {}).get('pct', 0)|round|int }}%</div></div>
+    <div class="tile"><div class="n">{{ q.risk.get('dovi', {}).get('count', 0) }}</div><div class="l">Dolby Vision</div></div>
+  </div>
+
+  <div class="grid g2 mt">
+    {% for t, label in (('Movie', 'Movies'), ('Episode', 'Episodes')) %}{% set rows = q.by_type.get(t) or [] %}
+    {% set n = rows|sum(attribute='count') %}{% if n %}
+    <div>
+      <div class="small muted" style="margin-bottom:4px">{{ label }} · {{ n }}</div>
+      <div class="resbar thin">{% for r in rows if r.count %}<i class="r-{{ r.label|lower }}" style="flex: {{ r.count }}" title="{{ r.label }}: {{ r.count }}"></i>{% endfor %}</div>
+    </div>
+    {% endif %}{% endfor %}
+  </div>
+</div>
+
+{# ---------------- transcode outlook ---------------- #}
+{% set hit = {} %}{% for r in hist.reasons if r.risk %}{% set _ = hit.update({r.risk: (hit.get(r.risk, 0) + r.count)}) %}{% endfor %}
+<div class="card mb">
+  <div class="spread">
+    <h2 style="margin:0">Transcode outlook</h2>
+    {% if hist.plays %}<span class="badge {{ 'b-bad' if hist.transcode_pct >= 40 else ('b-warn' if hist.transcode_pct >= 15 else 'b-ok') }}">{{ hist.transcode_pct }}% of plays transcoded · 90d</span>{% endif %}
+  </div>
+  <p class="muted small" style="margin:6px 0 12px">What in your library is likely to force a transcode. Factors that actually caused transcodes in your history are highlighted.</p>
+  {% set factors = [
+    ('hdr', 'HDR / Dolby Vision', 'Needs tone-mapping on SDR screens, most browsers and many phones.'),
+    ('codec', 'Not H.264 (HEVC, AV1, …)', 'Web browsers and older TVs often can’t decode HEVC or AV1.'),
+    ('ten_bit', '10-bit video', 'Older devices only play 8-bit.'),
+    ('image_subs', 'Image subtitles (PGS / VobSub)', 'Turning these subtitles on forces a burn-in transcode.'),
+    ('lossless_audio', 'TrueHD / DTS / lossless audio', 'Phones and browsers usually transcode the audio track.'),
+    ('bitrate_20', 'Bitrate 20 Mbps or more', 'Transcodes on remote connections with a bandwidth limit.'),
+    ('container', 'Uncommon container (AVI, TS, …)', 'Often remuxed or transcoded.'),
+  ] %}
+  <div class="risks">
+  {% for key, label, tip in factors %}{% set r = q.risk.get(key, {'count': 0, 'bytes': 0, 'pct': 0}) %}
+    <div class="risk{{ ' hit' if hit.get(key) }}">
+      <div class="spread"><strong>{{ label }}</strong><span class="risk-pct">{{ r.pct|round|int }}%</span></div>
+      <div class="bar"><i style="width: {{ r.pct }}%"></i></div>
+      <div class="meta">{{ r.count }} items · {{ r.bytes|bytes }} — {{ tip }}</div>
+      {% if hit.get(key) %}<div class="risk-hit">⚡ Caused {{ hit[key] }} transcode{{ 's' if hit[key] != 1 }} in the last 90 days</div>{% endif %}
+    </div>
+  {% endfor %}
+  </div>
+</div>
+
+{% if hist.plays %}
+<div class="grid g2 mb">
+  <div class="card">
+    <h2>Why streams transcoded <span class="muted small">· 90 days</span></h2>
+    {% set mx = (hist.reasons|map(attribute='count')|max) if hist.reasons else 1 %}
+    {% for r in hist.reasons %}
+    <div class="qrow"><span class="ql" title="{{ r.key }}">{{ r.label }}</span><span class="qbar warn"><i style="width: {{ (r.count / mx * 100)|round(1) }}%"></i></span><span class="qn">{{ r.count }}</span><span class="qs"></span></div>
+    {% else %}<p class="muted small">No transcodes recorded — everything direct played. 🎉</p>{% endfor %}
+  </div>
+  <div class="card">
+    <h2>Clients</h2>
+    <div class="list">
+      {% for c in hist.clients %}
+      <div>
+        <div class="spread"><strong class="ellip" style="max-width:60%">{{ c.client }}</strong>
+          <span class="badge {{ 'b-ok' if c.direct_pct >= 85 else ('b-warn' if c.direct_pct >= 50 else 'b-bad') }}">{{ c.direct_pct }}% direct</span></div>
+        <div class="meta">{{ c.plays }} plays{% if c.top_reason %} · mostly: {{ c.top_reason }}{% endif %}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="grid g2 mb">
+  {{ dist('Video codec', q.codec) }}
+  {{ dist('Dynamic range', q.hdr) }}
+  {{ dist('Audio codec', q.audio) }}
+  {{ dist('Audio channels', q.channels) }}
+  {{ dist('Container', q.container) }}
+  <div class="card">
+    <h2>Highest bitrates</h2>
+    <div class="list">
+      {% for h in q.heavy[:8] %}
+      <div><div class="ellip">{{ h.name }}</div>
+        <div class="meta">{{ (h.bitrate / 1000000)|round(1) }} Mbps · {{ h.res }} · {{ h.codec }}{% if h.hdr != 'SDR' %} · {{ h.hdr }}{% endif %}{% if h.size %} · {{ h.size|bytes }}{% endif %}</div></div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

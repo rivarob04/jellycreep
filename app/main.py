@@ -20,7 +20,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_, select
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import __version__, calendar_view, importer, notify, stats, storage, tracker, webhooks
+from . import __version__, calendar_view, importer, notify, quality, stats, storage, tracker, webhooks
 from .auth import (CSRF_COOKIE, LoginRequired, User, admin_user, api_user, csrf_token, current_user, oauth,
                    user_from_claims, verify_csrf)
 from .config import settings
@@ -218,7 +218,10 @@ async def current_activity() -> tuple[list[dict], list[str]]:
             key = f"{svc.id}:{sess.get('Id')}:{snap['item_id']}"
             t = tracked.get(key)
             rt, pos = snap["runtime_seconds"], snap["position_seconds"]
-            snap.update(
+            ends = None
+            if rt and pos is not None and not snap["is_paused"]:
+                ends = (datetime.now(TZ) + timedelta(seconds=max(rt - pos, 0))).strftime("%-I:%M %p")
+            snap.update(ends_at=ends, remaining=max((rt or 0) - (pos or 0), 0),
                 server_id=svc.id, server_name=svc.name, session_id=sess.get("Id"),
                 progress=round(pos / rt * 100, 1) if rt and pos is not None else 0,
                 watched=t.watched_seconds if t else 0, started=t.started_at if t else None,
@@ -235,6 +238,7 @@ async def page_activity(request: Request, user: User = Depends(current_user)):
         recent = list(db.scalars(select(Play).order_by(Play.stopped_at.desc()).limit(8)))
         today = stats.summary(db, 1)
     return render(request, "activity.html", user, streams=streams, errors=errors, recent=recent, today=today,
+                  last=recent[0] if recent else None,
                   health=services(),
                   has_servers=bool(services(("jellyfin",), enabled_only=False)))
 
@@ -242,7 +246,9 @@ async def page_activity(request: Request, user: User = Depends(current_user)):
 @app.get("/partials/activity", response_class=HTMLResponse)
 async def partial_activity(request: Request, user: User = Depends(current_user)):
     streams, errors = await current_activity()
-    return render(request, "_streams.html", user, streams=streams, errors=errors)
+    with SessionLocal() as db:
+        last = db.scalar(select(Play).order_by(Play.stopped_at.desc()))
+    return render(request, "_live.html", user, streams=streams, errors=errors, last=last)
 
 
 @app.post("/activity/{server_id}/{session_id}/stop")
@@ -339,7 +345,10 @@ async def page_stats(request: Request, days: int = 30, user: User = Depends(curr
 
 # --- media & automation ----------------------------------------------------------------
 @app.get("/media", response_class=HTMLResponse)
-async def page_media(request: Request, user: User = Depends(current_user)):
+async def page_media(request: Request, tab: str = "overview", server: int | None = None,
+                     user: User = Depends(current_user)):
+    if tab == "quality":
+        return await _media_quality(request, user, server)
     servers = []
     for svc in services(("jellyfin",)):
         client = await client_for(svc)
@@ -353,6 +362,30 @@ async def page_media(request: Request, user: User = Depends(current_user)):
         await asyncio.to_thread(storage.forecast, drives)
     return render(request, "media.html", user, servers=servers, drives=drives, storage_notes=notes,
                   storage_sum=storage.summary(drives))
+
+
+async def _media_quality(request: Request, user: User, server: int | None):
+    jfs = services(("jellyfin",))
+    svc = next((x for x in jfs if x.id == server), jfs[0] if jfs else None)
+    report = quality.cached(svc.id) if svc else None
+    if svc and not report and not quality.STATUS["running"]:
+        asyncio.create_task(quality.scan(svc.id))   # first visit: start scanning in the background
+    hist = await asyncio.to_thread(quality.history, 90)
+    return render(request, "quality.html", user, svc=svc, servers=jfs, q=report, hist=hist, status=quality.STATUS)
+
+
+@app.post("/media/quality/scan/{sid}")
+async def quality_rescan(sid: int, request: Request, user: User = Depends(admin_user)):
+    await verify_csrf(request)
+    _svc(sid, "jellyfin")
+    if not quality.STATUS["running"]:
+        asyncio.create_task(quality.scan(sid))
+    return RedirectResponse(f"/media?tab=quality&server={sid}", status_code=303)
+
+
+@app.get("/media/quality/status")
+async def quality_status(user: User = Depends(current_user)):
+    return quality.STATUS
 
 
 AUTOMATION_TABS = {

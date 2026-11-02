@@ -18,6 +18,8 @@
 - **Concurrent-stream stats** (daily peak streams and transcodes) and a local-time viewing heatmap.
 - **Import history from Jellystat** so stats go back before JellyCreep was installed.
 - **Jellyfin-style glass UI**: frosted panels over a blurred backdrop of what's playing (or last watched), Jellyfin's purple→blue palette, light/dark/auto theme, a per-device "Glass effects" switch for slower phones, and pull-to-refresh.
+- **Jellyfin-style hero on Activity**: full-width backdrop of what's playing with the title logo, poster, progress and "ends at" time — swipe between streams; shows the last thing watched when idle.
+- **Library quality report** (Media → Quality): how much is 4K/1080p/720p, HDR10/HDR10+/Dolby Vision, video and audio codecs, channels, containers, image subtitles and bitrates — plus a transcode outlook that ties those to the real reasons your streams transcoded and each client's direct-play rate.
 - **Storage on the Media tab**: every drive Jellyfin (10.11+) and Sonarr/Radarr/Lidarr can see, merged per physical disk, with free space, which libraries live where, and a "full in ~N days" estimate from daily readings.
 - **Read-only REST API** with tokens, for Homepage, scripts or other apps. Docs are at `/api/docs`.
 
