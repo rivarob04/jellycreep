@@ -12,8 +12,15 @@ from .upstream import Upstream, UpstreamError, pool
 class JellyfinClient(Upstream):
     def __init__(self, svc: Service) -> None:
         super().__init__(svc)
-        # X-Emby-Token keeps the Authorization header free for the proxy.
-        self.app_headers = {"X-Emby-Token": svc.api_key or ""}
+        key = (svc.api_key or "").strip()
+        mb = (f'MediaBrowser Client="JellyCreep", Device="JellyCreep", DeviceId="jellycreep-{svc.id}", '
+              f'Version="0.1.0", Token="{key}"')
+        # Jellyfin 10.11+ only accepts `Authorization: MediaBrowser Token=…` by default
+        # (legacy X-Emby-Token is off). Older servers still read X-Emby-Token.
+        self.app_headers = {"X-Emby-Authorization": mb, "X-Emby-Token": key}
+        if svc.proxy_auth in ("none", "headers"):
+            # Authorization is free (no Authentik credentials going in it), so use it.
+            self.app_headers["Authorization"] = mb
 
     async def test(self) -> str:
         info = await self.get("/System/Info")
