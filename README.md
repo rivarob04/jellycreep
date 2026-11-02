@@ -138,6 +138,10 @@ They never see other users, IP addresses, devices other than their own, download
 
 When a viewer's stream is being transcoded, JellyCreep explains why in plain English ("These subtitles have to be burned into the picture", "Your device can't play this audio track (TRUEHD)") and adds a tip they can act on. Their history marks each converted play with its reason, and the home page sums up how many recent plays were converted, the most common cause and the device it happened on.
 
+### Navigation on phones
+
+On phones and tablets, tap **☰** in the top-left corner, or swipe in from the left edge, to open the slide-out menu. It lists every page (the current one highlighted), plus the theme and glass switches and Sign out. Tap outside it, swipe it left or press Esc to close it. Wide screens keep the menu bar across the top.
+
 ### Recently added & library pages (like Tautulli Remote)
 
 Everyone gets a **Recently added** list. Admins and members find it under `/library`; Jellyfin users find it under **More → Recently added**, or tap **All →** on their home page. Filter by All, Movies, Shows or Music. Tap anything to open its page:

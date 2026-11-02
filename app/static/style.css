@@ -880,3 +880,36 @@ h1 { letter-spacing: -.01em; }
 :root[data-theme="light"] .ra-card::after { background: linear-gradient(90deg, rgba(10,12,18,.62), rgba(10,12,18,.42)); }
 .posters > a { color: inherit; min-width: 0; display: block; }
 a.plain { color: inherit; } a.plain:hover { text-decoration: underline; }
+
+/* ===================== v0.9 slide-out menu (replaces the bottom tab bar) ===================== */
+:root { --tabbar: 0px; }
+.tabbar { display: none !important; }
+.menu-btn { flex: none; display: grid; place-items: center; width: 42px; height: 42px; margin: 0 2px 0 -6px; border: 0; border-radius: 12px;
+  background: none; color: var(--text); cursor: pointer; }
+.menu-btn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.menu-btn:active { background: var(--panel); }
+.drawer-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.55); opacity: 0; pointer-events: none; transition: opacity .25s ease; }
+.drawer { position: fixed; top: 0; bottom: 0; left: 0; z-index: 61; width: min(82vw, 330px); display: flex; flex-direction: column;
+  background: #12131b; border-right: 1px solid rgba(255,255,255,.08); box-shadow: 12px 0 40px rgba(0,0,0,.5);
+  transform: translateX(-104%); transition: transform .28s cubic-bezier(.2,.8,.2,1); visibility: hidden;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) 0 calc(var(--safe-b) + 10px); overflow-y: auto; overscroll-behavior: contain; }
+html.drawer-open .drawer { transform: none; visibility: visible; }
+html.drawer-open .drawer-scrim { opacity: 1; pointer-events: auto; }
+html.drawer-open, html.drawer-open body { overflow: hidden; }
+.drawer.dragging, .drawer-scrim.dragging { transition: none; }
+.drawer-head { padding: 6px 18px 14px; border-bottom: 1px solid rgba(255,255,255,.07); margin-bottom: 8px; }
+.drawer-logo { display: block; height: 44px; width: auto; max-width: 100%; }
+.drawer-user { display: flex; align-items: center; gap: 10px; margin-top: 14px; color: #fff; }
+.drawer-user .avatar { width: 36px; height: 36px; font-size: 15px; }
+.drawer-user b { display: block; font-size: 15px; } .drawer-user small { display: block; color: rgba(255,255,255,.6); font-size: 12.5px; }
+.drawer-nav { display: flex; flex-direction: column; padding: 0 10px; gap: 2px; }
+.drawer-nav a, .drawer-nav .sheet-btn { display: flex; align-items: center; gap: 18px; height: 54px; padding: 0 16px; border-radius: 999px;
+  color: rgba(255,255,255,.92); font-size: 16.5px; font-weight: 500; background: none; border: 0; width: 100%; text-align: left; cursor: pointer; }
+.drawer-nav svg { width: 26px; height: 26px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.drawer-nav a:active, .drawer-nav .sheet-btn:active { background: rgba(255,255,255,.06); }
+.drawer-nav a.on { background: rgba(255,255,255,.1); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+.drawer-nav a.on svg { stroke: var(--accent-2); }
+.drawer-nav hr { border: 0; border-top: 1px solid rgba(255,255,255,.12); margin: 8px 10px; }
+.drawer-foot { margin-top: auto; padding: 14px 26px 4px; font-size: 12px; color: rgba(255,255,255,.4); }
+:root[data-fx="off"] .drawer { background: #12131b; }
+@media (min-width: 1000px) { .menu-btn { display: none; } .drawer, .drawer-scrim { display: none; } }

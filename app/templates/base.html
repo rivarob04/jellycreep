@@ -21,8 +21,9 @@
 <body>
 <div class="ambient" aria-hidden="true">{% if ambient %}<div class="ambient-img" style="background-image:url('{{ ambient }}')"></div>{% endif %}</div>
 {% set path = request.url.path %}
-{% set more_on = path.startswith('/add') or path.startswith('/invites') or path.startswith('/users') or path.startswith('/media') or path.startswith('/library') or path.startswith('/events') or path.startswith('/settings') %}
 <header class="top">
+  <button class="menu-btn" type="button" data-drawer-open aria-label="Open menu" aria-controls="drawer" aria-expanded="false">
+    <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h11M4 17h16"/></svg></button>
   <a class="brand" href="{{ '/me' if user.is_viewer else '/' }}" aria-label="JellyCreep home"><img class="brand-logo" src="/static/logo.png?v={{ version }}" height="30" alt="JellyCreep"></a>
   {% if user.is_viewer %}
   <nav class="nav-desktop">
@@ -58,59 +59,60 @@
 {% block content %}{% endblock %}
 </main>
 
+{# ---------- slide-out menu (phones/tablets), Tautulli Remote style ---------- #}
+{% set ico = {
+  'home': '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
+  'activity': '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  'discover': '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
+  'requests': '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/>',
+  'recent': '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  'history': '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>',
+  'upcoming': '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  'users': '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2c3 .2 5.5 2.6 5.5 5.8"/>',
+  'stats': '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  'media': '<rect x="3" y="7" width="14" height="13" rx="2"/><path d="M7 4h12a2 2 0 0 1 2 2v11"/><path d="M6 17l3-4 3 3 2-2 3 3"/>',
+  'automation': '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/>',
+  'events': '<path d="M3 11v2a2 2 0 0 0 2 2h2l5 4V5L7 9H5a2 2 0 0 0-2 2z"/><path d="M16 8a5 5 0 0 1 0 8"/>',
+  'add': '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
+  'invites': '<path d="M3 7l9 6 9-6"/><rect x="3" y="5" width="18" height="14" rx="2"/>',
+  'settings': '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  'theme': '<path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/>',
+  'glass': '<path d="M12 3l2.4 5.6L20 11l-5.6 2.4L12 19l-2.4-5.6L4 11l5.6-2.4z"/>',
+  'logout': '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/>',
+} %}
 {% if user.is_viewer %}
-<nav class="tabbar" aria-label="Main">
-  <a href="/me" class="{{ 'on' if path == '/me' }}">
-    <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>Home</a>
-  {% if portal_seerr %}
-  <a href="/me/discover" class="{{ 'on' if path.startswith('/me/discover') }}">
-    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Discover</a>
-  <a href="/me/requests" class="{{ 'on' if path.startswith('/me/requests') }}">
-    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/><rect x="3" y="3" width="18" height="18" rx="4"/></svg>Requests</a>
-  {% endif %}
-  <a href="/me/history" class="{{ 'on' if path.startswith('/me/history') }}">
-    <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>History</a>
-  {% if not portal_seerr %}
-  <a href="/me/upcoming" class="{{ 'on' if path.startswith('/me/upcoming') }}">
-    <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Coming up</a>
-  {% endif %}
-  <details class="{{ 'on' if path.startswith('/me/library') or (portal_seerr and path.startswith('/me/upcoming')) }}">
-    <summary><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</summary>
-    <div class="more-sheet">
-      <a href="/me/library" class="{{ 'on' if path.startswith('/me/library') }}">🆕 Recently added</a>
-      {% if portal_seerr %}<a href="/me/upcoming" class="{{ 'on' if path.startswith('/me/upcoming') }}">📅 Coming up</a>{% endif %}
-      <button type="button" class="sheet-btn" data-theme-toggle><span data-theme-label>🌓 Auto</span></button>
-      <button type="button" class="sheet-btn" data-fx-toggle><span data-fx-label>✨ Glass effects: on</span></button>
-      <a href="/logout">Sign out ({{ user.name }})</a>
-    </div>
-  </details>
-</nav>
+  {% set nav_main = [('/me', 'Home', 'home', True)]
+     + ([('/me/discover', 'Discover', 'discover', False), ('/me/requests', 'Requests', 'requests', False)] if portal_seerr else [])
+     + [('/me/library', 'Recently added', 'recent', False), ('/me/history', 'History', 'history', False), ('/me/upcoming', 'Coming up', 'upcoming', False)] %}
+  {% set nav_extra = [] %}
 {% else %}
-<nav class="tabbar" aria-label="Main">
-  <a href="/" class="{{ 'on' if path == '/' }}">
-    <svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Activity</a>
-  <a href="/history" class="{{ 'on' if path.startswith('/history') }}">
-    <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>History</a>
-  <a href="/stats" class="{{ 'on' if path.startswith('/stats') }}">
-    <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Stats</a>
-  <a href="/automation" class="{{ 'on' if path.startswith('/automation') }}">
-    <svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>Arr</a>
-  <details class="{{ 'on' if more_on }}">
-    <summary><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</summary>
-    <div class="more-sheet">
-      {% if user.is_admin %}<a href="/add" class="{{ 'on' if path.startswith('/add') }}">＋ Add a show or movie</a>{% endif %}
-      {% if user.is_admin %}<a href="/invites" class="{{ 'on' if path.startswith('/invites') }}">Invite a user</a>{% endif %}
-      <a href="/users" class="{{ 'on' if path.startswith('/users') }}">Users</a>
-      <a href="/library" class="{{ 'on' if path.startswith('/library') }}">🆕 Recently added</a>
-      <a href="/media" class="{{ 'on' if path.startswith('/media') }}">Media &amp; libraries</a>
-      <a href="/events" class="{{ 'on' if path.startswith('/events') }}">Events</a>
-      {% if user.is_admin %}<a href="/settings" class="{{ 'on' if path.startswith('/settings') }}">Settings</a>{% endif %}
-      <button type="button" class="sheet-btn" data-fx-toggle><span data-fx-label>✨ Glass effects: on</span></button>
-      {% if auth_mode != 'none' %}<a href="/auth/logout">Sign out ({{ user.name }})</a>{% endif %}
-    </div>
-  </details>
-</nav>
+  {% set nav_main = [('/', 'Activity', 'activity', True), ('/history', 'History', 'history', False), ('/library', 'Recently added', 'recent', False),
+                     ('/media', 'Libraries', 'media', False), ('/users', 'Users', 'users', False), ('/stats', 'Statistics', 'stats', False),
+                     ('/automation', 'Automation', 'automation', False), ('/events', 'Events', 'events', False)] %}
+  {% set nav_extra = ([('/add', 'Add a show or movie', 'add', False), ('/invites', 'Invite a user', 'invites', False), ('/settings', 'Settings', 'settings', False)] if user.is_admin else []) %}
 {% endif %}
+<div class="drawer-scrim" data-drawer-close></div>
+<aside class="drawer" id="drawer" aria-label="Menu" aria-hidden="true">
+  <div class="drawer-head">
+    <img class="drawer-logo" src="/static/logo.png?v={{ version }}" alt="JellyCreep">
+    <div class="drawer-user"><span class="avatar" style="background:linear-gradient(135deg,var(--accent),var(--accent-2))">{{ user.name[:1]|upper }}</span>
+      <span><b>{{ user.name }}</b><small>{{ 'Admin' if user.is_admin else ('Jellyfin user' if user.is_viewer else 'Member') }}</small></span></div>
+  </div>
+  <nav class="drawer-nav">
+    {% for href, label, icon, exact in nav_main %}
+    <a href="{{ href }}" class="{{ 'on' if (path == href if exact else path.startswith(href)) }}"><svg viewBox="0 0 24 24">{{ ico[icon]|safe }}</svg>{{ label }}</a>
+    {% endfor %}
+    {% if nav_extra %}<hr>{% for href, label, icon, exact in nav_extra %}
+    <a href="{{ href }}" class="{{ 'on' if path.startswith(href) }}"><svg viewBox="0 0 24 24">{{ ico[icon]|safe }}</svg>{{ label }}</a>
+    {% endfor %}{% endif %}
+    <hr>
+    <button type="button" class="sheet-btn" data-theme-toggle><svg viewBox="0 0 24 24">{{ ico.theme|safe }}</svg><span data-theme-label>🌓 Auto</span></button>
+    <button type="button" class="sheet-btn" data-fx-toggle><svg viewBox="0 0 24 24">{{ ico.glass|safe }}</svg><span data-fx-label>✨ Glass effects: on</span></button>
+    {% if user.is_viewer %}<a href="/logout"><svg viewBox="0 0 24 24">{{ ico.logout|safe }}</svg>Sign out</a>
+    {% elif auth_mode != 'none' %}<a href="/auth/logout"><svg viewBox="0 0 24 24">{{ ico.logout|safe }}</svg>Sign out</a>{% endif %}
+  </nav>
+  <div class="drawer-foot">JellyCreep v{{ version }}</div>
+</aside>
 <script src="/static/app.js?v={{ version }}"></script>
 </body>
 </html>

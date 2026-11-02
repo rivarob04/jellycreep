@@ -125,7 +125,7 @@
     if (t === "auto") delete root.dataset.theme; else root.dataset.theme = t;
     const light = t === "light" || (t === "auto" && matchMedia("(prefers-color-scheme: light)").matches);
     if (meta) meta.content = light ? "#eef0f7" : "#0a0a10";
-    document.querySelectorAll("[data-theme-label]").forEach((el) => (el.textContent = label[t]));
+    document.querySelectorAll("[data-theme-label]").forEach((el) => (el.textContent = el.closest(".drawer") ? "Theme: " + label[t].replace(/^\S+\s/, "") : label[t]));
   };
   apply(get());
   document.querySelectorAll("[data-theme-toggle]").forEach((b) => b.addEventListener("click", () => {
@@ -142,7 +142,7 @@
   ind.className = "ptr"; ind.innerHTML = "<span>↻</span>";
   document.body.appendChild(ind);
   let y0 = null, dy = 0;
-  const skip = ".posters, .seg, .health-strip, .tabs, .table-wrap, .more-sheet, input, textarea, select";
+  const skip = ".posters, .prow, .seg, .fchips, .health-strip, .tabs, .table-wrap, .more-sheet, .drawer, input, textarea, select";
   window.addEventListener("touchstart", (e) => {
     if (window.scrollY > 0 || e.touches.length !== 1 || e.target.closest(skip)) { y0 = null; return; }
     y0 = e.touches[0].clientY; dy = 0;
@@ -188,7 +188,7 @@
     const on = get() === "on";
     if (on) delete root.dataset.fx; else root.dataset.fx = "off";
     document.querySelectorAll("[data-fx-label]").forEach((el) => {
-      el.textContent = el.closest(".sheet-btn") ? `✨ Glass effects: ${on ? "on" : "off"}` : (on ? "✨ Glass" : "▫️ Flat");
+      el.textContent = el.closest(".drawer") ? `Glass effects: ${on ? "on" : "off"}` : el.closest(".sheet-btn") ? `✨ Glass effects: ${on ? "on" : "off"}` : (on ? "✨ Glass" : "▫️ Flat");
     });
   };
   paint();
@@ -228,3 +228,57 @@ document.querySelectorAll("[data-seasons]").forEach((form) => {
   all?.addEventListener("change", () => boxes.forEach((b) => (b.checked = all.checked)));
   boxes.forEach((b) => b.addEventListener("change", sync));
 });
+
+
+// Slide-out menu: hamburger, tap outside / Esc to close, swipe in from the left edge, swipe left to close.
+(function () {
+  const root = document.documentElement, drawer = document.getElementById("drawer");
+  if (!drawer) return;
+  const scrim = document.querySelector(".drawer-scrim"), btn = document.querySelector("[data-drawer-open]");
+  const isOpen = () => root.classList.contains("drawer-open");
+  const set = (open) => {
+    root.classList.toggle("drawer-open", open);
+    drawer.setAttribute("aria-hidden", open ? "false" : "true");
+    btn && btn.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) { const f = drawer.querySelector("a.on") || drawer.querySelector("a"); f && f.focus({ preventScroll: true }); }
+  };
+  btn && btn.addEventListener("click", () => set(true));
+  scrim && scrim.addEventListener("click", () => set(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && isOpen()) { set(false); btn && btn.focus(); } });
+  drawer.addEventListener("click", (e) => { if (e.target.closest("a")) set(false); });
+  window.addEventListener("pageshow", () => set(false));     // closed again when coming back with the back button
+
+  if (!("ontouchstart" in window)) return;
+  let x0 = null, y0 = 0, dx = 0, mode = null, w = 0;
+  const EDGE = 28;
+  window.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1 || matchMedia("(min-width: 1000px)").matches) return;
+    const t = e.touches[0];
+    if (isOpen()) mode = "close";
+    else if (t.clientX <= EDGE) mode = "open";
+    else { mode = null; return; }
+    x0 = t.clientX; y0 = t.clientY; dx = 0; w = drawer.offsetWidth || 300;
+  }, { passive: true });
+  window.addEventListener("touchmove", (e) => {
+    if (x0 === null || !mode) return;
+    const t = e.touches[0];
+    dx = t.clientX - x0;
+    if (Math.abs(t.clientY - y0) > Math.abs(dx) && Math.abs(dx) < 12) return;   // vertical scroll, leave it
+    if (e.cancelable) e.preventDefault();   // the menu wins over carousels / back-swipe while dragging it
+    const pos = mode === "open" ? Math.min(0, -w + Math.max(0, dx)) : Math.min(0, dx);
+    drawer.classList.add("dragging"); scrim.classList.add("dragging");
+    drawer.style.visibility = "visible";
+    drawer.style.transform = `translateX(${pos}px)`;
+    scrim.style.opacity = String(1 + pos / w); scrim.style.pointerEvents = "auto";
+  }, { passive: false });
+  const finish = () => {
+    if (x0 === null || !mode) return;
+    drawer.classList.remove("dragging"); scrim.classList.remove("dragging");
+    drawer.style.transform = ""; drawer.style.visibility = ""; scrim.style.opacity = ""; scrim.style.pointerEvents = "";
+    if (mode === "open" && dx > 60) set(true);
+    else if (mode === "close" && dx < -60) set(false);
+    x0 = null; mode = null;
+  };
+  window.addEventListener("touchend", finish);
+  window.addEventListener("touchcancel", finish);
+})();
