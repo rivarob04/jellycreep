@@ -7,3 +7,4 @@ python-multipart==0.0.20
 itsdangerous==2.2.0
 authlib==1.6.0
 cryptography==45.0.3
+tzdata==2025.2

@@ -32,7 +32,17 @@ from .upstream import UpstreamError, pool
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("jellycreep")
 BASE = Path(__file__).parent
-TZ = ZoneInfo(settings.tz) if settings.tz else timezone.utc
+def _load_tz(name: str | None):
+    if not name:
+        return timezone.utc
+    try:
+        return ZoneInfo(name)
+    except Exception:  # unknown name or no tz database — don't crash, just use UTC
+        logging.getLogger("jellycreep").warning("Unknown TZ %r, falling back to UTC", name)
+        return timezone.utc
+
+
+TZ = _load_tz(settings.tz)
 
 
 # --- startup ------------------------------------------------------------------------

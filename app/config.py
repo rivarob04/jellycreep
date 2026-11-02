@@ -41,11 +41,15 @@ class Settings:
         # oidc              : log in with Authentik (or any OIDC provider) directly
         # none              : no login (LAN testing only)
         self.auth_mode = (_env("AUTH_MODE", "authentik_forward") or "").lower()
-        self.trusted_proxies = [
-            ipaddress.ip_network(n.strip(), strict=False)
-            for n in (_env("TRUSTED_PROXIES", "127.0.0.1/32,172.16.0.0/12") or "").split(",")
-            if n.strip()
-        ]
+        self.trusted_proxies = []
+        for n in (_env("TRUSTED_PROXIES", "127.0.0.1/32,172.16.0.0/12") or "").replace(" ", ",").split(","):
+            if not n.strip():
+                continue
+            try:
+                self.trusted_proxies.append(ipaddress.ip_network(n.strip(), strict=False))
+            except ValueError:
+                print(f"[jellycreep] WARNING: ignoring invalid TRUSTED_PROXIES entry {n.strip()!r} "
+                      "(use an IP or CIDR like 192.168.0.85/32)", flush=True)
         self.user_header = _env("AUTHENTIK_USER_HEADER", "X-authentik-username")
         self.groups_header = _env("AUTHENTIK_GROUPS_HEADER", "X-authentik-groups")
         self.email_header = _env("AUTHENTIK_EMAIL_HEADER", "X-authentik-email")
