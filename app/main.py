@@ -21,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_, select
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import __version__, calendar_view, explain, importer, notify, quality, seerr_portal, stats, storage, tracker, webhooks
+from . import __version__, calendar_view, explain, importer, library, notify, quality, seerr_portal, stats, storage, tracker, webhooks
 from .auth import (CSRF_COOKIE, LoginRequired, User, ViewerOnly, admin_user, api_user, bust_login_cache, client_ip,
                    csrf_token, current_user, jellyfin_login_enabled, limiter, login_settings, oauth, staff_user,
                    user_from_claims, verify_csrf)
@@ -873,6 +873,110 @@ async def page_my_upcoming(request: Request, user: User = Depends(current_user))
         return RedirectResponse("/automation", status_code=303)
     up = await _upcoming(30) if login_settings()["upcoming"] else []
     return render(request, "me_upcoming.html", user, upcoming=up)
+
+
+# --- Library: recently added, item / season / episode pages (everyone) -----------------
+def _lib_base(user: User) -> str:
+    return "/me/library" if user.is_viewer else "/library"
+
+
+def _lib_server(user: User, sid: int | None) -> Service | None:
+    jfs = services(("jellyfin",))
+    if user.is_viewer:     # viewers only ever browse the server they signed in to
+        svc = next((x for x in jfs if x.id == user.server_id), None)
+        return None if (sid is not None and svc and sid != svc.id) else svc
+    return next((x for x in jfs if x.id == sid), None) if sid else (jfs[0] if jfs else None)
+
+
+async def _recent_page(request: Request, user: User, type: str, server: int | None):
+    svc = _lib_server(user, server)
+    kind = type if type in library.KINDS else "all"
+    items, err = [], None
+    if svc:
+        client = await client_for(svc)
+        uid, err = await safe(library.browse_as(client, svc.id, user))
+        if uid:
+            items, err = await safe(library.latest(client, uid, kind))
+    return render(request, "library_recent.html", user, items=items or [], err=err, kind=kind, kinds=library.KINDS,
+                  svc=svc, servers=[] if user.is_viewer else services(("jellyfin",)), lib=_lib_base(user))
+
+
+@app.get("/library", response_class=HTMLResponse)
+async def page_library(request: Request, type: str = "all", server: int | None = None, user: User = Depends(staff_user)):
+    return await _recent_page(request, user, type, server)
+
+
+@app.get("/me/library", response_class=HTMLResponse)
+async def page_my_library(request: Request, type: str = "all", user: User = Depends(current_user)):
+    if not user.is_viewer:
+        return RedirectResponse(f"/library?type={type}", status_code=303)
+    return await _recent_page(request, user, type, None)
+
+
+def _item_history(d: dict, user: User, limit: int = 60) -> list[Play]:
+    t = d["type"]
+    q = select(Play)
+    if t == "Series":
+        q = q.where(Play.poster_id == d["id"])
+    elif t == "Season":
+        q = q.where(Play.poster_id == d["series_id"], Play.season == d["index"])
+    else:
+        q = q.where(Play.item_id == d["id"])
+    if user.is_viewer:
+        q = q.where(_mine(user))
+    with SessionLocal() as db:
+        return list(db.scalars(q.order_by(Play.started_at.desc()).limit(limit)))
+
+
+async def _item_page(request: Request, user: User, sid: int, item_id: str, tab: str | None):
+    if not item_id.isalnum():
+        raise HTTPException(404)
+    svc = _lib_server(user, sid)
+    if not svc or svc.id != sid:
+        raise HTTPException(404)
+    client = await client_for(svc)
+    uid, err = await safe(library.browse_as(client, svc.id, user))
+    d, err = (await safe(library.item(client, uid, item_id, show_paths=not user.is_viewer))) if uid else (None, err)
+    if err or not d or not d.get("id"):
+        raise HTTPException(404, "That title isn't available, or your account can't access it.")
+    tabs = [("details", "Details")]
+    if d["type"] == "Series":
+        tabs.append(("seasons", "Seasons"))
+    if d["type"] == "Season":
+        tabs.append(("episodes", "Episodes"))
+    tabs.append(("history", "History"))
+    keys = [k for k, _ in tabs]
+    tab = tab if tab in keys else ("episodes" if d["type"] == "Season" else "details")
+    ctx: dict[str, Any] = {"d": d, "tab": tab, "tabs": tabs, "sid": svc.id, "lib": _lib_base(user),
+                           "rows": [], "history": [], "parent": None}
+    if tab == "seasons":
+        ctx["rows"], ctx["err"] = await safe(library.seasons(client, uid, d["id"]))
+    elif tab == "episodes":
+        ctx["rows"], ctx["err"] = await safe(library.episodes(client, uid, d["series_id"], d["id"]))
+    elif tab == "history":
+        ctx["history"] = _item_history(d, user)
+    if d["type"] == "Episode" and d.get("season_id"):
+        ctx["parent"] = (d["season_id"], f"Season {d['season_index']}" if d.get("season_index") is not None else "Season")
+    elif d["type"] == "Season" and d.get("series_id"):
+        ctx["parent"] = (d["series_id"], d["title"] or "Series")
+    imgp = "/me/img" if user.is_viewer else "/img"
+    if d.get("backdrop_id"):
+        ctx["ambient"] = f"{imgp}/{svc.id}/{d['backdrop_id']}?t=Backdrop&h=720"
+    return render(request, "library_item.html", user, **ctx)
+
+
+@app.get("/library/{sid}/{item_id}", response_class=HTMLResponse)
+async def page_library_item(request: Request, sid: int, item_id: str, tab: str | None = None,
+                            user: User = Depends(staff_user)):
+    return await _item_page(request, user, sid, item_id, tab)
+
+
+@app.get("/me/library/{sid}/{item_id}", response_class=HTMLResponse)
+async def page_my_library_item(request: Request, sid: int, item_id: str, tab: str | None = None,
+                               user: User = Depends(current_user)):
+    if not user.is_viewer:
+        return RedirectResponse(f"/library/{sid}/{item_id}" + (f"?tab={tab}" if tab else ""), status_code=303)
+    return await _item_page(request, user, sid, item_id, tab)
 
 
 # --- Seerr inside the Jellyfin-user portal (Discover / Requests) ----------------------

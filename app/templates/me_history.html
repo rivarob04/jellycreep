@@ -12,7 +12,7 @@
   {% set kind = 'tv' if p.item_type == 'Episode' else ('music' if p.item_type == 'Audio' else 'movie') %}
   <div class="agenda-item k-{{ kind }}">
     <span class="thumb k-bg-{{ kind }}">{% if p.poster_id %}<img loading="lazy" src="{{ imgp }}/{{ p.server_id }}/{{ p.poster_id }}?h=120" alt="" onerror="this.remove()">{% endif %}<b>{{ (p.series_name or p.title)[:1] }}</b></span>
-    <span class="ai-body"><span class="ai-title">{{ p.series_name if p.item_type == 'Episode' and p.series_name else p.title }}</span>
+    <span class="ai-body"><span class="ai-title">{% if p.item_id %}<a class="plain" href="/me/library/{{ p.server_id }}/{{ p.item_id }}">{% endif %}{{ p.series_name if p.item_type == 'Episode' and p.series_name else p.title }}{% if p.item_id %}</a>{% endif %}</span>
       <span class="ai-sub">{% if p.item_type == 'Episode' %}{% if p.season is not none %}S{{ '%02d'|format(p.season) }}E{{ '%02d'|format(p.episode or 0) }} · {% endif %}{{ p.title }}{% else %}{{ p.year or '' }}{% endif %}</span>
       <span class="ai-meta">{{ p.started_at|local('%a %b %-d, %-I:%M %p') }} · {{ p.watched_seconds|duration }}{% if p.client %} · {{ p.client }}{% endif %}</span>
       {% if p.play_method == 'Transcode' %}{% set why = explain(p.transcode_reasons) %}

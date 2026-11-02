@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Recently added{% endblock %}
+{% block content %}
+{% macro type_icon(kind) %}{% if kind == 'tv' %}<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>{% elif kind == 'music' %}<svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>{% else %}<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></svg>{% endif %}{% endmacro %}
+
+<div class="spread"><h1>Recently added</h1>
+  {% if servers|length > 1 %}
+  <form method="get"><input type="hidden" name="type" value="{{ kind }}">
+    <select name="server" onchange="this.form.submit()" aria-label="Server">{% for j in servers %}<option value="{{ j.id }}" {{ 'selected' if svc and svc.id == j.id }}>{{ j.name }}</option>{% endfor %}</select>
+  </form>{% endif %}
+</div>
+<div class="fchips mb">
+  {% for k, v in kinds.items() %}<a class="fchip{{ ' on' if kind == k }}" href="?type={{ k }}{{ '&server=' ~ svc.id if servers and svc }}">{{ v[0] }}</a>{% endfor %}
+</div>
+
+{% if not svc %}<div class="card empty"><div class="empty-icon">📚</div>Connect a Jellyfin server first.</div>
+{% else %}
+{% if err %}<div class="notice bad small">Couldn't load from Jellyfin: {{ err }}</div>{% endif %}
+<div class="ra-list">
+  {% for i in items %}
+  <a class="ra-card" href="{{ lib }}/{{ svc.id }}/{{ i.id }}"{% if i.backdrop_id %} style="--bd:url('{{ imgp }}/{{ svc.id }}/{{ i.backdrop_id }}?t=Backdrop&h=360')"{% endif %}>
+    <span class="ra-poster{{ ' sq' if i.icon == 'music' }}"><b>{{ i.title[:1] }}</b>{% if i.poster_id %}<img loading="lazy" src="{{ imgp }}/{{ svc.id }}/{{ i.poster_id }}?h=300" alt="" onerror="this.remove()">{% endif %}</span>
+    <span class="ra-body">
+      <span class="ra-title">{{ i.title }}</span>
+      {% for s in i.sub %}<span class="ra-sub">{{ s }}</span>{% endfor %}
+      <span class="ra-added">Added {{ i.ago }}</span>
+    </span>
+    <span class="ra-icon" aria-hidden="true">{{ type_icon(i.icon) }}</span>
+  </a>
+  {% else %}
+  <div class="card empty"><div class="empty-icon">🆕</div>Nothing has been added recently.</div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

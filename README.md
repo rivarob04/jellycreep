@@ -138,6 +138,18 @@ They never see other users, IP addresses, devices other than their own, download
 
 When a viewer's stream is being transcoded, JellyCreep explains why in plain English ("These subtitles have to be burned into the picture", "Your device can't play this audio track (TRUEHD)") and adds a tip they can act on. Their history marks each converted play with its reason, and the home page sums up how many recent plays were converted, the most common cause and the device it happened on.
 
+### Recently added & library pages (like Tautulli Remote)
+
+Everyone gets a **Recently added** list. Admins and members find it under `/library`; Jellyfin users find it under **More → Recently added**, or tap **All →** on their home page. Filter by All, Movies, Shows or Music. Tap anything to open its page:
+
+- **Details:** tagline, overview, network or studio, air date, runtime, rating, genres, director, writers, cast, the **Rotten Tomatoes** critics score (🍅 fresh / 🤢 rotten) and audience rating, IMDb/TMDB/TVDB links, and **file info** for movies and episodes (container, size, bitrate, video, every audio and subtitle track).
+- **Seasons:** a poster grid for series. Tap a season for its **Episodes** grid, then tap an episode for its own details and file info.
+- **History:** who watched it and when. Jellyfin users see only their own plays.
+
+Jellyfin users browse *as themselves*, so they only see libraries their Jellyfin account can access. File paths are only shown to staff. History rows and home-page posters link straight to these pages.
+
+Rotten Tomatoes and audience scores come from Jellyfin's metadata. If they're missing, enable a metadata provider that supplies critic ratings (e.g. the OMDb plugin) and refresh the library.
+
 ### Requesting with Seerr (like Moonfin)
 
 If Seerr is connected, signed-in Jellyfin users also get **Discover** and **Requests** tabs:

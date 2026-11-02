@@ -45,10 +45,10 @@
 <div class="spread section-title"><h2 style="margin:0">Your recently watched</h2><a class="small" href="/me/history">All →</a></div>
 <div class="posters mb">
   {% for p in recent %}
-  <figure title="{{ p.display_title }}">
+  <a href="{{ '/me/library/' ~ p.server_id ~ '/' ~ p.item_id if p.item_id else '#' }}"><figure title="{{ p.display_title }}">
     <img loading="lazy" src="{{ imgp }}/{{ p.server_id }}/{{ p.poster_id }}?h=300" alt="">
     <figcaption>{{ p.series_name or p.title }}<br><span class="muted">{% if p.item_type == 'Episode' and p.season is not none %}S{{ '%02d'|format(p.season) }}E{{ '%02d'|format(p.episode or 0) }} · {% endif %}{{ p.stopped_at|ago }}</span></figcaption>
-  </figure>
+  </figure></a>
   {% endfor %}
 </div>
 {% endif %}
@@ -69,14 +69,14 @@
 {% endif %}
 
 {% if added %}
-<div class="spread section-title"><h2 style="margin:0">New on {{ server_name }}</h2></div>
+<div class="spread section-title"><h2 style="margin:0">New on {{ server_name }}</h2><a class="small" href="/me/library">All →</a></div>
 <div class="posters mb">
   {% for i in added %}
   {% set pid = i.SeriesId if i.Type == 'Episode' else i.Id %}
-  <figure title="{{ i.SeriesName ~ ' – ' if i.SeriesName }}{{ i.Name }}">
+  <a href="/me/library/{{ user.server_id }}/{{ i.Id }}"><figure title="{{ i.SeriesName ~ ' – ' if i.SeriesName }}{{ i.Name }}">
     <img loading="lazy" src="{{ imgp }}/{{ user.server_id }}/{{ pid }}?h=300" alt="">
     <figcaption>{{ i.SeriesName or i.Name }}<br><span class="muted">{% if i.Type == 'Episode' %}S{{ '%02d'|format(i.ParentIndexNumber or 0) }}E{{ '%02d'|format(i.IndexNumber or 0) }}{% else %}{{ i.ProductionYear or '' }}{% endif %}</span></figcaption>
-  </figure>
+  </figure></a>
   {% endfor %}
 </div>
 {% endif %}

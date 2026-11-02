@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}{{ d.name if d.type == 'Episode' else d.title }}{% endblock %}
+{% block content %}
+{% set base = lib ~ '/' ~ sid %}
+{% set img = imgp ~ '/' ~ sid %}
+{% set wide = d.type == 'Episode' and d.thumb_id %}
+
+{% if parent %}<a class="small back-link" href="{{ base }}/{{ parent[0] }}">← {{ parent[1] }}</a>
+{% else %}<a class="small back-link" href="{{ lib }}">← Recently added</a>{% endif %}
+
+<section class="title-hero lib-hero"{% if d.backdrop_id %} style="--bd:url('{{ img }}/{{ d.backdrop_id }}?t=Backdrop&h=720')"{% endif %}>
+  <div class="th-inner{{ ' wide' if wide }}">
+    <span class="th-poster{{ ' wide' if wide }}">{% if wide %}<img src="{{ img }}/{{ d.thumb_id }}?h=360" alt="" onerror="this.remove()">{% elif d.poster_id %}<img src="{{ img }}/{{ d.poster_id }}?h=420" alt="" onerror="this.remove()">{% endif %}</span>
+    <div class="th-info">
+      <span class="badge">{{ {'Movie': 'Movie', 'Series': 'Series', 'Season': 'Season', 'Episode': 'Episode', 'MusicAlbum': 'Album'}.get(d.type, d.type) }}</span>
+      <h1>{{ d.title }}</h1>
+      {% if d.subtitle %}<div class="th-meta">{{ d.subtitle }}</div>{% endif %}
+      <div class="th-badges">
+        {% if d.critic is not none %}<span class="rating rt {{ 'fresh' if d.fresh else 'rotten' }}" title="Rotten Tomatoes critics score">{{ '🍅' if d.fresh else '🤢' }} {{ d.critic }}%</span>{% endif %}
+        {% if d.community %}<span class="rating star" title="Audience rating (TMDB / IMDb)">★ {{ d.community }}</span>{% endif %}
+        {% if d.played and user.is_viewer %}<span class="badge b-ok">✓ Watched</span>{% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<nav class="lib-tabs" aria-label="Sections">
+  {% for k, label in tabs %}<a href="?tab={{ k }}" class="{{ 'on' if tab == k }}">{{ label }}</a>{% endfor %}
+</nav>
+
+{% if tab == 'details' %}
+  {% if d.tagline or d.overview %}
+  <div class="card mb lib-summary">
+    {% if d.tagline %}<h2 class="lib-tagline">{{ d.tagline }}</h2>{% endif %}
+    {% if d.overview %}
+      {% if d.overview|length > 300 %}<input type="checkbox" id="ovm" class="ovm" hidden>{% endif %}
+      <p class="lib-overview{{ ' clamp' if d.overview|length > 300 }}">{{ d.overview }}</p>
+      {% if d.overview|length > 300 %}<label for="ovm" class="ovm-btn small"></label>{% endif %}
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if d.facts %}
+  <dl class="facts mb">
+    {% for k, v in d.facts %}<dt>{{ k }}</dt><dd>{{ v }}</dd>{% endfor %}
+  </dl>
+  {% endif %}
+
+  {% if d.critic is not none or d.community %}
+  <div class="card mb">
+    <h2>Ratings</h2>
+    <div class="rating-row">
+      {% if d.critic is not none %}<div class="rating-big"><span class="rb-ico">{{ '🍅' if d.fresh else '🤢' }}</span><b>{{ d.critic }}%</b><span class="muted small">Rotten Tomatoes · {{ 'Fresh' if d.fresh else 'Rotten' }}</span></div>{% endif %}
+      {% if d.community %}<div class="rating-big"><span class="rb-ico">⭐</span><b>{{ d.community }}<small>/10</small></b><span class="muted small">Audience</span></div>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% for m in d.media %}
+  <div class="card mb">
+    <h2>{{ 'File info' if d.media|length == 1 else ('Version ' ~ loop.index ~ (': ' ~ m.name if m.name else '')) }}</h2>
+    <dl class="facts tight">
+      {% if m.file %}<dt>File</dt><dd class="break">{{ m.file }}</dd>{% endif %}
+      {% if m.path %}<dt>Path</dt><dd class="break muted small">{{ m.path }}</dd>{% endif %}
+      {% if m.container %}<dt>Container</dt><dd>{{ m.container }}</dd>{% endif %}
+      {% if m.size %}<dt>Size</dt><dd>{{ m.size }}</dd>{% endif %}
+      {% if m.bitrate %}<dt>Bitrate</dt><dd>{{ m.bitrate }}</dd>{% endif %}
+      {% for v in m.video %}<dt>{{ 'Video' if loop.first }}</dt><dd>{{ v }}</dd>{% endfor %}
+      {% for a in m.audio %}<dt>{{ 'Audio' if loop.first }}</dt><dd>{{ a }}</dd>{% endfor %}
+      {% if m.subs %}<dt>Subtitles</dt><dd>{{ m.subs|join(' · ') }}</dd>{% endif %}
+    </dl>
+  </div>
+  {% endfor %}
+
+  {% if d.links %}
+  <div class="lib-links mb">{% for name, url in d.links %}<a class="btn sm" href="{{ url }}" target="_blank" rel="noopener">{{ name }} ↗</a>{% endfor %}</div>
+  {% endif %}
+
+{% elif tab == 'seasons' %}
+  {% if err %}<div class="notice bad small">{{ err }}</div>{% endif %}
+  <div class="lib-grid posters3">
+    {% for s in rows %}
+    <a class="lib-tile" href="{{ base }}/{{ s.id }}">
+      <span class="lt-img"><b>{{ s.index if s.index is not none else '•' }}</b>{% if s.has_img %}<img loading="lazy" src="{{ img }}/{{ s.id }}?h=400" alt="" onerror="this.remove()">{% elif d.poster_id %}<img loading="lazy" src="{{ img }}/{{ d.poster_id }}?h=400" alt="" onerror="this.remove()">{% endif %}
+        {% if s.played and user.is_viewer %}<i class="lt-check">✓</i>{% endif %}</span>
+      <span class="lt-cap"><b>{{ s.name }}</b>{% if s.count %}<small>{{ s.count }} episode{{ 's' if s.count != 1 }}</small>{% endif %}</span>
+    </a>
+    {% else %}<p class="muted">No seasons found.</p>{% endfor %}
+  </div>
+
+{% elif tab == 'episodes' %}
+  {% if err %}<div class="notice bad small">{{ err }}</div>{% endif %}
+  <div class="lib-grid eps">
+    {% for e in rows %}
+    <a class="lib-tile ep" href="{{ base }}/{{ e.id }}">
+      <span class="lt-img"><b>{{ e.index or '' }}</b>{% if e.has_img %}<img loading="lazy" src="{{ img }}/{{ e.id }}?h=300" alt="" onerror="this.remove()">{% endif %}
+        {% if e.played and user.is_viewer %}<i class="lt-check">✓</i>{% endif %}</span>
+      <span class="lt-cap"><b>Episode {{ e.index if e.index is not none else '?' }}</b><small>{{ e.name }}</small></span>
+    </a>
+    {% else %}<p class="muted">No episodes found.</p>{% endfor %}
+  </div>
+
+{% elif tab == 'history' %}
+  <div class="card flush">
+    {% for p in history %}
+    <div class="hist-row">
+      <span class="hr-main">
+        <b>{% if d.type in ('Series', 'Season') and p.season is not none %}S{{ p.season }} • E{{ p.episode or '?' }} · {% endif %}{{ p.title }}</b>
+        <span class="small muted">{{ p.started_at|local('%a %b %-d, %Y · %-I:%M %p') }} · {{ p.watched_seconds|duration }}{% if p.client %} · {{ p.client }}{% endif %}</span>
+      </span>
+      <span class="hr-side">
+        {% if user.is_viewer %}{% if p.completed %}<span class="badge b-ok">Finished</span>{% elif p.percent %}<span class="badge">{{ p.percent|round|int }}%</span>{% endif %}
+        {% else %}<a class="badge b-acc" href="/users/{{ p.user_name|urlencode }}">{{ p.user_name }}</a>{% endif %}
+        {% if p.play_method %}<span class="badge {{ 'b-warn' if p.play_method == 'Transcode' else '' }}">{{ p.play_method }}</span>{% endif %}
+      </span>
+    </div>
+    {% else %}
+    <div class="empty"><div class="empty-icon">🕒</div>{{ 'You haven\'t watched this yet.' if user.is_viewer else 'Nobody has watched this yet.' }}</div>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}
