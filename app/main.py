@@ -21,12 +21,12 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_, select
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import __version__, calendar_view, explain, importer, library, notify, quality, seerr_portal, stats, storage, tracker, webhooks
+from . import __version__, calendar_view, explain, importer, library, notify, quality, seerr_portal, webpush, stats, storage, tracker, webhooks
 from .auth import (CSRF_COOKIE, LoginRequired, User, ViewerOnly, admin_user, api_user, bust_login_cache, client_ip,
                    csrf_token, current_user, jellyfin_login_enabled, limiter, login_settings, oauth, staff_user,
                    user_from_claims, verify_csrf)
 from .config import settings
-from .db import (PROXY_AUTH_MODES, SERVICE_KINDS, ActiveStream, ApiToken, Event, Play, Service, SessionLocal,
+from .db import (PushSub, PROXY_AUTH_MODES, SERVICE_KINDS, ActiveStream, ApiToken, Event, Play, Service, SessionLocal,
                  hash_token, init_db, set_setting, utcnow)
 from .services import client_for
 from .upstream import UpstreamError, pool
@@ -159,6 +159,20 @@ def fmt_bytes(n: float | None) -> str:
 
 templates.env.filters.update(duration=fmt_duration, local=fmt_local, ago=fmt_ago, bytes=fmt_bytes)
 templates.env.globals.update(explain=explain.explain)
+
+
+def fmt_device(ua: str | None) -> str:
+    ua = ua or ""
+    if not ua or "Mozilla" not in ua:
+        return ua or "Unknown device"
+    os_ = next((n for k, n in (("Android", "Android"), ("iPhone", "iPhone"), ("iPad", "iPad"), ("Windows", "Windows"),
+                                ("Mac OS", "Mac"), ("CrOS", "Chromebook"), ("Linux", "Linux")) if k in ua), "Device")
+    br = next((n for k, n in (("Edg/", "Edge"), ("SamsungBrowser", "Samsung Internet"), ("Firefox", "Firefox"),
+                               ("Chrome", "Chrome"), ("Safari", "Safari")) if k in ua), "browser")
+    return f"{br} on {os_}"
+
+
+templates.env.filters.update(device_name=fmt_device)
 templates.env.globals.update(version=__version__, kinds=SERVICE_KINDS, proxy_modes=PROXY_AUTH_MODES)
 
 
@@ -873,6 +887,195 @@ async def page_my_upcoming(request: Request, user: User = Depends(current_user))
         return RedirectResponse("/automation", status_code=303)
     up = await _upcoming(30) if login_settings()["upcoming"] else []
     return render(request, "me_upcoming.html", user, upcoming=up)
+
+
+# --- Phone / browser notifications (Web Push) — everyone -------------------------------
+SW_JS = """// JellyCreep notifications
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data && e.data.text() }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'JellyCreep', {
+    body: d.body || '', icon: '/static/icon-192.png', badge: '/static/badge-96.png',
+    tag: d.tag || undefined, renotify: !!d.tag, timestamp: d.ts || Date.now(), data: { url: d.url || '/' },
+  }));
+});
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = new URL(e.notification.data && e.notification.data.url || '/', self.location.origin).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+    for (const w of wins) { if (w.url.startsWith(self.location.origin) && 'focus' in w) { w.navigate(url); return w.focus(); } }
+    return self.clients.openWindow(url);
+  }));
+});
+"""
+
+
+def _sw_response() -> Response:
+    return Response(SW_JS, media_type="application/javascript",
+                    headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+
+
+@app.get("/sw.js")
+async def service_worker_staff():
+    return _sw_response()
+
+
+@app.get("/me/sw.js")
+async def service_worker_viewer():
+    return _sw_response()
+
+
+def _push_base(user: User) -> str:
+    return "/me" if user.is_viewer else ""
+
+
+def _check_push_path(request: Request, user: User) -> None:
+    # viewers use /me/push/…, staff /push/… (so nginx can keep /push behind Authentik)
+    if request.url.path.startswith("/me/") != user.is_viewer:
+        raise HTTPException(404)
+
+
+async def _notif_page(request: Request, user: User):
+    key = webpush.user_key(user)
+    devices = webpush.subs_for(key)
+    ctx = {"vapid": webpush.public_key(), "prefs": webpush.prefs_for(key, user.is_viewer),
+           "labels": webpush.VIEWER_PREFS if user.is_viewer else webpush.STAFF_PREFS, "devices": devices,
+           "base": _push_base(user), "flash": request.session.pop("flash", None), "totals": None}
+    if user.is_admin:
+        with SessionLocal() as db:
+            rows = db.execute(select(PushSub.role, func.count(func.distinct(PushSub.user_key))).group_by(PushSub.role)).all()
+        ctx["totals"] = {"viewers": sum(n for r, n in rows if r == "viewer"), "staff": sum(n for r, n in rows if r != "viewer")}
+    return render(request, "notifications.html", user, **ctx)
+
+
+@app.get("/notifications", response_class=HTMLResponse)
+async def page_notifications(request: Request, user: User = Depends(staff_user)):
+    return await _notif_page(request, user)
+
+
+@app.get("/me/notifications", response_class=HTMLResponse)
+async def page_my_notifications(request: Request, user: User = Depends(current_user)):
+    if not user.is_viewer:
+        return RedirectResponse("/notifications", status_code=303)
+    return await _notif_page(request, user)
+
+
+async def _save_notif_prefs(request: Request, user: User):
+    _check_push_path(request, user)
+    await verify_csrf(request)
+    form = await request.form()
+    allowed = webpush.VIEWER_PREFS if user.is_viewer else webpush.STAFF_PREFS
+    webpush.save_prefs(webpush.user_key(user), user.is_viewer, {k: form.get(k) == "on" for k in allowed})
+    request.session["flash"] = {"ok": True, "msg": "Saved."}
+    return RedirectResponse(f"{_push_base(user)}/notifications", status_code=303)
+
+
+@app.post("/notifications")
+async def save_notifications(request: Request, user: User = Depends(staff_user)):
+    return await _save_notif_prefs(request, user)
+
+
+@app.post("/me/notifications")
+async def save_my_notifications(request: Request, user: User = Depends(current_user)):
+    return await _save_notif_prefs(request, user)
+
+
+async def _push_subscribe(request: Request, user: User):
+    _check_push_path(request, user)
+    await verify_csrf(request)
+    body = await request.json()
+    sub = body.get("subscription") or {}
+    endpoint, keys = str(sub.get("endpoint") or ""), sub.get("keys") or {}
+    if not webpush.valid_endpoint(endpoint) or not keys.get("p256dh") or not keys.get("auth") or len(endpoint) > 1000:
+        raise HTTPException(400, "That doesn't look like a browser push subscription.")
+    key = webpush.user_key(user)
+    with SessionLocal() as db:
+        row = db.scalar(select(PushSub).where(PushSub.endpoint == endpoint)) or PushSub(endpoint=endpoint)
+        row.p256dh, row.auth = str(keys["p256dh"])[:200], str(keys["auth"])[:100]
+        row.user_key, row.user_name, row.role = key, user.name, user.role
+        row.jf_id, row.server_id = (user.jf_id, user.server_id) if user.is_viewer else (None, None)
+        row.device, row.failures = str(body.get("device") or request.headers.get("user-agent", ""))[:200], 0
+        db.add(row)
+        db.commit()
+        mine = list(db.scalars(select(PushSub).where(PushSub.user_key == key).order_by(PushSub.created_at.desc())))
+        for old in mine[10:]:       # at most 10 devices per person
+            db.delete(old)
+        db.commit()
+    sent = await webpush.deliver([r for r in webpush.subs_for(key) if r.endpoint == endpoint], "🔔 Notifications are on",
+                                 "JellyCreep will let you know when something happens.", f"{_push_base(user)}/notifications", "welcome")
+    return JSONResponse({"ok": True, "delivered": sent})
+
+
+@app.post("/push/subscribe")
+async def push_subscribe(request: Request, user: User = Depends(staff_user)):
+    return await _push_subscribe(request, user)
+
+
+@app.post("/me/push/subscribe")
+async def my_push_subscribe(request: Request, user: User = Depends(current_user)):
+    return await _push_subscribe(request, user)
+
+
+async def _push_unsubscribe(request: Request, user: User):
+    _check_push_path(request, user)
+    await verify_csrf(request)
+    body = await request.json()
+    endpoint = str(body.get("endpoint") or "")
+    rid = body.get("id")
+    with SessionLocal() as db:
+        q = select(PushSub).where(PushSub.user_key == webpush.user_key(user))
+        q = q.where(PushSub.id == int(rid)) if str(rid or "").isdigit() else q.where(PushSub.endpoint == endpoint)
+        for row in db.scalars(q):
+            db.delete(row)
+        db.commit()
+    return JSONResponse({"ok": True})
+
+
+@app.post("/push/unsubscribe")
+async def push_unsubscribe(request: Request, user: User = Depends(staff_user)):
+    return await _push_unsubscribe(request, user)
+
+
+@app.post("/me/push/unsubscribe")
+async def my_push_unsubscribe(request: Request, user: User = Depends(current_user)):
+    return await _push_unsubscribe(request, user)
+
+
+async def _push_test(request: Request, user: User):
+    _check_push_path(request, user)
+    await verify_csrf(request)
+    n = await webpush.deliver(webpush.subs_for(webpush.user_key(user)), "🧪 Test notification",
+                              f"Hi {user.name} — this is what JellyCreep notifications look like.",
+                              f"{_push_base(user)}/notifications", "test")
+    return JSONResponse({"ok": n > 0, "delivered": n})
+
+
+@app.post("/push/test")
+async def push_test(request: Request, user: User = Depends(staff_user)):
+    return await _push_test(request, user)
+
+
+@app.post("/me/push/test")
+async def my_push_test(request: Request, user: User = Depends(current_user)):
+    return await _push_test(request, user)
+
+
+@app.post("/push/announce")
+async def push_announce(request: Request, user: User = Depends(admin_user)):
+    await verify_csrf(request)
+    form = await request.form()
+    title = str(form.get("title") or "📣 Announcement").strip()[:80]
+    msg = str(form.get("message") or "").strip()[:500]
+    audience = str(form.get("audience") or "everyone")
+    if not msg:
+        request.session["flash"] = {"ok": False, "msg": "Write a message first."}
+    else:
+        n = await webpush.announce(title, msg, audience if audience in ("everyone", "viewers", "staff") else "everyone")
+        log.info("Announcement by %s to %s: %s devices", user.name, audience, n)
+        request.session["flash"] = {"ok": True, "msg": f"Sent to {n} device{'s' if n != 1 else ''}."}
+    return RedirectResponse("/notifications", status_code=303)
 
 
 # --- Library: recently added, item / season / episode pages (everyone) -----------------

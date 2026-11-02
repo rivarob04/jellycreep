@@ -282,3 +282,82 @@ document.querySelectorAll("[data-seasons]").forEach((form) => {
   window.addEventListener("touchend", finish);
   window.addEventListener("touchcancel", finish);
 })();
+
+// Phone / browser notifications (Web Push)
+(function () {
+  const csrf = () => (document.querySelector('meta[name="csrf"]') || {}).content || "";
+  const post = (url, body) => fetch(url, { method: "POST", credentials: "same-origin",
+    headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() }, body: JSON.stringify(body || {}) });
+  const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  const viewer = location.pathname.startsWith("/me");
+  const base = viewer ? "/me" : "";
+  const swUrl = base + "/sw.js", scope = base + "/";
+  const reg = () => supported ? navigator.serviceWorker.getRegistration(scope) : Promise.resolve(null);
+
+  // Signing out on a shared phone: stop this device getting the previous person's notifications.
+  document.querySelectorAll('a[href="/logout"], a[href="/auth/logout"]').forEach((a) => a.addEventListener("click", async (e) => {
+    if (!supported) return;
+    e.preventDefault();
+    try {
+      const r = await reg(); const sub = r && await r.pushManager.getSubscription();
+      if (sub) { await post(base + "/push/unsubscribe", { endpoint: sub.endpoint }).catch(() => {}); await sub.unsubscribe(); }
+    } catch (_) {}
+    location.href = a.href;
+  }));
+
+  const box = document.getElementById("push");
+  if (!box) return;
+  const $ = (s) => box.querySelector(s);
+  const on = $("[data-push-on]"), off = $("[data-push-off]"), test = $("[data-push-test]");
+  const show = (icon, title, text, state) => {
+    $("[data-push-ico]").textContent = icon; $("[data-push-title]").textContent = title; $("[data-push-text]").textContent = text || "";
+    on.hidden = state !== "off"; off.hidden = test.hidden = state !== "on"; box.classList.toggle("on", state === "on");
+  };
+  const key = (b64) => { const p = "=".repeat((4 - b64.length % 4) % 4); const raw = atob((b64 + p).replace(/-/g, "+").replace(/_/g, "/"));
+    return Uint8Array.from(raw, (c) => c.charCodeAt(0)); };
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent), standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+
+  async function refresh() {
+    if (!window.isSecureContext) return show("⚠️", "Needs HTTPS", "Open JellyCreep through its https:// address to use notifications.", "none");
+    if (!supported) return show("📵", ios && !standalone ? "Add JellyCreep to your Home Screen first" : "This browser can't do notifications",
+      ios && !standalone ? "On iPhone, tap Share → Add to Home Screen, open JellyCreep from there, then come back here." : "Try Chrome on Android, or Chrome, Edge, Firefox or Safari on a computer.", "none");
+    if (Notification.permission === "denied") return show("🚫", "Notifications are blocked", "Allow them in this site's settings (🔒 in the address bar → Notifications), then reload.", "none");
+    const r = await reg(); const sub = r && await r.pushManager.getSubscription();
+    if (sub) show("🔔", "On for this device", "You'll get the alerts ticked below.", "on");
+    else show("🔕", "Off for this device", "Turn on to get alerts here.", "off");
+  }
+
+  on.addEventListener("click", async () => {
+    on.disabled = true;
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") { await refresh(); return; }
+      const r = await navigator.serviceWorker.register(swUrl, { scope });
+      await navigator.serviceWorker.ready;
+      let sub = await r.pushManager.getSubscription();
+      if (!sub) sub = await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key(box.dataset.vapid) });
+      const res = await post(base + "/push/subscribe", { subscription: sub.toJSON(), device: navigator.userAgent });
+      if (!res.ok) throw new Error((await res.text()).slice(0, 200));
+      location.reload();
+    } catch (err) {
+      show("⚠️", "Couldn't turn notifications on", String(err && err.message || err), "off");
+    } finally { on.disabled = false; }
+  });
+  off.addEventListener("click", async () => {
+    const r = await reg(); const sub = r && await r.pushManager.getSubscription();
+    if (sub) { await post(base + "/push/unsubscribe", { endpoint: sub.endpoint }); await sub.unsubscribe(); }
+    location.reload();
+  });
+  test.addEventListener("click", async () => {
+    test.disabled = true; const t = test.textContent; test.textContent = "Sending…";
+    const res = await post(base + "/push/test").then((x) => x.json()).catch(() => ({}));
+    test.textContent = res.delivered ? "Sent ✓" : "Couldn't send"; setTimeout(() => { test.textContent = t; test.disabled = false; }, 2500);
+  });
+  document.querySelectorAll("[data-push-remove]").forEach((b) => b.addEventListener("click", async () => {
+    await post(base + "/push/unsubscribe", { id: b.dataset.pushRemove });
+    const r = await reg(); const sub = r && await r.pushManager.getSubscription();
+    if (sub && b.closest("[data-device-endpoint]").dataset.deviceEndpoint === sub.endpoint) await sub.unsubscribe();
+    location.reload();
+  }));
+  refresh();
+})();

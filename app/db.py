@@ -293,5 +293,24 @@ class DiskSnapshot(Base):
     free: Mapped[float] = mapped_column(Float)
 
 
+class PushSub(Base):
+    """A browser/phone that asked for push notifications (Web Push)."""
+    __tablename__ = "push_subs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    endpoint: Mapped[str] = mapped_column(String(1000), unique=True)
+    p256dh: Mapped[str] = mapped_column(String(200))
+    auth: Mapped[str] = mapped_column(String(100))
+    user_key: Mapped[str] = mapped_column(String(300), index=True)   # "viewer:<server>:<jf id>" or "staff:<name>"
+    user_name: Mapped[str] = mapped_column(String(200))
+    role: Mapped[str] = mapped_column(String(16))                    # admin | member | viewer
+    jf_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    server_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    device: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: utcnow())
+    last_ok: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    failures: Mapped[int] = mapped_column(Integer, default=0)
+
+
 def init_db() -> None:
     Base.metadata.create_all(engine)

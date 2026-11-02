@@ -49,6 +49,8 @@
   </nav>
   {% endif %}
   <div class="spacer"></div>
+  <a class="bell-btn{{ ' on' if path.endswith('/notifications') }}" href="{{ '/me' if user.is_viewer else '' }}/notifications" aria-label="Notifications">
+    <svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></a>
   <button class="theme-btn fx-desk" type="button" data-fx-toggle aria-label="Toggle glass effects"><span data-fx-label>✨ Glass</span></button>
   <button class="theme-btn" type="button" data-theme-toggle aria-label="Change theme"><span data-theme-label>🌓 Auto</span></button>
   <div class="who">{{ user.name }}{% if user.is_admin %} · admin{% endif %}</div>
@@ -78,17 +80,20 @@
   'settings': '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   'theme': '<path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/>',
   'glass': '<path d="M12 3l2.4 5.6L20 11l-5.6 2.4L12 19l-2.4-5.6L4 11l5.6-2.4z"/>',
+  'bell': '<path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
   'logout': '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/>',
 } %}
 {% if user.is_viewer %}
   {% set nav_main = [('/me', 'Home', 'home', True)]
      + ([('/me/discover', 'Discover', 'discover', False), ('/me/requests', 'Requests', 'requests', False)] if portal_seerr else [])
-     + [('/me/library', 'Recently added', 'recent', False), ('/me/history', 'History', 'history', False), ('/me/upcoming', 'Coming up', 'upcoming', False)] %}
+     + [('/me/library', 'Recently added', 'recent', False), ('/me/history', 'History', 'history', False), ('/me/upcoming', 'Coming up', 'upcoming', False),
+        ('/me/notifications', 'Notifications', 'bell', False)] %}
   {% set nav_extra = [] %}
 {% else %}
   {% set nav_main = [('/', 'Activity', 'activity', True), ('/history', 'History', 'history', False), ('/library', 'Recently added', 'recent', False),
                      ('/media', 'Libraries', 'media', False), ('/users', 'Users', 'users', False), ('/stats', 'Statistics', 'stats', False),
-                     ('/automation', 'Automation', 'automation', False), ('/events', 'Events', 'events', False)] %}
+                     ('/automation', 'Automation', 'automation', False), ('/events', 'Events', 'events', False),
+                     ('/notifications', 'Notifications', 'bell', False)] %}
   {% set nav_extra = ([('/add', 'Add a show or movie', 'add', False), ('/invites', 'Invite a user', 'invites', False), ('/settings', 'Settings', 'settings', False)] if user.is_admin else []) %}
 {% endif %}
 <div class="drawer-scrim" data-drawer-close></div>

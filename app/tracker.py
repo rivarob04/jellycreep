@@ -232,6 +232,13 @@ async def run_forever() -> None:
             await poll_once()
             if ticks % max(1, 300 // settings.poll_interval) == 0:
                 await check_services()
+            if ticks % max(1, 180 // settings.poll_interval) == 0:
+                try:
+                    from . import push_watch
+                    await push_watch.seerr_once()
+                    await push_watch.media_once()
+                except Exception:  # noqa: BLE001
+                    log.exception("Push watchers failed")
             if ticks % max(1, 21600 // settings.poll_interval) == 0:   # every 6 h → daily storage snapshot
                 try:
                     from .storage import snapshot_now

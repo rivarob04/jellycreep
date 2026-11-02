@@ -138,6 +138,23 @@ They never see other users, IP addresses, devices other than their own, download
 
 When a viewer's stream is being transcoded, JellyCreep explains why in plain English ("These subtitles have to be burned into the picture", "Your device can't play this audio track (TRUEHD)") and adds a tip they can act on. Their history marks each converted play with its reason, and the home page sums up how many recent plays were converted, the most common cause and the device it happened on.
 
+### Phone notifications (everyone)
+
+Tap the **🔔** in the top bar (or **Notifications** in the menu), then tap **Turn on for this device**. JellyCreep then sends real notifications with its own icon to that phone or computer, even while the app is closed, using Web Push. Nothing else is needed: no ntfy, no extra app, and no Firebase account.
+
+- **Jellyfin users** can be told when:
+  - their requests are approved, declined or ready to watch
+  - a new episode of a show they've watched (last 6 months) is added
+  - anything new is added (off by default)
+  - you send an announcement
+
+  They're only told about things their Jellyfin account can access.
+- **Admins and members** get the same alerts as ntfy/Pushover (new Seerr request, download failed, app down/back, new Wizarr user, transcodes, health). They can also get "new movies & episodes" and announcements. Each person picks their own alerts.
+- **Admins** can send an **announcement** to everyone, Jellyfin users only, or staff only.
+- Tapping a notification opens the right page. Signing out on a phone turns that phone's notifications off, so a shared device doesn't get the previous person's alerts.
+
+Requirements: JellyCreep must be opened over **https://**. The container also needs outbound HTTPS to the browser push services (`fcm.googleapis.com` for Chrome/Android, `*.push.apple.com` for Safari, `updates.push.services.mozilla.com` for Firefox). On iPhone, people must first **Add to Home Screen** (iOS 16.4+). The signing keys are created automatically and kept in the data volume. Set `VAPID_SUBJECT=mailto:you@example.com` if you want a contact address on them.
+
 ### Navigation on phones
 
 On phones and tablets, tap **☰** in the top-left corner, or swipe in from the left edge, to open the slide-out menu. It lists every page (the current one highlighted), plus the theme and glass switches and Sign out. Tap outside it, swipe it left or press Esc to close it. Wide screens keep the menu bar across the top.

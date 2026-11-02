@@ -93,6 +93,12 @@ async def _send_all(title: str, message: str, url: str | None, priority: str, ch
 async def send(trigger: str, title: str, message: str, url: str | None = None, priority: str = "default") -> None:
     """Fire-and-forget: never let a notification failure break the caller."""
     try:
+        from . import webpush
+        await webpush.notify_staff(trigger, title, message, tag=trigger,
+                                   urgency="high" if priority == "high" else ("low" if priority == "low" else "normal"))
+    except Exception:  # noqa: BLE001
+        log.exception("Web push error")
+    try:
         if not enabled(trigger):
             return
         cfg = config()

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block content %}
+{% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}
+<h1>Notifications</h1>
+<p class="muted small" style="margin-top:-6px">Get alerts on this phone or computer, even when JellyCreep is closed.</p>
+
+<div class="card mb push-card" id="push" data-vapid="{{ vapid }}" data-base="{{ base }}" data-sw="{{ base }}/sw.js" data-scope="{{ base }}/">
+  <div class="push-state">
+    <span class="push-ico" data-push-ico>🔕</span>
+    <div style="min-width:0;flex:1">
+      <strong data-push-title>Checking this device…</strong>
+      <div class="small muted" data-push-text></div>
+    </div>
+  </div>
+  <div class="req-buttons">
+    <button class="btn primary" type="button" data-push-on hidden>🔔 Turn on for this device</button>
+    <button class="btn" type="button" data-push-test hidden>Send a test</button>
+    <button class="btn" type="button" data-push-off hidden>Turn off for this device</button>
+  </div>
+  <details class="small push-help"><summary>Not working?</summary>
+    <ul>
+      <li><b>Android:</b> use Chrome. Installing JellyCreep (⋮ → <i>Add to Home screen</i>) works best. If you tapped “Block”, open the site settings (🔒 in the address bar) → Notifications → Allow.</li>
+      <li><b>iPhone / iPad:</b> first add JellyCreep to your Home Screen (Share → <i>Add to Home Screen</i>), open it from there, then turn notifications on. Needs iOS 16.4 or newer.</li>
+      <li>Battery saver can delay notifications. If they arrive late, set Chrome's battery use to “Unrestricted”.</li>
+    </ul>
+  </details>
+</div>
+
+<form method="post" action="{{ base }}/notifications" class="card mb">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <h2>Tell me when…</h2>
+  <p class="small muted" style="margin-top:-4px">These apply to all your devices.</p>
+  <div class="push-prefs">
+    {% for k, label in labels.items() %}
+    <label class="check"><input type="checkbox" name="{{ k }}" {{ 'checked' if prefs[k] }}> {{ label }}</label>
+    {% endfor %}
+  </div>
+  {% if user.is_viewer %}<p class="hint">“New episodes” covers shows you've watched in the last 6 months. You'll only hear about things your Jellyfin account can watch.</p>{% endif %}
+  <div class="actions"><button class="btn primary">Save</button></div>
+</form>
+
+{% if devices %}
+<div class="card mb">
+  <h2>Your devices</h2>
+  <div class="list">
+    {% for d in devices %}
+    <div class="spread device-row" data-device-endpoint="{{ d.endpoint }}">
+      <span style="min-width:0;flex:1"><span class="ellip" style="display:block">{{ d.device|device_name }}</span>
+        <span class="meta">Added {{ d.created_at|ago }}{% if d.last_ok %} · last delivered {{ d.last_ok|ago }}{% endif %}</span></span>
+      <button class="btn sm" type="button" data-push-remove="{{ d.id }}">Remove</button>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if user.is_admin %}
+<form method="post" action="/push/announce" class="card mb">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <h2>📣 Send an announcement</h2>
+  <p class="small muted" style="margin-top:-4px">
+    {{ totals.viewers }} Jellyfin user{{ 's' if totals.viewers != 1 }} and {{ totals.staff }} admin/member{{ 's' if totals.staff != 1 }} have notifications on.</p>
+  <div class="form">
+    <label class="full">Title <input name="title" maxlength="80" placeholder="📣 Server maintenance tonight"></label>
+    <label class="full">Message <textarea name="message" maxlength="500" rows="3" placeholder="Jellyfin will be down from 11 pm to midnight for updates." required></textarea></label>
+    <label class="full">Send to
+      <select name="audience"><option value="everyone">Everyone</option><option value="viewers">Jellyfin users only</option><option value="staff">Admins &amp; members only</option></select></label>
+    <div class="actions full"><button class="btn primary">Send</button></div>
+  </div>
+  <p class="hint" style="margin:8px 0 0">People who switched off “Announcements” won't get it. ntfy, Pushover and Discord are still set up under <a href="/settings#notifications">Settings → Notifications</a>.</p>
+</form>
+{% endif %}
+{% endblock %}

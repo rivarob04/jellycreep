@@ -168,6 +168,14 @@ def viewer_allowed(path: str) -> bool:
 REVALIDATE_EVERY = 6 * 3600
 
 
+def _drop_push(user: User) -> None:
+    try:
+        from .webpush import drop_viewer
+        drop_viewer(user.jf_id)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 async def _revalidate(request: Request, user: User) -> None:
     """Every few hours, make sure the Jellyfin account still exists and isn't disabled."""
     data = request.session.get("user") or {}
@@ -185,10 +193,12 @@ async def _revalidate(request: Request, user: User) -> None:
         client = await client_for(svc)
         info = await client.get(f"/Users/{user.jf_id}")
         if (info.get("Policy") or {}).get("IsDisabled"):
+            _drop_push(user)
             request.session.clear()
             raise LoginRequired()
     except UpstreamError as e:
         if "404" in str(e) or "400" in str(e):
+            _drop_push(user)
             request.session.clear()
             raise LoginRequired()
         return  # Jellyfin unreachable: don't lock people out, try again next time
