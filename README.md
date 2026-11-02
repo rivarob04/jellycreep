@@ -31,7 +31,7 @@
 
    | Variable | Value |
    |---|---|
-   | `JELLYCREEP_SECRET_KEY` | `openssl rand -base64 48` (the only required one) |
+   | `JELLYCREEP_SECRET_KEY` | optional: `openssl rand -base64 48`. If you leave it out, one is generated and saved in the data volume |
    | `JELLYCREEP_BASE_URL` | `https://jellycreep.example.com` |
    | `JELLYFIN_URL` / `JELLYFIN_API_KEY` | e.g. `http://jellyfin:8096` / key from Dashboard → API Keys |
 

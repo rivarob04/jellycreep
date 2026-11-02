@@ -5,9 +5,8 @@
 # connects to them by URL + API key (directly, or through Authentik).
 #
 # In Dockhand: Stacks → Add from Git → this repo, branch `main`, compose path `compose.yaml`.
-# Required stack variable:
-#   JELLYCREEP_SECRET_KEY   long random string (encrypts saved API keys, signs sessions)
-# Everything else is optional — see .env.example. Apps can also be added later
+# No variables are required — JellyCreep generates its own secret key on first start.
+# Everything is optional — see .env.example. Apps can also be added later
 # from Settings in the web UI.
 
 name: jellycreep
@@ -20,7 +19,8 @@ services:
     restart: unless-stopped
     environment:
       TZ: ${TZ:-America/Toronto}
-      SECRET_KEY: ${JELLYCREEP_SECRET_KEY:?Set JELLYCREEP_SECRET_KEY}
+      # Optional: if blank, JellyCreep generates one and keeps it in its data volume.
+      SECRET_KEY: ${JELLYCREEP_SECRET_KEY:-}
       BASE_URL: ${JELLYCREEP_BASE_URL:-}                 # e.g. https://jellycreep.example.com
       # authentik_forward (behind an Authentik outpost) | oidc (log in via Authentik) | none
       AUTH_MODE: ${AUTH_MODE:-authentik_forward}
