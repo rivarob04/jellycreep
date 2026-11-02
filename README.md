@@ -136,6 +136,8 @@ Your Jellyfin users can get their own dashboard by signing in with their **Jelly
 
 They never see other users, IP addresses, devices other than their own, downloads, storage, settings or any admin page. The server enforces this with default-deny: viewers are redirected to `/me`, and admin APIs return 403. A Jellyfin *administrator* who signs in this way is also only a viewer. Admin access always goes through Authentik and MFA.
 
+When a viewer's stream is being transcoded, JellyCreep explains why in plain English ("These subtitles have to be burned into the picture", "Your device can't play this audio track (TRUEHD)") and adds a tip they can act on. Their history marks each converted play with its reason, and the home page sums up how many recent plays were converted, the most common cause and the device it happened on.
+
 1. **Settings → Sign-in → Allow Jellyfin users to sign in**, then pick what users can see. Or set `JELLYFIN_LOGIN=true`.
 2. **nginx:** let the user pages bypass Authentik. Everything else stays protected. Add the following to your JellyCreep server block, above `location /`. It's also in [`deploy/nginx/jellycreep.conf`](deploy/nginx/jellycreep.conf).
    ```nginx

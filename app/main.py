@@ -21,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_, select
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import __version__, calendar_view, importer, notify, quality, stats, storage, tracker, webhooks
+from . import __version__, calendar_view, explain, importer, notify, quality, stats, storage, tracker, webhooks
 from .auth import (CSRF_COOKIE, LoginRequired, User, ViewerOnly, admin_user, api_user, bust_login_cache, client_ip,
                    csrf_token, current_user, jellyfin_login_enabled, limiter, login_settings, oauth, staff_user,
                    user_from_claims, verify_csrf)
@@ -158,6 +158,7 @@ def fmt_bytes(n: float | None) -> str:
 
 
 templates.env.filters.update(duration=fmt_duration, local=fmt_local, ago=fmt_ago, bytes=fmt_bytes)
+templates.env.globals.update(explain=explain.explain)
 templates.env.globals.update(version=__version__, kinds=SERVICE_KINDS, proxy_modes=PROXY_AUTH_MODES)
 
 
@@ -832,6 +833,7 @@ async def page_me(request: Request, user: User = Depends(current_user)):
         last = db.scalar(select(Play).where(_mine(user)).order_by(Play.stopped_at.desc()))
         recent = list(db.scalars(select(Play).where(_mine(user)).order_by(Play.stopped_at.desc()).limit(10)))
         prof = stats.user_profile(db, user.name, TZ)
+        tips = explain.summary(db.scalars(select(Play).where(_mine(user), Play.started_at >= utcnow() - timedelta(days=30))))
     svc = next((x for x in services(("jellyfin",)) if x.id == user.server_id), None)
 
     async def none():
@@ -844,7 +846,8 @@ async def page_me(request: Request, user: User = Depends(current_user)):
         added = added[0] or []
     return render(request, "me.html", user, streams=streams, others=others if cfg["server_activity"] else None,
                   last=last, recent=recent, u=prof, added=added or [], upcoming=upcoming or [], my_requests=reqs or [],
-                  server_ok=bool(svc and svc.last_ok is not False), server_name=svc.name if svc else "Jellyfin")
+                  server_ok=bool(svc and svc.last_ok is not False), server_name=svc.name if svc else "Jellyfin",
+                  tips=tips)
 
 
 @app.get("/partials/me", response_class=HTMLResponse)

@@ -27,6 +27,20 @@
 {% endif %}
 {% endif %}
 
+{% if tips and tips.transcodes %}
+<div class="card mb tip-card">
+  <div class="tip-ico">💡</div>
+  <div>
+    <strong>{{ tips.transcodes }} of your last {{ tips.total }} plays had to be converted</strong>
+    {% if tips.top %}<div class="small" style="margin-top:4px">Most often: {{ tips.top.text }}</div>
+    {% if tips.top.tip %}<div class="small muted" style="margin-top:2px">{{ tips.top.tip }}</div>{% endif %}{% endif %}
+    <div class="small muted" style="margin-top:4px">Converting can lower picture quality and cause buffering. Mostly on {{ tips.client }}.</div>
+  </div>
+</div>
+{% elif tips and tips.total >= 3 %}
+<div class="card mb tip-card ok"><div class="tip-ico">✅</div><div><strong>Everything you watched lately played in original quality.</strong><div class="small muted">No converting needed on your devices.</div></div></div>
+{% endif %}
+
 {% if recent %}
 <div class="spread section-title"><h2 style="margin:0">Your recently watched</h2><a class="small" href="/me/history">All →</a></div>
 <div class="posters mb">

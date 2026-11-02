@@ -698,3 +698,17 @@ h1 { letter-spacing: -.01em; }
 .login-or { display: flex; align-items: center; gap: 10px; margin: 18px 0 12px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
 .login-or::before, .login-or::after { content: ""; flex: 1; height: 1px; background: var(--glass-line); }
 .login-foot { max-width: 400px; text-align: center; margin-top: 14px; }
+
+/* ===================== v0.6.1 transcode explanations ===================== */
+.hero-why { margin-top: 10px; padding: 9px 12px; border-radius: 12px; background: rgba(224,164,58,.16); border: 1px solid rgba(224,164,58,.4);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); font-size: 13px; max-width: 560px; }
+.hero-why summary { cursor: pointer; font-weight: 700; color: #ffd38a; }
+.why-row { display: flex; flex-direction: column; gap: 2px; margin-top: 7px; }
+.why-row b { font-weight: 600; color: #fff; }
+.why-row span { color: rgba(255,255,255,.8); }
+.hero-good { margin-top: 8px; font-size: 13px; color: #8ff0c0; font-weight: 600; }
+.ai-why { font-size: 12px; color: var(--warn); margin-top: 2px; white-space: normal; }
+.ai-why em { font-style: normal; color: var(--muted); }
+.tip-card { display: flex; gap: 12px; align-items: flex-start; border-color: rgba(224,164,58,.45) !important; }
+.tip-card.ok { border-color: rgba(63,185,127,.45) !important; }
+.tip-ico { font-size: 26px; line-height: 1; }

@@ -24,6 +24,17 @@
             {% else %}{{ s.year or '' }}{% endif %}
           </div>
           <div class="hero-who">{% if user.is_viewer %}<b>{{ s.user_name }}</b>{% else %}<a href="/users/{{ s.user_name|urlencode }}">{{ s.user_name }}</a>{% endif %} · {{ s.client or '?' }} on {{ s.device or '?' }}</div>
+          {% if s.play_method == 'Transcode' %}
+          {% set why = explain(s.transcode_reasons, s.source_video_codec, s.source_audio_codec, s.resolution) %}
+          {% if why %}
+          <details class="hero-why"{{ ' open' if user.is_viewer }}>
+            <summary>⚠ Why is this converting?</summary>
+            {% for w in why %}<div class="why-row"><b>{{ w.text }}</b>{% if w.tip %}<span>💡 {{ w.tip }}</span>{% endif %}</div>{% endfor %}
+          </details>
+          {% endif %}
+          {% elif s.play_method in ('DirectPlay', 'DirectStream') and user.is_viewer %}
+          <div class="hero-good">✓ Playing the original quality{{ ' (repackaged on the fly)' if s.play_method == 'DirectStream' }}</div>
+          {% endif %}
           <div class="hero-progress">
             <div class="bar"><i style="width: {{ s.progress }}%"></i></div>
             <div class="hero-time"><span>{{ s.position_seconds|duration }} / {{ s.runtime_seconds|duration }}</span>
