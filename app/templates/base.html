@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="JellyCreep">
+  <meta name="csrf" content="{{ csrf }}">
+  <title>{% block title %}JellyCreep{% endblock %} · JellyCreep</title>
+  <link rel="manifest" href="/static/manifest.webmanifest" crossorigin="use-credentials">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icon-180.png">
+  <link rel="stylesheet" href="/static/style.css?v={{ version }}">
+</head>
+<body>
+{% set path = request.url.path %}
+{% set more_on = path.startswith('/users') or path.startswith('/media') or path.startswith('/events') or path.startswith('/settings') %}
+<header class="top">
+  <a class="brand" href="/"><img src="/static/icon.svg" width="26" height="26" alt=""><span>JellyCreep</span></a>
+  <nav class="nav-desktop">
+    <a href="/" class="{{ 'on' if path == '/' }}">Activity</a>
+    <a href="/history" class="{{ 'on' if path.startswith('/history') }}">History</a>
+    <a href="/users" class="{{ 'on' if path.startswith('/users') }}">Users</a>
+    <a href="/stats" class="{{ 'on' if path.startswith('/stats') }}">Stats</a>
+    <a href="/media" class="{{ 'on' if path.startswith('/media') }}">Media</a>
+    <a href="/automation" class="{{ 'on' if path.startswith('/automation') }}">Automation</a>
+    <a href="/events" class="{{ 'on' if path.startswith('/events') }}">Events</a>
+    {% if user.is_admin %}<a href="/settings" class="{{ 'on' if path.startswith('/settings') }}">Settings</a>{% endif %}
+  </nav>
+  <div class="spacer"></div>
+  <div class="who">{{ user.name }}{% if user.is_admin %} · admin{% endif %}</div>
+</header>
+
+<main>
+{% block content %}{% endblock %}
+</main>
+
+<nav class="tabbar" aria-label="Main">
+  <a href="/" class="{{ 'on' if path == '/' }}">
+    <svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Activity</a>
+  <a href="/history" class="{{ 'on' if path.startswith('/history') }}">
+    <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>History</a>
+  <a href="/stats" class="{{ 'on' if path.startswith('/stats') }}">
+    <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Stats</a>
+  <a href="/automation" class="{{ 'on' if path.startswith('/automation') }}">
+    <svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>Arr</a>
+  <details class="{{ 'on' if more_on }}">
+    <summary><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</summary>
+    <div class="more-sheet">
+      <a href="/users" class="{{ 'on' if path.startswith('/users') }}">Users</a>
+      <a href="/media" class="{{ 'on' if path.startswith('/media') }}">Media &amp; libraries</a>
+      <a href="/events" class="{{ 'on' if path.startswith('/events') }}">Events</a>
+      {% if user.is_admin %}<a href="/settings" class="{{ 'on' if path.startswith('/settings') }}">Settings</a>{% endif %}
+      {% if auth_mode != 'none' %}<a href="/auth/logout">Sign out ({{ user.name }})</a>{% endif %}
+    </div>
+  </details>
+</nav>
+<script src="/static/app.js?v={{ version }}"></script>
+</body>
+</html>

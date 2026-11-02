@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Stats{% endblock %}
+{% macro hbars(rows) %}
+  {% set mx = (rows|map(attribute='plays')|max) if rows else 1 %}
+  {% for r in rows %}
+  <div class="hbar"><span title="{{ r.label }}">{{ r.label }}</span><div class="track"><i style="width: {{ (r.plays / mx * 100)|round(1) }}%"></i></div><span class="num muted">{{ r.plays }}</span></div>
+  {% else %}<div class="muted small">No data</div>{% endfor %}
+{% endmacro %}
+{% block content %}
+<div class="spread"><h1>Statistics</h1>
+  <div class="tabs">{% for d in [7, 30, 90, 365] %}<a href="?days={{ d }}" class="{{ 'on' if d == days }}">{{ d }} days</a>{% endfor %}</div>
+</div>
+<div class="grid g4 mb">
+  <div class="card tile"><div class="n">{{ summary.plays }}</div><div class="l">Plays</div></div>
+  <div class="card tile"><div class="n">{{ summary.seconds|duration }}</div><div class="l">Watch time</div></div>
+  <div class="card tile"><div class="n">{{ summary.users }}</div><div class="l">Active users</div></div>
+  <div class="card tile"><div class="n">{{ (summary.plays / ((days) or 1))|round(1) }}</div><div class="l">Plays / day</div></div>
+</div>
+
+<div class="card mb">
+  <h2>Plays per day</h2>
+  {% set mx = (per_day|map(attribute='plays')|max) or 1 %}
+  <div class="chart">
+    {% for d in per_day %}
+    <div class="col" title="{{ d.day }}: {{ d.plays }} plays ({{ d.movies }} movies, {{ d.episodes }} episodes, {{ d.other }} other)">
+      <i class="c-mov" style="height: {{ (d.movies / mx * 100)|round(2) }}%"></i>
+      <i class="c-ep" style="height: {{ (d.episodes / mx * 100)|round(2) }}%"></i>
+      <i class="c-oth" style="height: {{ (d.other / mx * 100)|round(2) }}%"></i>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="legend"><span><i class="c-mov"></i>Movies</span><span><i class="c-ep"></i>Episodes</span><span><i class="c-oth"></i>Other</span>
+    <span style="margin-left:auto">{{ per_day[0].day }} → {{ per_day[-1].day }} (UTC)</span></div>
+</div>
+
+<div class="grid g3 mb">
+  <div class="card"><h2>Top users</h2>
+    {% for u in top_users %}
+    <div class="rank"><span class="muted">#{{ loop.index }}</span><a href="/history?user_name={{ u.user|urlencode }}">{{ u.user }}</a><span class="muted small">{{ u.seconds|duration }} · {{ u.plays }}</span></div>
+    {% else %}<div class="muted small">No data</div>{% endfor %}
+  </div>
+  <div class="card"><h2>Most watched movies</h2>
+    {% for m in top_movies %}
+    <div class="rank"><img class="mini-poster" loading="lazy" src="/img/{{ m.server }}/{{ m.poster }}?h=100" alt=""><span>{{ m.title }}{% if m.year %} <span class="muted">({{ m.year }})</span>{% endif %}</span><span class="muted small">{{ m.plays }} plays · {{ m.users }} users</span></div>
+    {% else %}<div class="muted small">No data</div>{% endfor %}
+  </div>
+  <div class="card"><h2>Most watched shows</h2>
+    {% for m in top_shows %}
+    <div class="rank"><img class="mini-poster" loading="lazy" src="/img/{{ m.server }}/{{ m.poster }}?h=100" alt=""><span>{{ m.title }}</span><span class="muted small">{{ m.plays }} plays · {{ m.users }} users</span></div>
+    {% else %}<div class="muted small">No data</div>{% endfor %}
+  </div>
+</div>
+
+<div class="grid g3 mb">
+  <div class="card"><h2>Play method</h2>{{ hbars(methods) }}</div>
+  <div class="card"><h2>Clients</h2>{{ hbars(clients) }}</div>
+  <div class="card"><h2>Media type</h2>{{ hbars(types) }}</div>
+</div>
+
+<div class="card mb">
+  <h2>Plays by hour of day (UTC)</h2>
+  {% set mh = (by_hour|max) or 1 %}
+  <div class="chart" style="height:110px">
+    {% for n in by_hour %}<div class="col" title="{{ '%02d'|format(loop.index0) }}:00 – {{ n }} plays"><i class="c-ep" style="height: {{ (n / mh * 100)|round(2) }}%"></i></div>{% endfor %}
+  </div>
+  <div class="legend"><span>00</span><span style="margin-left:auto">12</span><span style="margin-left:auto">23</span></div>
+</div>
+
+{% for j in jellystat %}
+<div class="card mb">
+  <div class="spread"><h2>Jellystat · {{ j.svc.name }}</h2><a class="btn sm" href="{{ j.svc.link }}" target="_blank" rel="noopener">Open Jellystat ↗</a></div>
+  {% if j.error %}<div class="notice bad">{{ j.error }}</div>
+  {% elif j.users %}
+  <div class="small muted mb">Most active users over {{ days }} days, according to Jellystat (includes history from before JellyCreep was installed).</div>
+  {% for u in j.users[:10] %}
+  <div class="rank"><span class="muted">#{{ loop.index }}</span><span>{{ u.Name or u.UserName or u.name or '?' }}</span><span class="muted small">{{ u.Plays or u.plays or '' }} plays</span></div>
+  {% endfor %}
+  {% else %}<div class="muted small">No data from Jellystat for this period.</div>{% endif %}
+</div>
+{% endfor %}
+{% endblock %}

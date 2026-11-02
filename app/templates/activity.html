@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Activity{% endblock %}
+{% block content %}
+{% if not has_servers %}
+<div class="notice">No Jellyfin server yet. {% if user.is_admin %}<a href="/settings?new=jellyfin">Add one in Settings</a> to start tracking.{% else %}Ask an admin to add one.{% endif %}</div>
+{% endif %}
+<div class="grid g4 mb">
+  <div class="card tile"><div class="n">{{ streams|length }}</div><div class="l">Streams now</div></div>
+  <div class="card tile"><div class="n">{{ streams|selectattr('play_method', 'equalto', 'Transcode')|list|length }}</div><div class="l">Transcoding</div></div>
+  <div class="card tile"><div class="n">{{ today.plays }}</div><div class="l">Plays · 24h</div></div>
+  <div class="card tile"><div class="n">{{ today.seconds|duration }}</div><div class="l">Watched · 24h</div></div>
+</div>
+<div class="spread mb"><h1 style="margin:0">Now playing</h1><span class="muted small">Live</span></div>
+<div id="live-streams">{% include "_streams.html" %}</div>
+
+<div class="spread section-title"><h2 style="margin:0">Recently watched</h2><a class="small" href="/history">All history →</a></div>
+{% if recent %}
+<div class="posters">
+  {% for p in recent %}
+  <figure title="{{ p.display_title }}">
+    <img loading="lazy" src="/img/{{ p.server_id }}/{{ p.poster_id }}?h=300" alt="">
+    <figcaption>{{ p.series_name or p.title }}<br><span class="muted">{{ p.user_name }} · {{ p.stopped_at|ago }}</span></figcaption>
+  </figure>
+  {% endfor %}
+</div>
+{% else %}<div class="card empty">History will appear here once someone finishes watching something.</div>{% endif %}
+{% endblock %}

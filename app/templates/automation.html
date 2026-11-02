@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Automation{% endblock %}
+{% block content %}
+<h1>Automation</h1>
+{% if not panels %}
+<div class="card empty">No Sonarr, Radarr, Prowlarr, qBittorrent or Seerr configured yet.{% if user.is_admin %} <a href="/settings">Add them in Settings</a>.{% endif %}</div>
+{% else %}
+<div class="tabs">
+  {% if calendar %}<a href="#upcoming">Upcoming</a>{% endif %}
+  {% for p in panels %}<a href="#svc-{{ p.svc.id }}">{{ p.svc.name }}</a>{% endfor %}
+</div>
+
+{% if calendar %}
+<div class="card mb" id="upcoming">
+  <h2>Upcoming</h2>
+  <div class="list">
+    {% for c in calendar %}
+    <div class="spread"><span class="ellip" style="max-width:68%">{{ c.title }}</span>
+      <span class="small muted">{{ c.when }} · {{ c.source }}{% if c.has_file %} <span class="badge b-ok">✓</span>{% endif %}</span></div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% for p in panels %}
+<div class="card mb" id="svc-{{ p.svc.id }}">
+  <div class="spread mb">
+    <h2 style="margin:0">{{ p.svc.name }}</h2>
+    <a class="btn sm" href="{{ p.svc.link }}" target="_blank" rel="noopener">Open ↗</a>
+  </div>
+  {% if p.error %}<div class="notice bad">{{ p.error }}</div>{% endif %}
+
+  {% for h in p.health or [] %}
+  <div class="notice {{ 'bad' if h.type == 'error' else '' }} small">⚠ {{ h.message }}</div>
+  {% endfor %}
+
+  {% if p.svc.kind in ('sonarr', 'radarr', 'lidarr') %}
+    <h2 class="small muted" style="text-transform:uppercase; letter-spacing:.05em">Queue ({{ (p.queue or [])|length }})</h2>
+    {% if p.queue %}
+    <div class="list mb">
+      {% for q in p.queue %}
+      {% set pct = ((1 - (q.sizeleft or 0) / q.size) * 100) if q.size else 0 %}
+      <div>
+        <div class="ellip">{% if q.series %}{{ q.series.title }}{% if q.episode %} S{{ '%02d'|format(q.episode.seasonNumber) }}E{{ '%02d'|format(q.episode.episodeNumber) }}{% endif %}{% elif q.movie %}{{ q.movie.title }}{% elif q.artist %}{{ q.artist.artistName }}{% else %}{{ q.title }}{% endif %}</div>
+        <div class="meta spread"><span>{{ q.status }}{% if q.trackedDownloadState and q.trackedDownloadState != 'downloading' %} · {{ q.trackedDownloadState }}{% endif %} · {{ q.protocol }}</span><span>{{ pct|round|int }}%{% if q.timeleft %} · {{ q.timeleft }}{% endif %}</span></div>
+        <div class="bar"><i style="width: {{ pct }}%"></i></div>
+        {% for m in q.statusMessages or [] %}{% for msg in m.messages %}<div class="meta bad-text">{{ msg }}</div>{% endfor %}{% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="muted small">Queue is empty.</p>{% endif %}
+
+    {% if p.history %}
+    <details>
+      <summary class="muted" style="padding:8px 0; cursor:pointer">Recent activity ({{ p.history|length }})</summary>
+      <div class="list">
+        {% for h in p.history %}
+        <div>
+          <div class="ellip">{% if h.series %}{{ h.series.title }}{% if h.episode %} S{{ '%02d'|format(h.episode.seasonNumber) }}E{{ '%02d'|format(h.episode.episodeNumber) }}{% endif %}{% elif h.movie %}{{ h.movie.title }}{% else %}{{ h.sourceTitle }}{% endif %}</div>
+          <div class="meta">{{ h.eventType }} · {{ (h.date or '')[:16]|replace('T', ' ') }}{% if h.quality and h.quality.quality %} · {{ h.quality.quality.name }}{% endif %}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </details>
+    {% endif %}
+
+    {% if p.disk %}
+    <details>
+      <summary class="muted" style="padding:8px 0; cursor:pointer">Disk space</summary>
+      {% for d in p.disk %}
+      {% set used = ((1 - d.freeSpace / d.totalSpace) * 100) if d.totalSpace else 0 %}
+      <div style="margin:6px 0">
+        <div class="spread small"><span class="mono ellip" style="max-width:60%">{{ d.path }}</span><span class="muted">{{ d.freeSpace|bytes }} free of {{ d.totalSpace|bytes }}</span></div>
+        <div class="bar"><i style="width: {{ used }}%; {{ 'background: var(--bad)' if used > 90 }}"></i></div>
+      </div>
+      {% endfor %}
+    </details>
+    {% endif %}
+
+  {% elif p.svc.kind == 'prowlarr' %}
+    <div class="list">
+      {% for i in p.indexers or [] %}
+      <div class="spread"><span class="row" style="gap:8px"><span class="dot {{ 'bad' if i.id in p.failing else ('ok' if i.enable else '') }}"></span>{{ i.name }}</span>
+        <span class="muted small">{{ i.protocol }}{% if not i.enable %} · disabled{% elif i.id in p.failing %} · failing{% endif %}</span></div>
+      {% else %}<p class="muted small">No indexers.</p>{% endfor %}
+    </div>
+
+  {% elif p.svc.kind == 'qbittorrent' %}
+    {% if p.transfer %}
+    <div class="grid g4 mb">
+      <div class="tile"><div class="n">{{ (p.transfer.dl_info_speed or 0)|bytes }}/s</div><div class="l">Download</div></div>
+      <div class="tile"><div class="n">{{ (p.transfer.up_info_speed or 0)|bytes }}/s</div><div class="l">Upload</div></div>
+    </div>
+    {% endif %}
+    {% set active = (p.torrents or [])|rejectattr('progress', 'ge', 1)|list %}
+    <h2 class="small muted" style="text-transform:uppercase; letter-spacing:.05em">Downloading ({{ active|length }})</h2>
+    <div class="list mb">
+      {% for t in active %}
+      <div>
+        <div class="ellip">{{ t.name }}</div>
+        <div class="meta spread"><span>{{ t.state }} · {{ t.size|bytes }}{% if t.category %} · {{ t.category }}{% endif %}</span><span>{{ (t.progress * 100)|round(1) }}% · {{ t.dlspeed|bytes }}/s</span></div>
+        <div class="bar"><i style="width: {{ t.progress * 100 }}%"></i></div>
+      </div>
+      {% else %}<p class="muted small">Nothing downloading.</p>{% endfor %}
+    </div>
+    <details>
+      <summary class="muted" style="padding:8px 0; cursor:pointer">Recently added ({{ (p.torrents or [])|length }})</summary>
+      <div class="list">
+        {% for t in (p.torrents or [])[:25] %}
+        <div><div class="ellip">{{ t.name }}</div><div class="meta">{{ t.state }} · ratio {{ t.ratio|round(2) }} · {{ t.size|bytes }}</div></div>
+        {% endfor %}
+      </div>
+    </details>
+
+  {% elif p.svc.kind == 'jellyseerr' %}
+    {% if p.counts %}
+    <div class="grid g4 mb">
+      <div class="tile"><div class="n">{{ p.counts.pending or 0 }}</div><div class="l">Pending</div></div>
+      <div class="tile"><div class="n">{{ p.counts.processing or 0 }}</div><div class="l">Processing</div></div>
+      <div class="tile"><div class="n">{{ p.counts.available or 0 }}</div><div class="l">Available</div></div>
+      <div class="tile"><div class="n">{{ p.counts.total or 0 }}</div><div class="l">Total</div></div>
+    </div>
+    {% endif %}
+    {% set rstatus = {1: ('Pending', 'b-warn'), 2: ('Approved', 'b-ok'), 3: ('Declined', 'b-bad'), 4: ('Failed', 'b-bad'), 5: ('Completed', 'b-ok')} %}
+    <div class="list">
+      {% for r in p.requests or [] %}
+      {% set st = rstatus.get(r.status, ('?', '')) %}
+      <div class="spread">
+        <span style="min-width:0; flex:1"><span class="ellip" style="display:block">{{ r._title or ('TMDB ' ~ ((r.media or {}).tmdbId or '?')) }}{% if r._year %} <span class="muted">({{ r._year }})</span>{% endif %}</span>
+          <span class="meta">{{ r.type }} · {{ (r.requestedBy or {}).displayName or '?' }} · {{ (r.createdAt or '')[:10] }}</span></span>
+        <span class="badge {{ st[1] }}">{{ st[0] }}</span>
+      </div>
+      {% else %}<p class="muted small">No requests.</p>{% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

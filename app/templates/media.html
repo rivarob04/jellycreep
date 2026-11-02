@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Media{% endblock %}
+{% block content %}
+<h1>Media</h1>
+{% for s in servers %}
+<div class="card mb">
+  <div class="spread mb">
+    <h2 style="margin:0">{{ s.svc.name }}</h2>
+    <span class="muted small">{% if s.info %}v{{ s.info.Version }}{% endif %}</span>
+  </div>
+  {% if s.error %}<div class="notice bad">{{ s.error }}</div>{% endif %}
+  {% if s.counts %}
+  <div class="grid g4 mb">
+    <div class="tile"><div class="n">{{ s.counts.MovieCount or 0 }}</div><div class="l">Movies</div></div>
+    <div class="tile"><div class="n">{{ s.counts.SeriesCount or 0 }}</div><div class="l">Series</div></div>
+    <div class="tile"><div class="n">{{ s.counts.EpisodeCount or 0 }}</div><div class="l">Episodes</div></div>
+    <div class="tile"><div class="n">{{ s.counts.AlbumCount or 0 }}</div><div class="l">Albums</div></div>
+  </div>
+  {% endif %}
+  {% if s.recent %}
+  <h2>Recently added</h2>
+  <div class="posters mb">
+    {% for i in s.recent %}
+    {% set pid = i.SeriesId if i.Type == 'Episode' else i.Id %}
+    <figure title="{{ i.SeriesName ~ ' – ' if i.SeriesName }}{{ i.Name }}">
+      <img loading="lazy" src="/img/{{ s.svc.id }}/{{ pid }}?h=300" alt="">
+      <figcaption>{{ i.SeriesName or i.Name }}<br><span class="muted">{% if i.Type == 'Episode' %}S{{ '%02d'|format(i.ParentIndexNumber or 0) }}E{{ '%02d'|format(i.IndexNumber or 0) }}{% else %}{{ i.ProductionYear or i.Type }}{% endif %}</span></figcaption>
+    </figure>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if s.libs %}
+  <h2>Libraries</h2>
+  <div class="list">
+    {% for l in s.libs %}
+    <div class="spread"><span><strong>{{ l.Name }}</strong> <span class="muted small">{{ l.CollectionType or 'mixed' }}</span></span>
+      <span class="muted small ellip" style="max-width:55%">{{ (l.Locations or [])|join(', ') }}</span></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% else %}
+<div class="card empty">No Jellyfin server configured.{% if user.is_admin %} <a href="/settings?new=jellyfin">Add one</a>.{% endif %}</div>
+{% endfor %}
+{% endblock %}

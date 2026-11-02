@@ -1,0 +1,136 @@
+# JellyCreep + Jellystat stack — made for Dockhand (works with plain `docker compose` too).
+#
+# In Dockhand: Stacks → Add from Git → this repo, branch `main`, compose path `compose.yaml`.
+# Then set the stack variables below (mark the passwords/secrets as "secret").
+#
+# Required variables:
+#   JELLYCREEP_SECRET_KEY   long random string (encrypts saved API keys, signs sessions)
+#   JELLYSTAT_DB_PASSWORD   password for Jellystat's Postgres
+#   JELLYSTAT_JWT_SECRET    long random string for Jellystat logins
+#
+# Everything else has a sensible default — see .env.example for the full list.
+
+name: jellycreep
+
+services:
+  jellycreep:
+    image: ghcr.io/rivarob04/jellycreep:latest
+    build: .                      # used if the image can't be pulled
+    container_name: jellycreep
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-America/Toronto}
+      SECRET_KEY: ${JELLYCREEP_SECRET_KEY:?Set JELLYCREEP_SECRET_KEY}
+      BASE_URL: ${JELLYCREEP_BASE_URL:-}                 # e.g. https://jellycreep.example.com
+      # authentik_forward (behind an Authentik outpost) | oidc (log in via Authentik) | none
+      AUTH_MODE: ${AUTH_MODE:-authentik_forward}
+      # Only requests coming *from* these addresses may set X-authentik-* headers.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1/32,172.16.0.0/12}
+      ADMIN_GROUP: ${ADMIN_GROUP:-jellycreep-admins}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}                       # https://auth.example.com/application/o/jellycreep
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      POLL_INTERVAL: ${POLL_INTERVAL:-10}
+      MIN_WATCH_SECONDS: ${MIN_WATCH_SECONDS:-30}
+      WATCHED_PERCENT: ${WATCHED_PERCENT:-90}
+      HISTORY_RETENTION_DAYS: ${HISTORY_RETENTION_DAYS:-0}
+      # First-run convenience: services are created from these if set.
+      # You can also add/edit them later in Settings (from your phone).
+      JELLYFIN_URL: ${JELLYFIN_URL:-}
+      JELLYFIN_API_KEY: ${JELLYFIN_API_KEY:-}
+      SONARR_URL: ${SONARR_URL:-}
+      SONARR_API_KEY: ${SONARR_API_KEY:-}
+      SONARR_PROXY_AUTH: ${SONARR_PROXY_AUTH:-}
+      RADARR_URL: ${RADARR_URL:-}
+      RADARR_API_KEY: ${RADARR_API_KEY:-}
+      RADARR_PROXY_AUTH: ${RADARR_PROXY_AUTH:-}
+      PROWLARR_URL: ${PROWLARR_URL:-}
+      PROWLARR_API_KEY: ${PROWLARR_API_KEY:-}
+      PROWLARR_PROXY_AUTH: ${PROWLARR_PROXY_AUTH:-}
+      QBITTORRENT_URL: ${QBITTORRENT_URL:-}
+      QBITTORRENT_USERNAME: ${QBITTORRENT_USERNAME:-}
+      QBITTORRENT_PASSWORD: ${QBITTORRENT_PASSWORD:-}
+      QBITTORRENT_PROXY_AUTH: ${QBITTORRENT_PROXY_AUTH:-}
+      JELLYSEERR_URL: ${JELLYSEERR_URL:-}
+      JELLYSEERR_API_KEY: ${JELLYSEERR_API_KEY:-}
+      JELLYSEERR_PROXY_AUTH: ${JELLYSEERR_PROXY_AUTH:-}
+      JELLYSTAT_URL: http://jellystat:3000                # the bundled Jellystat below
+      JELLYSTAT_PUBLIC_URL: ${JELLYSTAT_PUBLIC_URL:-}
+      JELLYSTAT_API_KEY: ${JELLYSTAT_API_KEY:-}
+      # Authentik service account used for apps behind Authentik (*_PROXY_AUTH=authentik_basic)
+      AUTHENTIK_URL: ${AUTHENTIK_URL:-}
+      AUTHENTIK_SERVICE_USERNAME: ${AUTHENTIK_SERVICE_USERNAME:-}
+      AUTHENTIK_SERVICE_APP_PASSWORD: ${AUTHENTIK_SERVICE_APP_PASSWORD:-}
+    volumes:
+      - jellycreep-data:/data
+    ports:
+      # Bound to localhost by default so nobody on the LAN can bypass Authentik.
+      # Your reverse proxy / Authentik outpost should reach it on the shared network instead.
+      - "${JELLYCREEP_BIND:-127.0.0.1}:${JELLYCREEP_PORT:-8484}:8484"
+    networks:
+      - default
+      - proxy
+    depends_on:
+      jellystat:
+        condition: service_started
+
+  jellystat-db:
+    image: postgres:15.2
+    container_name: jellystat-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${JELLYSTAT_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${JELLYSTAT_DB_PASSWORD:?Set JELLYSTAT_DB_PASSWORD}
+      TZ: ${TZ:-America/Toronto}
+    volumes:
+      - jellystat-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${JELLYSTAT_DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-file: "5"
+        max-size: 10m
+
+  jellystat:
+    image: cyfershepard/jellystat:latest
+    container_name: jellystat
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${JELLYSTAT_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${JELLYSTAT_DB_PASSWORD:?Set JELLYSTAT_DB_PASSWORD}
+      POSTGRES_IP: jellystat-db
+      POSTGRES_PORT: 5432
+      JWT_SECRET: ${JELLYSTAT_JWT_SECRET:?Set JELLYSTAT_JWT_SECRET}
+      TZ: ${TZ:-America/Toronto}
+    volumes:
+      - jellystat-backup:/app/backend/backup-data
+    ports:
+      - "${JELLYSTAT_BIND:-0.0.0.0}:${JELLYSTAT_PORT:-3000}:3000"
+    networks:
+      - default
+      - proxy
+    depends_on:
+      jellystat-db:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-file: "5"
+        max-size: 10m
+
+volumes:
+  jellycreep-data:
+  jellystat-postgres:
+  jellystat-backup:
+
+networks:
+  # Shared with your reverse proxy / Authentik outpost (and Jellyfin/*arrs if they
+  # live in Docker), so they can reach each other by container name.
+  # Create it once:  docker network create proxy   (or set PROXY_NETWORK to yours)
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:-proxy}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Events{% endblock %}
+{% block content %}
+<h1>Events</h1>
+<p class="muted small" style="margin-top:-6px">Webhooks from Sonarr, Radarr, Lidarr, Prowlarr, Seerr and Jellyfin.{% if user.is_admin %} Setup is in <a href="/settings#webhooks">Settings</a>.{% endif %}</p>
+{% if sources %}
+<div class="tabs">
+  <a href="/events" class="{{ 'on' if not source }}">All</a>
+  {% for s in sources %}<a href="/events?source={{ s }}" class="{{ 'on' if s == source }}">{{ s|capitalize }}</a>{% endfor %}
+</div>
+{% endif %}
+<div class="card">
+  {% if rows %}
+  <div class="list">
+    {% for e in rows %}
+    <div>
+      <div class="spread"><span class="row" style="gap:6px"><span class="badge b-acc">{{ e.source }}</span><span class="badge {{ 'b-ok' if e.event_type in ('Download', 'MEDIA_AVAILABLE', 'ItemAdded') else ('b-bad' if 'Fail' in e.event_type or e.event_type in ('Health',) else '') }}">{{ e.event_type }}</span></span>
+        <span class="muted small" title="{{ e.created_at|local }}">{{ e.created_at|ago }}</span></div>
+      <div style="margin-top:4px; overflow-wrap:anywhere">{{ e.title }}</div>
+      {% if e.detail %}<div class="meta" style="overflow-wrap:anywhere">{{ e.detail }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<div class="empty">No events yet.</div>{% endif %}
+</div>
+{% endblock %}

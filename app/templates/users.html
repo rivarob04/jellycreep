@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Users{% endblock %}
+{% block content %}
+<h1>Users</h1>
+<div class="card flush table-wrap">
+{% if rows %}
+<table class="stack">
+  <thead><tr><th>User</th><th>Last seen</th><th>Last played</th><th>Player</th><th>IP</th><th class="num">Plays</th><th class="num">Watch time</th><th>Since</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td class="lead"><a href="/history?user_name={{ r.user|urlencode }}">{{ r.user }}</a></td>
+    <td data-label="Last seen" title="{{ r.last|local }}">{{ r.last|ago }}</td>
+    <td data-label="Played" class="ellip">{{ r.last_title or '' }}</td>
+    <td data-label="Player">{{ r.last_client or '' }}</td>
+    <td data-label="IP" class="mono small">{{ r.last_ip or '' }}</td>
+    <td data-label="Plays" class="num">{{ r.plays }}</td>
+    <td data-label="Watched" class="num">{{ r.seconds|duration }}</td>
+    <td data-label="Since" class="muted">{{ r.first|local('%Y-%m-%d') }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<div class="empty">No one has played anything yet.</div>{% endif %}
+</div>
+{% endblock %}

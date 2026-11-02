@@ -1,0 +1,222 @@
+"""Clients for each supported app, built on Upstream (so they all work behind Authentik)."""
+from __future__ import annotations
+
+import asyncio
+from datetime import datetime, timedelta, timezone
+from typing import Any
+
+from .db import Service
+from .upstream import Upstream, UpstreamError, pool
+
+
+class JellyfinClient(Upstream):
+    def __init__(self, svc: Service) -> None:
+        super().__init__(svc)
+        # X-Emby-Token keeps the Authorization header free for the proxy.
+        self.app_headers = {"X-Emby-Token": svc.api_key or ""}
+
+    async def test(self) -> str:
+        info = await self.get("/System/Info")
+        return f"Jellyfin {info.get('Version')} – {info.get('ServerName')}"
+
+    async def sessions(self) -> list[dict]:
+        return await self.get("/Sessions") or []
+
+    async def users(self) -> list[dict]:
+        return await self.get("/Users") or []
+
+    async def system_info(self) -> dict:
+        return await self.get("/System/Info") or {}
+
+    async def libraries(self) -> list[dict]:
+        return await self.get("/Library/VirtualFolders") or []
+
+    async def counts(self) -> dict:
+        return await self.get("/Items/Counts") or {}
+
+    async def recently_added(self, limit: int = 18) -> list[dict]:
+        data = await self.get("/Items", params={
+            "SortBy": "DateCreated", "SortOrder": "Descending", "Recursive": "true",
+            "IncludeItemTypes": "Movie,Episode,MusicAlbum", "Limit": str(limit),
+            "Fields": "DateCreated,ProductionYear", "IsMissing": "false",
+        })
+        return (data or {}).get("Items", [])
+
+    async def stop(self, session_id: str) -> None:
+        await self.post(f"/Sessions/{session_id}/Playing/Stop", expect_json=False)
+
+    async def message(self, session_id: str, header: str, text: str) -> None:
+        await self.post(f"/Sessions/{session_id}/Message", json={"Header": header, "Text": text, "TimeoutMs": 10000},
+                        expect_json=False)
+
+    async def image(self, item_id: str, kind: str = "Primary", max_height: int = 300):
+        return await self.get(f"/Items/{item_id}/Images/{kind}", params={"maxHeight": str(max_height), "quality": "85"},
+                              expect_json=False, headers={"Accept": "image/*"})
+
+
+class ArrClient(Upstream):
+    """Sonarr / Radarr (v3 API) and Lidarr / Prowlarr (v1 API)."""
+
+    def __init__(self, svc: Service) -> None:
+        super().__init__(svc)
+        self.app_headers = {"X-Api-Key": svc.api_key or ""}
+        self.v = "v1" if svc.kind in ("lidarr", "prowlarr") else "v3"
+
+    def p(self, path: str) -> str:
+        return f"/api/{self.v}/{path.lstrip('/')}"
+
+    async def test(self) -> str:
+        st = await self.get(self.p("system/status"))
+        return f"{st.get('appName', self.svc.kind_label)} {st.get('version')}"
+
+    async def health(self) -> list[dict]:
+        return await self.get(self.p("health")) or []
+
+    async def queue(self) -> list[dict]:
+        params = {"pageSize": "50"}
+        if self.svc.kind == "sonarr":
+            params.update(includeSeries="true", includeEpisode="true")
+        elif self.svc.kind == "radarr":
+            params.update(includeMovie="true")
+        elif self.svc.kind == "lidarr":
+            params.update(includeArtist="true", includeAlbum="true")
+        data = await self.get(self.p("queue"), params=params)
+        return (data or {}).get("records", [])
+
+    async def calendar(self, days: int = 14) -> list[dict]:
+        now = datetime.now(timezone.utc)
+        params = {"start": (now - timedelta(days=1)).date().isoformat(),
+                  "end": (now + timedelta(days=days)).date().isoformat()}
+        if self.svc.kind == "sonarr":
+            params["includeSeries"] = "true"
+        return await self.get(self.p("calendar"), params=params) or []
+
+    async def history(self, size: int = 25) -> list[dict]:
+        params = {"pageSize": str(size), "sortKey": "date", "sortDirection": "descending"}
+        if self.svc.kind == "sonarr":
+            params.update(includeSeries="true", includeEpisode="true")
+        elif self.svc.kind == "radarr":
+            params.update(includeMovie="true")
+        data = await self.get(self.p("history"), params=params)
+        return (data or {}).get("records", [])
+
+    async def diskspace(self) -> list[dict]:
+        return await self.get(self.p("diskspace")) or []
+
+    async def indexers(self) -> list[dict]:
+        return await self.get(self.p("indexer")) or []
+
+    async def indexer_status(self) -> list[dict]:
+        return await self.get(self.p("indexerstatus")) or []
+
+
+class QbitClient(Upstream):
+    def __init__(self, svc: Service) -> None:
+        super().__init__(svc)
+        # qBittorrent's CSRF check compares Referer/Origin with the Host it sees.
+        self.app_headers = {"Referer": self.base, "Origin": self.base}
+        self._logged_in = False
+
+    async def _login(self) -> None:
+        if not self.svc.username:
+            self._logged_in = True  # auth bypassed for this subnet in qBittorrent
+            return
+        r = await self.post("/api/v2/auth/login", data={"username": self.svc.username, "password": self.svc.password or ""},
+                            expect_json=False)
+        if r.text.strip() != "Ok.":
+            raise UpstreamError(f"qBittorrent login failed: {r.text.strip()[:100] or r.status_code}")
+        self._logged_in = True
+
+    async def call(self, path: str, **kw: Any) -> Any:
+        if not self._logged_in:
+            await self._login()
+        try:
+            return await self.get(path, **kw)
+        except UpstreamError as e:
+            if "403" in str(e):
+                self._logged_in = False
+                await self._login()
+                return await self.get(path, **kw)
+            raise
+
+    async def test(self) -> str:
+        r = await self.call("/api/v2/app/version", expect_json=False)
+        return f"qBittorrent {r.text.strip()}"
+
+    async def torrents(self, limit: int = 50) -> list[dict]:
+        return await self.call("/api/v2/torrents/info", params={"sort": "added_on", "reverse": "true", "limit": str(limit)}) or []
+
+    async def transfer(self) -> dict:
+        return await self.call("/api/v2/transfer/info") or {}
+
+
+class SeerrClient(Upstream):
+    def __init__(self, svc: Service) -> None:
+        super().__init__(svc)
+        self.app_headers = {"X-Api-Key": svc.api_key or ""}
+
+    async def test(self) -> str:
+        st = await self.get("/api/v1/status")
+        return f"Seerr {st.get('version')}"
+
+    async def requests(self, take: int = 20) -> list[dict]:
+        data = await self.get("/api/v1/request", params={"take": str(take), "skip": "0", "sort": "added", "filter": "all"})
+        results = (data or {}).get("results", [])
+
+        async def title(req: dict) -> None:
+            media = req.get("media") or {}
+            tmdb = media.get("tmdbId")
+            kind = "movie" if req.get("type") == "movie" else "tv"
+            if not tmdb:
+                return
+            try:
+                d = await self.get(f"/api/v1/{kind}/{tmdb}")
+                req["_title"] = d.get("title") or d.get("name")
+                req["_year"] = (d.get("releaseDate") or d.get("firstAirDate") or "")[:4]
+            except UpstreamError:
+                pass
+
+        await asyncio.gather(*(title(r) for r in results))
+        return results
+
+    async def counts(self) -> dict:
+        return await self.get("/api/v1/request/count") or {}
+
+
+class JellystatClient(Upstream):
+    """Jellystat has no formal API docs; these are the endpoints its own UI and
+    the Homepage widget use, authenticated with an API key from
+    Jellystat → Settings → API Keys."""
+
+    def __init__(self, svc: Service) -> None:
+        super().__init__(svc)
+        self.app_headers = {"x-api-token": svc.api_key or ""}
+
+    async def test(self) -> str:
+        await self.get("/stats/getViewsByLibraryType", params={"days": "30"})
+        return "Jellystat reachable"
+
+    async def views_by_type(self, days: int) -> dict:
+        return await self.get("/stats/getViewsByLibraryType", params={"days": str(days)}) or {}
+
+    async def most_active_users(self, days: int) -> list[dict]:
+        return await self.post("/stats/getMostActiveUsers", json={"days": days}) or []
+
+    async def most_viewed(self, days: int, kind: str) -> list[dict]:
+        return await self.post("/stats/getMostViewedByType", json={"days": days, "type": kind}) or []
+
+
+FACTORIES = {
+    "jellyfin": JellyfinClient,
+    "sonarr": ArrClient,
+    "radarr": ArrClient,
+    "lidarr": ArrClient,
+    "prowlarr": ArrClient,
+    "qbittorrent": QbitClient,
+    "jellyseerr": SeerrClient,
+    "jellystat": JellystatClient,
+}
+
+
+async def client_for(svc: Service) -> Any:
+    return await pool.get(svc, FACTORIES[svc.kind])

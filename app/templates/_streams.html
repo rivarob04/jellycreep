@@ -1,0 +1,40 @@
+{% for e in errors %}<div class="notice bad">{{ e }}</div>{% endfor %}
+{% if streams %}
+<div class="streams">
+  {% for s in streams %}
+  <div class="stream">
+    {% if s.poster_id %}<img class="poster" loading="lazy" src="/img/{{ s.server_id }}/{{ s.poster_id }}?h=280" alt="">{% else %}<div class="poster"></div>{% endif %}
+    <div class="body">
+      <div class="spread">
+        <span class="badge {{ 'b-warn' if s.play_method == 'Transcode' else 'b-ok' }}">{{ s.play_method or 'Unknown' }}</span>
+        {% if s.is_paused %}<span class="badge">Paused</span>{% else %}<span class="badge b-acc">Playing</span>{% endif %}
+      </div>
+      <div class="t" title="{{ s.display }}">{{ s.display }}</div>
+      <dl class="kv">
+        <dt>User</dt><dd><a href="/history?user_name={{ s.user_name|urlencode }}">{{ s.user_name }}</a></dd>
+        <dt>Player</dt><dd>{{ s.client or '?' }} · {{ s.device or '?' }}</dd>
+        <dt>Video</dt><dd>{{ (s.source_video_codec or '?')|upper }} {{ s.resolution or '' }}{% if s.play_method == 'Transcode' and s.video_codec != s.source_video_codec %} → {{ (s.video_codec or '?')|upper }} {{ s.transcode_resolution or '' }}{% endif %}</dd>
+        <dt>Audio</dt><dd>{{ (s.source_audio_codec or '?')|upper }}{% if s.play_method == 'Transcode' and s.audio_codec != s.source_audio_codec %} → {{ (s.audio_codec or '?')|upper }}{% endif %}</dd>
+        {% if s.transcode_reasons %}<dt>Reason</dt><dd title="{{ s.transcode_reasons }}">{{ s.transcode_reasons }}</dd>{% endif %}
+        <dt>Bitrate</dt><dd>{{ ((s.bitrate or 0) / 1000000)|round(1) }} Mbps{% if s.container %} · {{ s.container }}{% endif %}</dd>
+        <dt>IP</dt><dd>{{ s.ip or '?' }}</dd>
+        <dt>Server</dt><dd>{{ s.server_name }}</dd>
+      </dl>
+      <div class="spread small muted"><span>{{ s.position_seconds|duration }} / {{ s.runtime_seconds|duration }}</span><span>watched {{ s.watched|duration }}</span></div>
+      <div class="bar"><i style="width: {{ s.progress }}%"></i></div>
+      {% if user.is_admin %}
+      <details><summary class="muted">Stop stream…</summary>
+        <form method="post" action="/activity/{{ s.server_id }}/{{ s.session_id }}/stop">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input name="message" placeholder="Optional message to the user" style="flex:1">
+          <button class="btn sm danger">Stop</button>
+        </form>
+      </details>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card empty">Nothing is playing right now.</div>
+{% endif %}

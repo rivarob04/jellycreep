@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+{% set origin = (cfg.base_url or (request.base_url|string)).rstrip('/') %}
+<h1>Settings</h1>
+<div class="tabs">
+  <a href="#services">Services</a><a href="#tokens">API tokens</a><a href="#webhooks">Webhooks</a><a href="#about">About</a>
+</div>
+
+{% set svc = editing %}
+{% set kind = svc.kind if svc else new_kind %}
+{% if kind %}
+<div class="card mb" id="edit">
+  <div class="spread mb"><h2 style="margin:0">{{ 'Edit' if svc else 'Add' }} {{ kinds[kind] }}</h2><a class="btn sm" href="/settings">Cancel</a></div>
+  <form method="post" action="/settings/services" class="form" autocomplete="off">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% if svc %}<input type="hidden" name="id" value="{{ svc.id }}">{% else %}<input type="hidden" name="kind" value="{{ kind }}">{% endif %}
+    <label>Name<input name="name" value="{{ svc.name if svc else kinds[kind] }}" required></label>
+    <label>URL JellyCreep uses
+      <input name="url" type="url" inputmode="url" value="{{ svc.url if svc }}" placeholder="{{ 'http://jellyfin:8096' if kind == 'jellyfin' else 'https://' ~ kind ~ '.example.com' }}" required>
+      <span class="hint">Internal (http://container:port) or the public URL behind Authentik.</span></label>
+    <label>Link URL (optional)<input name="public_url" type="url" inputmode="url" value="{{ svc.public_url or '' if svc }}" placeholder="URL your phone opens"></label>
+
+    {% if kind in ('jellyfin', 'sonarr', 'radarr', 'lidarr', 'prowlarr', 'jellyseerr', 'jellystat') %}
+    <label>API key{% if svc and svc.api_key_enc %} <span class="badge b-ok">saved</span>{% endif %}
+      <input name="api_key" type="password" placeholder="{{ 'Leave blank to keep · type clear to remove' if svc and svc.api_key_enc else '' }}">
+      <span class="hint">{% if kind == 'jellyfin' %}Dashboard → API Keys{% elif kind == 'jellystat' %}Jellystat → Settings → API Keys{% elif kind == 'jellyseerr' %}Settings → General → API Key{% else %}Settings → General → Security → API Key{% endif %}</span></label>
+    {% endif %}
+    {% if kind == 'qbittorrent' %}
+    <label>qBittorrent username<input name="username" value="{{ svc.username or '' if svc }}" autocapitalize="off"></label>
+    <label>qBittorrent password{% if svc and svc.password_enc %} <span class="badge b-ok">saved</span>{% endif %}
+      <input name="password" type="password" placeholder="{{ 'Leave blank to keep' if svc and svc.password_enc else '' }}"></label>
+    {% endif %}
+
+    <fieldset class="full">
+      <legend>MFA / login proxy in front of this app</legend>
+      <div class="form">
+        <label class="full">Proxy auth
+          <select name="proxy_auth">
+            {% for k, label in proxy_modes.items() %}<option value="{{ k }}" {{ 'selected' if (svc.proxy_auth if svc else 'none') == k }}>{{ label }}</option>{% endfor %}
+          </select></label>
+        <label data-proxy="authentik_basic authentik_token">Authentik username
+          <input name="proxy_username" value="{{ svc.proxy_username or '' if svc }}" autocapitalize="off" placeholder="e.g. svc-jellycreep">
+          <span class="hint">A service account with access to this app in Authentik.</span></label>
+        <label data-proxy="authentik_basic authentik_token">App password{% if svc and svc.proxy_password_enc %} <span class="badge b-ok">saved</span>{% endif %}
+          <input name="proxy_password" type="password" placeholder="{{ 'Leave blank to keep' if svc and svc.proxy_password_enc else 'Authentik → Directory → Tokens → App password' }}"></label>
+        <label data-proxy="authentik_token">Authentik URL<input name="authentik_url" type="url" inputmode="url" value="{{ svc.authentik_url or '' if svc }}" placeholder="https://auth.example.com"></label>
+        <label data-proxy="authentik_token">Proxy provider client ID<input name="authentik_client_id" value="{{ svc.authentik_client_id or '' if svc }}" autocapitalize="off"></label>
+        <label class="full">Extra headers (one per line, <code>Name: value</code>)
+          <textarea name="extra_headers" placeholder="CF-Access-Client-Id: xxx.access&#10;CF-Access-Client-Secret: yyy">{{ '••••' if svc and svc.extra_headers else '' }}</textarea>
+          <span class="hint">Sent with every request in any mode. Leave •••• to keep the saved headers.</span></label>
+      </div>
+    </fieldset>
+
+    <label class="check"><input type="checkbox" name="enabled" {{ 'checked' if not svc or svc.enabled }}> Enabled</label>
+    <label class="check"><input type="checkbox" name="verify_tls" {{ 'checked' if not svc or svc.verify_tls }}> Verify TLS certificate</label>
+    <label>Timeout (seconds)<input name="timeout" type="number" inputmode="numeric" min="3" max="120" value="{{ svc.timeout if svc else 15 }}"></label>
+    <div class="actions full"><button class="btn primary">Save &amp; test</button></div>
+  </form>
+  {% if svc %}
+  <form method="post" action="/settings/services/{{ svc.id }}/delete" data-confirm="Delete {{ svc.name }}? Watch history is kept." style="margin-top:12px">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn danger block">Delete service</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="card mb" id="services">
+  <h2>Services</h2>
+  {% if services %}
+  <div class="list">
+    {% for s in services %}
+    <div id="svc-{{ s.id }}">
+      <div class="spread">
+        <span class="row" style="gap:8px; min-width:0; flex:1"><span id="dot-{{ s.id }}" class="dot {{ 'ok' if s.last_ok else ('bad' if s.last_ok is sameas false else '') }}"></span>
+          <strong class="ellip">{{ s.name }}</strong>{% if not s.enabled %}<span class="badge">off</span>{% endif %}
+          {% if s.proxy_auth != 'none' %}<span class="badge b-acc">🔒 {{ 'Authentik' if s.proxy_auth.startswith('authentik') else 'headers' }}</span>{% endif %}</span>
+        <span class="row" style="gap:6px"><button class="btn sm" type="button" data-test="{{ s.id }}">Test</button><a class="btn sm" href="/settings?edit={{ s.id }}#edit">Edit</a></span>
+      </div>
+      <div class="meta ellip">{{ s.kind_label }} · {{ s.url }}</div>
+      <div id="status-{{ s.id }}" class="small {{ 'bad-text' if s.last_ok is sameas false }}" style="overflow-wrap:anywhere">{{ s.last_status or '' }}{% if s.last_checked %} <span class="muted">· {{ s.last_checked|ago }}</span>{% endif %}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<p class="muted">Nothing connected yet. Start with Jellyfin.</p>{% endif %}
+  <h2 class="mt">Add a service</h2>
+  <div class="grid g4">
+    {% for k, label in kinds.items() %}<a class="btn" href="/settings?new={{ k }}#edit">+ {{ label }}</a>{% endfor %}
+  </div>
+</div>
+
+<div class="card mb" id="tokens">
+  <h2>API tokens</h2>
+  <p class="muted small">For apps that read JellyCreep's data (Homepage, scripts, mobile apps) and for webhooks. Send as <code>X-Api-Key</code> or <code>?apikey=</code>. Tokens are read-only.</p>
+  {% if new_token %}
+  <div class="notice ok">New token <strong>{{ new_token.name }}</strong> — copy it now, it won't be shown again.
+    <div class="copy-box" style="margin-top:8px"><code>{{ new_token.token }}</code><button class="btn sm" type="button" data-copy="{{ new_token.token }}">Copy</button></div></div>
+  {% endif %}
+  <div class="list mb">
+    {% for t in tokens %}
+    <div class="spread">
+      <span><strong>{{ t.name }}</strong><span class="meta"> · {{ t.prefix }}… · used {{ t.last_used_at|ago }}</span></span>
+      <form method="post" action="/settings/tokens/{{ t.id }}/delete" data-confirm="Revoke token {{ t.name }}?"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm danger">Revoke</button></form>
+    </div>
+    {% else %}<p class="muted small">No tokens yet.</p>{% endfor %}
+  </div>
+  <form method="post" action="/settings/tokens" class="row" style="flex-wrap:nowrap">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input name="name" placeholder="Token name, e.g. sonarr-webhook" required>
+    <button class="btn primary">Create</button>
+  </form>
+</div>
+
+<div class="card mb" id="webhooks">
+  <h2>Webhooks</h2>
+  <p class="muted small">Point each app's webhook at JellyCreep so grabs, imports, requests and health alerts land in <a href="/events">Events</a>. Replace <code>TOKEN</code> with an API token from above.</p>
+  <div class="list">
+    {% for src, where in [('sonarr', 'Settings → Connect → + → Webhook (POST)'), ('radarr', 'Settings → Connect → + → Webhook (POST)'), ('lidarr', 'Settings → Connect → + → Webhook'), ('prowlarr', 'Settings → Notifications → + → Webhook'), ('jellyseerr', 'Settings → Notifications → Webhook'), ('jellyfin', 'Webhook plugin → Generic destination')] %}
+    <div>
+      <div class="spread"><strong>{{ src|capitalize }}</strong><span class="meta">{{ where }}</span></div>
+      <div class="copy-box" style="margin-top:6px"><code class="small">{{ origin }}/api/v1/webhook/{{ src }}?apikey=TOKEN</code><button class="btn sm" type="button" data-copy="{{ origin }}/api/v1/webhook/{{ src }}?apikey=TOKEN">Copy</button></div>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="muted small">If JellyCreep is behind Authentik, add <code>^/api/.*</code> to the proxy provider's <em>Unauthenticated Paths</em> — the API has its own token check.</p>
+</div>
+
+<div class="card" id="about">
+  <h2>About</h2>
+  <div class="list small">
+    <div class="spread"><span class="muted">Version</span><span>{{ version }}</span></div>
+    <div class="spread"><span class="muted">Login mode</span><span>{{ auth_mode }}</span></div>
+    <div class="spread"><span class="muted">Signed in as</span><span>{{ user.name }} ({{ user.via }})</span></div>
+    <div class="spread"><span class="muted">Admin group</span><span>{{ cfg.admin_group or 'everyone is admin' }}</span></div>
+    <div class="spread"><span class="muted">Poll interval</span><span>{{ cfg.poll_interval }}s</span></div>
+    <div class="spread"><span class="muted">Counted as a play after</span><span>{{ cfg.min_watch_seconds }}s</span></div>
+    <div class="spread"><span class="muted">Plays recorded</span><span>{{ counts.plays }}</span></div>
+    <div class="spread"><span class="muted">Events recorded</span><span>{{ counts.events }}</span></div>
+    <div class="spread"><span class="muted">API docs</span><a href="/api/docs">/api/docs</a></div>
+  </div>
+</div>
+{% endblock %}

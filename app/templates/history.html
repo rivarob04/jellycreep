@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}History{% endblock %}
+{% block content %}
+<div class="spread"><h1>History</h1><span class="muted small">{{ total }} play{{ "s" if total != 1 }}</span></div>
+{% set filtered = f.user_name or f.type or f.method %}
+<form class="filters" method="get">
+  <input class="wide" type="search" name="q" value="{{ f.q }}" placeholder="Search title or series" enterkeyhint="search">
+  <details {{ 'open' if filtered }}>
+    <summary>Filters{% if filtered %} · active{% endif %}</summary>
+    <div class="filters" style="margin:6px 0 0">
+      <select name="user_name" class="wide"><option value="">All users</option>{% for u in users %}<option {{ 'selected' if f.user_name == u }}>{{ u }}</option>{% endfor %}</select>
+      <select name="type">
+        <option value="">All types</option>
+        {% for t in ['Movie', 'Episode', 'Audio', 'MusicVideo', 'TvChannel'] %}<option {{ 'selected' if f.type == t }}>{{ t }}</option>{% endfor %}
+      </select>
+      <select name="method">
+        <option value="">Any method</option>
+        {% for m in ['DirectPlay', 'DirectStream', 'Transcode'] %}<option {{ 'selected' if f.method == m }}>{{ m }}</option>{% endfor %}
+      </select>
+    </div>
+  </details>
+  {% if f.q or filtered %}<button class="btn primary">Apply</button><a class="btn" href="/history">Clear</a>
+  {% else %}<button class="btn primary wide">Apply</button>{% endif %}
+</form>
+
+<div class="card flush table-wrap">
+{% if rows %}
+<table class="stack">
+  <thead><tr><th></th><th>Title</th><th>User</th><th>Started</th><th>Player</th><th>Method</th><th class="num">Watched</th><th class="num">Progress</th><th>IP</th></tr></thead>
+  <tbody>
+  {% for p in rows %}
+  <tr>
+    <td class="thumb">{% if p.poster_id %}<img class="mini-poster" loading="lazy" src="/img/{{ p.server_id }}/{{ p.poster_id }}?h=110" alt="">{% endif %}</td>
+    <td class="lead" title="{{ p.display_title }}">{{ p.display_title }}</td>
+    <td data-label="User"><a href="/history?user_name={{ p.user_name|urlencode }}">{{ p.user_name }}</a></td>
+    <td data-label="Started" title="Stopped {{ p.stopped_at|local }}">{{ p.started_at|local }}</td>
+    <td data-label="Player">{{ p.client or '?' }}{% if p.device %} · <span class="muted">{{ p.device }}</span>{% endif %}</td>
+    <td data-label="Method"><span class="badge {{ 'b-warn' if p.play_method == 'Transcode' else 'b-ok' }}" title="{{ p.transcode_reasons or '' }}">{{ p.play_method or '?' }}</span></td>
+    <td data-label="Watched" class="num">{{ p.watched_seconds|duration }}{% if p.paused_seconds > 60 %} <span class="muted small">(paused {{ p.paused_seconds|duration }})</span>{% endif %}</td>
+    <td data-label="Progress" class="num">{% if p.percent is not none %}{% if p.completed %}<span class="badge b-ok">✓ {{ p.percent|round|int }}%</span>{% else %}{{ p.percent|round|int }}%{% endif %}{% endif %}</td>
+    <td data-label="IP" class="mono small">{{ p.ip or '' }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<div class="empty">No plays match.</div>{% endif %}
+</div>
+
+{% if pages > 1 %}
+{% set qs = 'q=' ~ (f.q|urlencode) ~ '&user_name=' ~ (f.user_name|urlencode) ~ '&type=' ~ f.type ~ '&method=' ~ f.method %}
+<div class="pager">
+  {% if page > 1 %}<a class="btn sm" href="?{{ qs }}&page={{ page - 1 }}">← Newer</a>{% else %}<span></span>{% endif %}
+  <span class="muted small">{{ page }} / {{ pages }}</span>
+  {% if page < pages %}<a class="btn sm" href="?{{ qs }}&page={{ page + 1 }}">Older →</a>{% else %}<span></span>{% endif %}
+</div>
+{% endif %}
+{% endblock %}
