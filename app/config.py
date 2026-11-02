@@ -57,6 +57,11 @@ class Settings:
         # Leave empty to make every authenticated user an admin.
         self.admin_group = _env("ADMIN_GROUP", "jellycreep-admins") or ""
 
+        # Jellyfin sign-in for regular users (can also be switched on in Settings)
+        self.jellyfin_login_default = _env("JELLYFIN_LOGIN", "false")
+        # Optional link on the login page for admins, e.g. https://jellycreep-admin.example.com
+        self.admin_login_url = _env("ADMIN_LOGIN_URL", "") or ""
+
         self.oidc_issuer = (_env("OIDC_ISSUER", "") or "").rstrip("/")
         self.oidc_client_id = _env("OIDC_CLIENT_ID", "")
         self.oidc_client_secret = _env("OIDC_CLIENT_SECRET", "")

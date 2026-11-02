@@ -25,7 +25,8 @@
     const refresh = async () => {
       if (document.hidden || touching || live.querySelector("details[open]")) return;
       try {
-        const r = await fetch("/partials/activity", { headers: { "X-Requested-With": "fetch" } });
+        const r = await fetch(live.dataset.src || "/partials/activity", { headers: { "X-Requested-With": "fetch" } });
+        if (r.status === 401) { location.reload(); return; }
         if (!r.ok) return;
         const old = live.querySelector("[data-hero-track]");
         const x = old ? old.scrollLeft : 0;

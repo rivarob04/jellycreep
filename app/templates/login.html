@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0a10">
+  <meta name="robots" content="noindex">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="JellyCreep">
+  <script>(function(){try{var d=document.documentElement,t=localStorage.getItem("jc-theme");if(t==="light"||t==="dark")d.dataset.theme=t;}catch(e){}})();</script>
+  <title>Sign in · JellyCreep</title>
+  <link rel="manifest" href="/me/manifest.webmanifest" crossorigin="use-credentials">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icon-180.png">
+  <link rel="stylesheet" href="/static/style.css?v={{ version }}">
+</head>
+<body class="login-body">
+<div class="ambient" aria-hidden="true"></div>
+<main class="login-main">
+  <div class="card login-card">
+    <div class="login-brand"><img src="/static/icon.svg" width="54" height="54" alt=""><span>JellyCreep</span></div>
+    {% if bye %}<div class="notice ok small">You're signed out.</div>{% endif %}
+    {% if error %}<div class="notice bad small" role="alert">{{ error }}</div>{% endif %}
+
+    {% if jf_enabled %}
+    <h1 class="login-h">Sign in</h1>
+    <p class="muted small login-sub">Use your Jellyfin username and password.</p>
+    <form method="post" action="/login" class="login-form" autocomplete="on">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="next" value="{{ next }}">
+      <label>Username<input name="username" value="{{ username }}" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required {{ 'autofocus' if not username }}></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required {{ 'autofocus' if username }}></label>
+      <button class="btn primary block">Sign in with Jellyfin</button>
+    </form>
+    {% else %}
+    <h1 class="login-h">Sign in</h1>
+    <p class="muted small login-sub">Jellyfin sign-in isn't turned on for this server.</p>
+    {% endif %}
+
+    {% if oidc or admin_url %}
+    <div class="login-or"><span>admin</span></div>
+    <a class="btn block" href="{{ '/auth/login' if oidc else admin_url }}">🔐 Sign in with Authentik</a>
+    {% endif %}
+  </div>
+  <p class="muted small login-foot">Your password is checked by your Jellyfin server and is never stored by JellyCreep.</p>
+</main>
+<script>
+  // light/dark follows the app setting
+</script>
+</body>
+</html>

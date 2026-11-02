@@ -27,6 +27,9 @@ services:
       # Only requests coming *from* these addresses may set X-authentik-* headers.
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1/32,172.16.0.0/12}
       ADMIN_GROUP: ${ADMIN_GROUP:-jellycreep-admins}
+      # Let Jellyfin users sign in with their Jellyfin password (can also be toggled in Settings → Sign-in)
+      JELLYFIN_LOGIN: ${JELLYFIN_LOGIN:-false}
+      ADMIN_LOGIN_URL: ${ADMIN_LOGIN_URL:-}               # optional "Sign in with Authentik" link on the login page
       OIDC_ISSUER: ${OIDC_ISSUER:-}                       # https://auth.example.com/application/o/jellycreep
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}

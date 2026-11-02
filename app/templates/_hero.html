@@ -3,7 +3,7 @@
 <section class="hero-wrap" aria-label="Now playing">
   <div class="hero-track" data-hero-track>
     {% for s in streams %}
-    {% set bd = '/img/' ~ s.server_id ~ '/' ~ s.poster_id %}
+    {% set bd = imgp ~ '/' ~ s.server_id ~ '/' ~ s.poster_id %}
     <article class="hero" id="hero-{{ loop.index }}">
       {% if s.poster_id %}<div class="hero-bg" style="background-image:url('{{ bd }}?t=Backdrop&h=900')"></div>{% endif %}
       <div class="hero-shade"></div>
@@ -23,7 +23,7 @@
             {% elif s.item_type == 'Audio' %}{{ s.series_name or '' }}
             {% else %}{{ s.year or '' }}{% endif %}
           </div>
-          <div class="hero-who"><a href="/users/{{ s.user_name|urlencode }}">{{ s.user_name }}</a> · {{ s.client or '?' }} on {{ s.device or '?' }}</div>
+          <div class="hero-who">{% if user.is_viewer %}<b>{{ s.user_name }}</b>{% else %}<a href="/users/{{ s.user_name|urlencode }}">{{ s.user_name }}</a>{% endif %} · {{ s.client or '?' }} on {{ s.device or '?' }}</div>
           <div class="hero-progress">
             <div class="bar"><i style="width: {{ s.progress }}%"></i></div>
             <div class="hero-time"><span>{{ s.position_seconds|duration }} / {{ s.runtime_seconds|duration }}</span>
@@ -39,7 +39,7 @@
   {% endif %}
 </section>
 {% elif last and last.poster_id %}
-{% set bd = '/img/' ~ last.server_id ~ '/' ~ last.poster_id %}
+{% set bd = imgp ~ '/' ~ last.server_id ~ '/' ~ last.poster_id %}
 <section class="hero-wrap" aria-label="Last watched">
   <article class="hero idle">
     <div class="hero-bg" style="background-image:url('{{ bd }}?t=Backdrop&h=900')"></div>
@@ -47,12 +47,12 @@
     <div class="hero-body">
       <img class="hero-poster" src="{{ bd }}?h=420" alt="" onerror="this.remove()">
       <div class="hero-info">
-        <div class="hero-chips"><span class="live-chip idle">Nothing playing · last watched {{ last.stopped_at|ago }}</span></div>
+        <div class="hero-chips"><span class="live-chip idle">{% if user.is_viewer %}Last watched{% else %}Nothing playing · last watched{% endif %} {{ last.stopped_at|ago }}</span></div>
         <img class="hero-logo" src="{{ bd }}?t=Logo&h=160" alt="{{ last.series_name or last.title }}"
              onload="this.closest('.hero-info').classList.add('has-logo')" onerror="this.remove()">
         <h2 class="hero-title">{{ last.series_name if last.item_type == 'Episode' and last.series_name else last.title }}</h2>
         <div class="hero-sub">{% if last.item_type == 'Episode' %}{% if last.season is not none %}S{{ '%02d'|format(last.season) }}E{{ '%02d'|format(last.episode or 0) }} · {% endif %}{{ last.title }}{% else %}{{ last.year or '' }}{% endif %}</div>
-        <div class="hero-who"><a href="/users/{{ last.user_name|urlencode }}">{{ last.user_name }}</a> · {{ last.client or '?' }} · watched {{ last.watched_seconds|duration }}{% if last.percent is not none %} ({{ last.percent|round|int }}%){% endif %}</div>
+        <div class="hero-who">{% if user.is_viewer %}<b>{{ last.user_name }}</b>{% else %}<a href="/users/{{ last.user_name|urlencode }}">{{ last.user_name }}</a>{% endif %} · {{ last.client or '?' }} · watched {{ last.watched_seconds|duration }}{% if last.percent is not none %} ({{ last.percent|round|int }}%){% endif %}</div>
       </div>
     </div>
   </article>

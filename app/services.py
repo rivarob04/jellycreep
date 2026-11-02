@@ -5,6 +5,8 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import httpx
+
 from .db import Service
 from .upstream import Upstream, UpstreamError, pool
 
@@ -14,13 +16,46 @@ class JellyfinClient(Upstream):
         super().__init__(svc)
         key = (svc.api_key or "").strip()
         mb = (f'MediaBrowser Client="JellyCreep", Device="JellyCreep", DeviceId="jellycreep-{svc.id}", '
-              f'Version="0.5.0", Token="{key}"')
+              f'Version="0.6.0", Token="{key}"')
         # Jellyfin 10.11+ only accepts `Authorization: MediaBrowser Token=…` by default
         # (legacy X-Emby-Token is off). Older servers still read X-Emby-Token.
         self.app_headers = {"X-Emby-Authorization": mb, "X-Emby-Token": key}
         if svc.proxy_auth in ("none", "headers"):
             # Authorization is free (no Authentik credentials going in it), so use it.
             self.app_headers["Authorization"] = mb
+
+    async def authenticate(self, username: str, password: str) -> dict | None:
+        """Check a Jellyfin username/password. Returns the auth result, None if wrong, raises if unreachable.
+        Sent WITHOUT JellyCreep's admin API key."""
+        import hashlib
+        dev = hashlib.sha1(f"jc-login-{username.lower()}".encode()).hexdigest()[:16]
+        auth = (f'MediaBrowser Client="JellyCreep", Device="JellyCreep sign-in", DeviceId="{dev}", '
+                f'Version="0.6.0"')
+        headers = {**await self._proxy_headers(), "X-Emby-Authorization": auth, "Content-Type": "application/json",
+                   "Accept": "application/json"}
+        if "Authorization" not in headers:
+            headers["Authorization"] = auth
+        try:
+            r = await self._client.post("/Users/AuthenticateByName", json={"Username": username, "Pw": password},
+                                        headers=headers)
+        except httpx.HTTPError as e:
+            raise UpstreamError(f"Could not reach Jellyfin: {e.__class__.__name__}") from e
+        if r.status_code in (400, 401, 403, 404):
+            return None
+        if r.status_code >= 300:
+            raise UpstreamError(f"Jellyfin answered HTTP {r.status_code}")
+        return r.json()
+
+    async def end_session(self, token: str) -> None:
+        """Log out the throwaway session created by authenticate(), so it doesn't pile up under Devices."""
+        auth = f'MediaBrowser Client="JellyCreep", Device="JellyCreep sign-in", DeviceId="x", Version="0.6.0", Token="{token}"'
+        headers = {**await self._proxy_headers(), "X-Emby-Authorization": auth}
+        if "Authorization" not in headers:
+            headers["Authorization"] = auth
+        try:
+            await self._client.post("/Sessions/Logout", headers=headers)
+        except httpx.HTTPError:
+            pass
 
     async def test(self) -> str:
         info = await self.get("/System/Info")
@@ -52,8 +87,9 @@ class JellyfinClient(Upstream):
         """Jellyfin 10.11+: per-library and server-folder disk usage (admin key)."""
         return await self.get("/System/Info/Storage") or {}
 
-    async def recently_added(self, limit: int = 18) -> list[dict]:
-        data = await self.get("/Items", params={
+    async def recently_added(self, limit: int = 18, user_id: str | None = None) -> list[dict]:
+        extra = {"userId": user_id} if user_id else {}
+        data = await self.get("/Items", params={**extra,
             "SortBy": "DateCreated", "SortOrder": "Descending", "Recursive": "true",
             "IncludeItemTypes": "Movie,Episode,MusicAlbum", "Limit": str(limit),
             "Fields": "DateCreated,ProductionYear", "IsMissing": "false",

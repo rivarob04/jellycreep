@@ -4,7 +4,7 @@
 {% set origin = (cfg.base_url or (request.base_url|string)).rstrip('/') %}
 <h1>Settings</h1>
 <div class="tabs">
-  <a href="#services">Services</a><a href="#notifications">Notifications</a><a href="#tokens">API tokens</a><a href="#webhooks">Webhooks</a>{% if jellystats %}<a href="#import">Import</a>{% endif %}<a href="#about">About</a>
+  <a href="#services">Services</a><a href="#signin">Sign-in</a><a href="#notifications">Notifications</a><a href="#tokens">API tokens</a><a href="#webhooks">Webhooks</a>{% if jellystats %}<a href="#import">Import</a>{% endif %}<a href="#about">About</a>
 </div>
 {% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}
 
@@ -88,6 +88,29 @@
   <div class="grid g4">
     {% for k, label in kinds.items() %}<a class="btn" href="/settings?new={{ k }}#edit">+ {{ label }}</a>{% endfor %}
   </div>
+</div>
+
+<div class="card mb" id="signin">
+  <h2>Jellyfin user sign-in</h2>
+  <p class="muted small">Let people sign in with their Jellyfin username and password. They get a personal dashboard — their own watching, stats, history and requests — and nothing else: no other users, no IP addresses, no settings or downloads. Jellyfin admins who sign in this way are viewers too; admin access always goes through Authentik.</p>
+  <form method="post" action="/settings/signin" class="form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="check full"><input type="checkbox" name="enabled" {{ 'checked' if signin.enabled }}> <strong>Allow Jellyfin users to sign in</strong></label>
+    {% if jellyfins|length > 1 %}
+    <label class="full">Check passwords against
+      <select name="server_id">{% for j in jellyfins %}<option value="{{ j.id }}" {{ 'selected' if signin.server_id == j.id }}>{{ j.name }}</option>{% endfor %}</select></label>
+    {% elif jellyfins %}<input type="hidden" name="server_id" value="{{ jellyfins[0].id }}">{% endif %}
+    <fieldset class="full"><legend>What users can see</legend>
+      <label class="check"><input type="checkbox" name="recent" {{ 'checked' if signin.recent }}> Recently added (only libraries they can access)</label>
+      <label class="check"><input type="checkbox" name="upcoming" {{ 'checked' if signin.upcoming }}> Upcoming episodes &amp; movies (Sonarr/Radarr calendar)</label>
+      <label class="check"><input type="checkbox" name="requests" {{ 'checked' if signin.requests }}> Their own Seerr requests and status</label>
+      <label class="check"><input type="checkbox" name="server_activity" {{ 'checked' if signin.server_activity }}> How many other people are watching (count only, no names)</label>
+    </fieldset>
+    {% if not jellyfins %}<p class="notice bad small full">Connect a Jellyfin server first.</p>{% endif %}
+    <div class="actions full"><button class="btn primary">Save</button>
+      {% if signin.enabled %}<a class="btn" href="{{ (cfg.base_url or '') }}/login" target="_blank" rel="noopener">Open sign-in page ↗</a>{% endif %}</div>
+  </form>
+  <p class="hint" style="margin:10px 0 0">The sign-in page has to be reachable without Authentik — see the README section “Letting Jellyfin users sign in”.</p>
 </div>
 
 <div class="card mb" id="notifications">

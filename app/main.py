@@ -7,6 +7,7 @@ import logging
 import math
 import os
 import secrets
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -21,7 +22,8 @@ from sqlalchemy import func, or_, select
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import __version__, calendar_view, importer, notify, quality, stats, storage, tracker, webhooks
-from .auth import (CSRF_COOKIE, LoginRequired, User, admin_user, api_user, csrf_token, current_user, oauth,
+from .auth import (CSRF_COOKIE, LoginRequired, User, ViewerOnly, admin_user, api_user, bust_login_cache, client_ip,
+                   csrf_token, current_user, jellyfin_login_enabled, limiter, login_settings, oauth, staff_user,
                    user_from_claims, verify_csrf)
 from .config import settings
 from .db import (PROXY_AUTH_MODES, SERVICE_KINDS, ActiveStream, ApiToken, Event, Play, Service, SessionLocal,
@@ -99,9 +101,21 @@ async def security_headers(request: Request, call_next):
     return response
 
 
+@app.exception_handler(ViewerOnly)
+async def _viewer_redirect(request: Request, _exc: ViewerOnly):
+    if request.method == "GET" and not request.url.path.startswith(("/api/", "/partials/", "/settings/import", "/media/quality/status")):
+        return RedirectResponse("/me", status_code=303)
+    return JSONResponse({"detail": "Not available"}, status_code=403)
+
+
 @app.exception_handler(LoginRequired)
 async def _login_redirect(request: Request, _exc: LoginRequired):
-    return RedirectResponse(f"/auth/login?next={request.url.path}", status_code=302)
+    nxt = request.url.path
+    if request.url.path.startswith(("/partials/", "/api/")) or request.method != "GET":
+        return JSONResponse({"detail": "Signed out"}, status_code=401)
+    if not jellyfin_login_enabled() and settings.auth_mode == "oidc":
+        return RedirectResponse(f"/auth/login?next={nxt}", status_code=302)
+    return RedirectResponse(f"/login?next={nxt}", status_code=302)
 
 
 # --- template helpers ----------------------------------------------------------------
@@ -147,35 +161,43 @@ templates.env.filters.update(duration=fmt_duration, local=fmt_local, ago=fmt_ago
 templates.env.globals.update(version=__version__, kinds=SERVICE_KINDS, proxy_modes=PROXY_AUTH_MODES)
 
 
-_AMBIENT: dict[str, Any] = {"at": 0.0, "url": None}
+_AMBIENT: dict[str, Any] = {}
 
 
-def ambient_url() -> str | None:
-    """Backdrop for the glass background: what's playing now, else the last thing watched (cached 60 s)."""
-    import time as _t
-    if _t.time() - _AMBIENT["at"] < 60:
-        return _AMBIENT["url"]
+def ambient_url(user: User | None = None) -> str | None:
+    """Backdrop for the glass background: what's playing now, else the last thing watched (cached 60 s).
+    Viewers only ever get their own artwork."""
+    viewer = user is not None and user.is_viewer
+    key = f"v:{user.name}" if viewer else "staff"
+    hit = _AMBIENT.get(key)
+    if hit and time.time() - hit[0] < 60:
+        return hit[1]
     url = None
     try:
         with SessionLocal() as db:
-            act = db.scalar(select(ActiveStream).order_by(ActiveStream.started_at.desc()))
-            if act:
+            for act in db.scalars(select(ActiveStream).order_by(ActiveStream.started_at.desc()).limit(20)):
                 d = json.loads(act.data)
+                if viewer and not (_norm(d.get("user_id")) == user.jf_id or d.get("user_name") == user.name):
+                    continue
                 if d.get("poster_id"):
-                    url = f"/img/{act.server_id}/{d['poster_id']}?t=Backdrop&h=720"
+                    url = f"{'/me/img' if viewer else '/img'}/{act.server_id}/{d['poster_id']}?t=Backdrop&h=720"
+                    break
             if not url:
-                p = db.scalar(select(Play).where(Play.poster_id.is_not(None)).order_by(Play.stopped_at.desc()))
+                q = select(Play).where(Play.poster_id.is_not(None))
+                if viewer:
+                    q = q.where(_mine(user))
+                p = db.scalar(q.order_by(Play.stopped_at.desc()))
                 if p:
-                    url = f"/img/{p.server_id}/{p.poster_id}?t=Backdrop&h=720"
+                    url = f"{'/me/img' if viewer else '/img'}/{p.server_id}/{p.poster_id}?t=Backdrop&h=720"
     except Exception:  # noqa: BLE001
         url = None
-    _AMBIENT.update(at=_t.time(), url=url)
+    _AMBIENT[key] = (time.time(), url)
     return url
 
 
 def render(request: Request, name: str, user: User, **ctx: Any) -> HTMLResponse:
     ctx.update(request=request, user=user, csrf=csrf_token(request), auth_mode=settings.auth_mode,
-               ambient=ambient_url())
+               ambient=ambient_url(user), imgp="/me/img" if user.is_viewer else "/img")
     return templates.TemplateResponse(request, name, ctx)
 
 
@@ -232,7 +254,7 @@ async def current_activity() -> tuple[list[dict], list[str]]:
 
 
 @app.get("/", response_class=HTMLResponse)
-async def page_activity(request: Request, user: User = Depends(current_user)):
+async def page_activity(request: Request, user: User = Depends(staff_user)):
     streams, errors = await current_activity()
     with SessionLocal() as db:
         recent = list(db.scalars(select(Play).order_by(Play.stopped_at.desc()).limit(8)))
@@ -244,7 +266,7 @@ async def page_activity(request: Request, user: User = Depends(current_user)):
 
 
 @app.get("/partials/activity", response_class=HTMLResponse)
-async def partial_activity(request: Request, user: User = Depends(current_user)):
+async def partial_activity(request: Request, user: User = Depends(staff_user)):
     streams, errors = await current_activity()
     with SessionLocal() as db:
         last = db.scalar(select(Play).order_by(Play.stopped_at.desc()))
@@ -303,7 +325,7 @@ def history_query(user_name: str | None, item_type: str | None, q: str | None, m
 
 @app.get("/history", response_class=HTMLResponse)
 async def page_history(request: Request, user_name: str | None = None, type: str | None = None, q: str | None = None,
-                       method: str | None = None, page: int = 1, user: User = Depends(current_user)):
+                       method: str | None = None, page: int = 1, user: User = Depends(staff_user)):
     per = 50
     page = max(1, page)
     with SessionLocal() as db:
@@ -316,14 +338,14 @@ async def page_history(request: Request, user_name: str | None = None, type: str
 
 
 @app.get("/users", response_class=HTMLResponse)
-async def page_users(request: Request, user: User = Depends(current_user)):
+async def page_users(request: Request, user: User = Depends(staff_user)):
     with SessionLocal() as db:
         rows = stats.users_table(db)
     return render(request, "users.html", user, rows=rows)
 
 
 @app.get("/stats", response_class=HTMLResponse)
-async def page_stats(request: Request, days: int = 30, user: User = Depends(current_user)):
+async def page_stats(request: Request, days: int = 30, user: User = Depends(staff_user)):
     days = days if days in (7, 30, 90, 365) else 30
     with SessionLocal() as db:
         ctx = dict(
@@ -346,7 +368,7 @@ async def page_stats(request: Request, days: int = 30, user: User = Depends(curr
 # --- media & automation ----------------------------------------------------------------
 @app.get("/media", response_class=HTMLResponse)
 async def page_media(request: Request, tab: str = "overview", server: int | None = None,
-                     user: User = Depends(current_user)):
+                     user: User = Depends(staff_user)):
     if tab == "quality":
         return await _media_quality(request, user, server)
     servers = []
@@ -384,7 +406,7 @@ async def quality_rescan(sid: int, request: Request, user: User = Depends(admin_
 
 
 @app.get("/media/quality/status")
-async def quality_status(user: User = Depends(current_user)):
+async def quality_status(user: User = Depends(staff_user)):
     return quality.STATUS
 
 
@@ -443,7 +465,7 @@ async def _calendar(ym: str | None) -> tuple[dict, list[str]]:
 
 @app.get("/automation", response_class=HTMLResponse)
 async def page_automation(request: Request, tab: str = "calendar", m: str | None = None,
-                          user: User = Depends(current_user)):
+                          user: User = Depends(staff_user)):
     available = {k: v for k, v in AUTOMATION_TABS.items() if services(v[1])}
     if tab not in available:
         tab = next(iter(available), "calendar")
@@ -473,7 +495,7 @@ async def arr_image(sid: int, item_id: int, t: str = "poster", user: User = Depe
 
 
 @app.get("/events", response_class=HTMLResponse)
-async def page_events(request: Request, source: str | None = None, user: User = Depends(current_user)):
+async def page_events(request: Request, source: str | None = None, user: User = Depends(staff_user)):
     with SessionLocal() as db:
         stmt = select(Event).order_by(Event.created_at.desc()).limit(200)
         if source:
@@ -710,12 +732,169 @@ async def do_add(sid: int, request: Request, user: User = Depends(admin_user)):
 
 # --- user pages -------------------------------------------------------------------------
 @app.get("/users/{name}", response_class=HTMLResponse)
-async def page_user(name: str, request: Request, user: User = Depends(current_user)):
+async def page_user(name: str, request: Request, user: User = Depends(staff_user)):
     with SessionLocal() as db:
         prof = stats.user_profile(db, name, TZ)
     if not prof:
         raise HTTPException(404, "No plays recorded for that user")
     return render(request, "user.html", user, u=prof)
+
+
+# --- viewer (Jellyfin user) dashboard ----------------------------------------------------
+def _norm(uid: str | None) -> str:
+    return (uid or "").replace("-", "").lower()
+
+
+def _mine(user: User):
+    """SQL filter for the signed-in Jellyfin user's own plays."""
+    conds = [Play.user_name == user.name]
+    if user.jf_id:
+        conds.append(func.replace(func.lower(Play.user_id), "-", "") == user.jf_id)
+    return or_(*conds)
+
+
+async def _my_streams(user: User) -> tuple[list[dict], int]:
+    streams, _ = await current_activity()
+    mine = [x for x in streams if _norm(x.get("user_id")) == user.jf_id or x.get("user_name") == user.name]
+    for x in mine:   # never send IPs to viewers
+        x["ip"] = None
+    return mine, len(streams) - len(mine)
+
+
+async def _upcoming(days: int = 14) -> list[dict]:
+    today = datetime.now(TZ).date()
+    end = today + timedelta(days=days)
+    out: list[dict] = []
+
+    async def one(svc: Service):
+        client = await client_for(svc)
+        raw, err = await safe(client.calendar(today - timedelta(days=1), end + timedelta(days=1)))
+        if not err:
+            out.extend(calendar_view.items_for(svc, raw, TZ, today, end))
+
+    await asyncio.gather(*(one(x) for x in services(("sonarr", "radarr"))))
+    out = [i for i in out if today <= i["day"] <= end]
+    out.sort(key=lambda i: (i["day"], i["time"] or "", i["title"]))
+    for i in out:
+        i["link"] = None    # don't expose *arr admin URLs to viewers
+        if i.get("poster"):
+            i["poster"] = "/me" + i["poster"]
+    return out[:30]
+
+
+async def _my_requests(user: User) -> list[dict]:
+    res: list[dict] = []
+    for svc in services(("jellyseerr",)):
+        client = await client_for(svc)
+        data, err = await safe(client.requests(take=60))
+        if err:
+            continue
+        for r in data or []:
+            rb = r.get("requestedBy") or {}
+            names = {str(rb.get(k) or "").lower() for k in ("jellyfinUsername", "username", "displayName", "plexUsername")}
+            if user.name.lower() in names:
+                res.append(r)
+    return res[:15]
+
+
+@app.get("/me/img/{server_id}/{item_id}")
+async def me_image(server_id: int, item_id: str, h: int = 300, t: str = "Primary", user: User = Depends(current_user)):
+    return await image(server_id, item_id, h, t, user)
+
+
+@app.get("/me/arrimg/{sid}/{item_id}")
+async def me_arr_image(sid: int, item_id: int, t: str = "poster", user: User = Depends(current_user)):
+    return await arr_image(sid, item_id, t, user)
+
+
+@app.get("/me/manifest.webmanifest")
+async def me_manifest():
+    return JSONResponse({
+        "name": "JellyCreep", "short_name": "JellyCreep", "start_url": "/me", "scope": "/", "display": "standalone",
+        "background_color": "#0a0a10", "theme_color": "#0a0a10",
+        "icons": [{"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png"},
+                  {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}],
+    }, media_type="application/manifest+json")
+
+
+@app.get("/logout")
+async def logout_alias(request: Request):
+    return await logout(request)
+
+
+@app.get("/me", response_class=HTMLResponse)
+async def page_me(request: Request, user: User = Depends(current_user)):
+    if not user.is_viewer:
+        return RedirectResponse("/", status_code=303)
+    cfg = login_settings()
+    streams, others = await _my_streams(user)
+    with SessionLocal() as db:
+        last = db.scalar(select(Play).where(_mine(user)).order_by(Play.stopped_at.desc()))
+        recent = list(db.scalars(select(Play).where(_mine(user)).order_by(Play.stopped_at.desc()).limit(10)))
+        prof = stats.user_profile(db, user.name, TZ)
+    svc = next((x for x in services(("jellyfin",)) if x.id == user.server_id), None)
+
+    async def none():
+        return None
+    added_job = safe((await client_for(svc)).recently_added(16, user.jf_id)) if (svc and cfg["recent"]) else none()
+    up_job = _upcoming(14) if cfg["upcoming"] else none()
+    req_job = _my_requests(user) if cfg["requests"] else none()
+    added, upcoming, reqs = await asyncio.gather(added_job, up_job, req_job)
+    if isinstance(added, tuple):
+        added = added[0] or []
+    return render(request, "me.html", user, streams=streams, others=others if cfg["server_activity"] else None,
+                  last=last, recent=recent, u=prof, added=added or [], upcoming=upcoming or [], my_requests=reqs or [],
+                  server_ok=bool(svc and svc.last_ok is not False), server_name=svc.name if svc else "Jellyfin")
+
+
+@app.get("/partials/me", response_class=HTMLResponse)
+async def partial_me(request: Request, user: User = Depends(current_user)):
+    if not user.is_viewer:
+        raise HTTPException(404)
+    streams, _ = await _my_streams(user)
+    with SessionLocal() as db:
+        last = db.scalar(select(Play).where(_mine(user)).order_by(Play.stopped_at.desc()))
+    return render(request, "_hero.html", user, streams=streams, last=last)
+
+
+@app.get("/me/history", response_class=HTMLResponse)
+async def page_my_history(request: Request, page: int = 1, q: str | None = None, user: User = Depends(current_user)):
+    if not user.is_viewer:
+        return RedirectResponse("/history", status_code=303)
+    per = 30
+    page = max(1, page)
+    with SessionLocal() as db:
+        stmt = select(Play).where(_mine(user))
+        if q:
+            like = f"%{q}%"
+            stmt = stmt.where(or_(Play.title.ilike(like), Play.series_name.ilike(like)))
+        total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+        rows = list(db.scalars(stmt.order_by(Play.started_at.desc()).offset((page - 1) * per).limit(per)))
+    return render(request, "me_history.html", user, rows=rows, total=total, page=page,
+                  pages=max(1, math.ceil(total / per)), q=q or "")
+
+
+@app.get("/me/upcoming", response_class=HTMLResponse)
+async def page_my_upcoming(request: Request, user: User = Depends(current_user)):
+    if not user.is_viewer:
+        return RedirectResponse("/automation", status_code=303)
+    up = await _upcoming(30) if login_settings()["upcoming"] else []
+    return render(request, "me_upcoming.html", user, upcoming=up)
+
+
+@app.post("/settings/signin")
+async def save_signin(request: Request, user: User = Depends(admin_user)):
+    await verify_csrf(request)
+    form = await request.form()
+    sid = str(form.get("server_id") or "")
+    set_setting("jellyfin_login", {
+        "enabled": form.get("enabled") == "on", "server_id": int(sid) if sid.isdigit() else None,
+        "upcoming": form.get("upcoming") == "on", "recent": form.get("recent") == "on",
+        "requests": form.get("requests") == "on", "server_activity": form.get("server_activity") == "on",
+    })
+    bust_login_cache()
+    request.session["flash"] = {"ok": True, "msg": "Sign-in settings saved."}
+    return RedirectResponse("/settings#signin", status_code=303)
 
 
 # --- notifications & import ---------------------------------------------------------------
@@ -780,6 +959,7 @@ async def page_settings(request: Request, edit: int | None = None, new: str | No
     return render(request, "settings.html", user, services=svcs, tokens=tokens, editing=editing,
                   new_kind=new if new in SERVICE_KINDS else None, new_token=new_token, counts=counts, cfg=settings,
                   flash=flash, notif=notify.config(), triggers=notify.TRIGGERS, import_status=importer.STATUS,
+                  signin=login_settings(), jellyfins=[x for x in svcs if x.kind == "jellyfin"],
                   jellystats=[x for x in svcs if x.kind == "jellystat"])
 
 
@@ -922,10 +1102,83 @@ async def auth_callback(request: Request):
 
 @app.get("/auth/logout")
 async def logout(request: Request):
+    was_viewer = (request.session.get("user") or {}).get("via") == "jellyfin"
     request.session.clear()
+    if was_viewer or (jellyfin_login_enabled() and not request.headers.get(settings.user_header)):
+        return RedirectResponse("/login?bye=1", status_code=303)
     if settings.auth_mode == "authentik_forward":
         return RedirectResponse("/outpost.goauthentik.io/sign_out")
-    return HTMLResponse("<p>Signed out of JellyCreep. <a href='/'>Sign in again</a></p>")
+    return RedirectResponse("/login?bye=1", status_code=303)
+
+
+# --- Jellyfin sign-in -------------------------------------------------------------------
+def _safe_next(nxt: str | None) -> str:
+    return nxt if nxt and nxt.startswith("/") and not nxt.startswith("//") and not nxt.startswith("/login") else "/me"
+
+
+def _login_page(request: Request, error: str | None = None, status: int = 200, username: str = "", nxt: str = "/me"):
+    return templates.TemplateResponse(request, "login.html", {
+        "request": request, "csrf": csrf_token(request), "error": error, "username": username, "next": nxt,
+        "jf_enabled": jellyfin_login_enabled(), "oidc": settings.auth_mode == "oidc" and oauth is not None,
+        "admin_url": settings.admin_login_url, "bye": request.query_params.get("bye"), "version": __version__,
+    }, status_code=status)
+
+
+def _login_server() -> Service | None:
+    cfg = login_settings()
+    jfs = services(("jellyfin",))
+    return next((x for x in jfs if x.id == cfg.get("server_id")), jfs[0] if jfs else None)
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, next: str = "/me"):
+    from .auth import browser_user
+    u = browser_user(request)
+    if u:
+        return RedirectResponse("/me" if u.is_viewer else "/", status_code=303)
+    return _login_page(request, nxt=_safe_next(next))
+
+
+@app.post("/login")
+async def do_login(request: Request):
+    await verify_csrf(request)
+    form = await request.form()
+    username = str(form.get("username") or "").strip()[:128]
+    password = str(form.get("password") or "")[:512]
+    nxt = _safe_next(str(form.get("next") or ""))
+    if not jellyfin_login_enabled():
+        return _login_page(request, "Jellyfin sign-in is turned off.", 403)
+    ip = client_ip(request)
+    if not username or not password:
+        return _login_page(request, "Enter your Jellyfin username and password.", 400, username, nxt)
+    if limiter.blocked(ip, username):
+        log.warning("Sign-in rate limited for %r from %s", username, ip)
+        return _login_page(request, "Too many attempts. Wait 15 minutes and try again.", 429, username, nxt)
+    svc = _login_server()
+    if not svc:
+        return _login_page(request, "No Jellyfin server is connected yet.", 503, username, nxt)
+    client = await client_for(svc)
+    try:
+        res = await client.authenticate(username, password)
+    except UpstreamError:
+        return _login_page(request, "Couldn't reach Jellyfin right now. Try again in a minute.", 503, username, nxt)
+    if not res or not res.get("User"):
+        limiter.fail(ip, username)
+        log.info("Failed Jellyfin sign-in for %r from %s", username, ip)
+        await asyncio.sleep(0.6)
+        return _login_page(request, "Wrong username or password.", 401, username, nxt)
+    ju = res["User"]
+    if (ju.get("Policy") or {}).get("IsDisabled"):
+        return _login_page(request, "This Jellyfin account is disabled.", 403, username, nxt)
+    if res.get("AccessToken"):
+        await client.end_session(res["AccessToken"])
+    limiter.ok(ip, username)
+    request.session.clear()
+    request.session["user"] = {"via": "jellyfin", "name": ju.get("Name") or username,
+                               "jf_id": str(ju.get("Id") or "").replace("-", "").lower(),
+                               "server_id": svc.id, "checked": time.time()}
+    log.info("Jellyfin user %s signed in from %s", ju.get("Name"), ip)
+    return RedirectResponse(nxt, status_code=303)
 
 
 # --- API ------------------------------------------------------------------------------

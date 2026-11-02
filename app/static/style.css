@@ -681,3 +681,20 @@ h1 { letter-spacing: -.01em; }
 .risk-hit { margin-top: 6px; font-size: 12.5px; font-weight: 650; color: var(--warn); }
 @media (min-width: 700px) { .risks { grid-template-columns: repeat(2, 1fr); } .qrow { grid-template-columns: 130px 1fr 44px 130px; grid-template-areas: "l b n s"; } .qrow .qs { text-align: right; } }
 :root[data-theme="light"] .risk, :root[data-theme="light"] .resbar { background: rgba(255,255,255,.5); }
+
+/* ===================== v0.6 viewer & sign-in ===================== */
+.tabbar:has(> :nth-child(4):last-child) { grid-template-columns: repeat(4, 1fr); }
+.me-head { display: flex; gap: 14px; align-items: center; margin-bottom: 14px; }
+.login-body { min-height: 100vh; }
+.login-main { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px calc(24px + env(safe-area-inset-bottom, 0px)); max-width: none; }
+.login-card { width: 100%; max-width: 400px; padding: 26px 22px; border-radius: 22px; }
+.login-brand { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 18px; }
+.login-brand span { font-size: 24px; font-weight: 800; background: var(--jf-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.login-h { text-align: center; margin: 0 0 4px; font-size: 21px; }
+.login-sub { text-align: center; margin: 0 0 18px; }
+.login-form { display: flex; flex-direction: column; gap: 12px; }
+.login-form label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.login-form .btn { margin-top: 6px; min-height: 48px; font-size: 15px; }
+.login-or { display: flex; align-items: center; gap: 10px; margin: 18px 0 12px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.login-or::before, .login-or::after { content: ""; flex: 1; height: 1px; background: var(--glass-line); }
+.login-foot { max-width: 400px; text-align: center; margin-top: 14px; }

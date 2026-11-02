@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Coming up{% endblock %}
+{% block content %}
+<h1>Coming up</h1>
+<p class="muted small" style="margin-top:-6px">New episodes and movies expected over the next 30 days.</p>
+{% set ns = namespace(day=None) %}
+{% for i in upcoming %}
+  {% if i.day != ns.day %}
+    {% if ns.day %}</div></section>{% endif %}
+    {% set ns.day = i.day %}
+    {% set delta = (i.day - upcoming[0].day).days %}
+    <section class="agenda-day"><h3 class="agenda-h">{{ i.day.strftime('%A') }}<span>{{ i.day.strftime('%b %-d') }}</span></h3><div class="card flush">
+  {% endif %}
+  <div class="agenda-item k-{{ i.kind }}">
+    <span class="thumb k-bg-{{ i.kind }}">{% if i.poster %}<img loading="lazy" src="{{ i.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ i.title[:1] }}</b></span>
+    <span class="ai-body"><span class="ai-title">{{ i.title }}</span><span class="ai-sub">{{ i.sub }}</span>
+      <span class="ai-meta">{% if i.time %}{{ i.time }} · {% endif %}{{ i.network or '' }}
+        {% if i.premiere %}<span class="badge b-acc">Premiere</span>{% endif %}{% if i.finale %}<span class="badge b-warn">Finale</span>{% endif %}</span></span>
+    <span class="ai-status">{% if i.has_file %}<span class="badge b-ok">Ready</span>{% endif %}</span>
+  </div>
+  {% if loop.last %}</div></section>{% endif %}
+{% else %}
+<div class="card empty"><div class="empty-icon">🗓️</div>Nothing scheduled in the next 30 days.</div>
+{% endfor %}
+{% endblock %}

@@ -18,6 +18,7 @@
 - **Concurrent-stream stats** (daily peak streams and transcodes) and a local-time viewing heatmap.
 - **Import history from Jellystat** so stats go back before JellyCreep was installed.
 - **Jellyfin-style glass UI**: frosted panels over a blurred backdrop of what's playing (or last watched), Jellyfin's purple→blue palette, light/dark/auto theme, a per-device "Glass effects" switch for slower phones, and pull-to-refresh.
+- **Jellyfin user sign-in** with a personal, privacy-safe dashboard (their own watching, stats, history, upcoming and requests — no other users, no IPs, no admin pages).
 - **Jellyfin-style hero on Activity**: full-width backdrop of what's playing with the title logo, poster, progress and "ends at" time — swipe between streams; shows the last thing watched when idle.
 - **Library quality report** (Media → Quality): how much is 4K/1080p/720p, HDR10/HDR10+/Dolby Vision, video and audio codecs, channels, containers, image subtitles and bitrates — plus a transcode outlook that ties those to the real reasons your streams transcoded and each client's direct-play rate.
 - **Storage on the Media tab**: every drive Jellyfin (10.11+) and Sonarr/Radarr/Lidarr can see, merged per physical disk, with free space, which libraries live where, and a "full in ~N days" estimate from daily readings.
@@ -128,6 +129,31 @@ Custom headers are added in every mode. The session cookie Authentik sets is reu
 **Same Docker network, no Authentik?** Use the container URL (`http://sonarr:8989`) with proxy auth set to *None*. That's the fastest path.
 
 ---
+
+## Letting Jellyfin users sign in
+
+Your Jellyfin users can get their own dashboard by signing in with their **Jellyfin username and password**. It shows what they're watching, their stats and streaks, their history, upcoming episodes, what's new (only from libraries they can access) and the status of their Seerr requests.
+
+They never see other users, IP addresses, devices other than their own, downloads, storage, settings or any admin page. The server enforces this with default-deny: viewers are redirected to `/me`, and admin APIs return 403. A Jellyfin *administrator* who signs in this way is also only a viewer. Admin access always goes through Authentik and MFA.
+
+1. **Settings → Sign-in → Allow Jellyfin users to sign in**, then pick what users can see. Or set `JELLYFIN_LOGIN=true`.
+2. **nginx:** let the user pages bypass Authentik. Everything else stays protected. Add the following to your JellyCreep server block, above `location /`. It's also in [`deploy/nginx/jellycreep.conf`](deploy/nginx/jellycreep.conf).
+   ```nginx
+   location ~ ^/(login|logout|me|partials/me)(/|$) {
+       proxy_set_header X-authentik-username "";
+       proxy_set_header X-authentik-groups   "";
+       proxy_set_header X-authentik-email    "";
+       proxy_pass http://jellycreep;
+   }
+   location /static/ { proxy_pass http://jellycreep; }
+   ```
+3. Send users **`https://<your-jellycreep>/me`**. They'll get the sign-in page, and can then *Add to Home Screen*.
+
+How it works:
+- Passwords are checked by Jellyfin (`/Users/AuthenticateByName`) and never stored.
+- The short-lived Jellyfin session created by the check is logged out straight away, so it doesn't clutter Jellyfin's device list.
+- Failed attempts are rate-limited per IP and per username.
+- Every few hours JellyCreep re-checks that the account still exists and isn't disabled. If it is gone or disabled, they're signed out.
 
 ## Inviting users (Wizarr)
 

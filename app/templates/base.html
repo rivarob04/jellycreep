@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-title" content="JellyCreep">
   <meta name="csrf" content="{{ csrf }}">
   <title>{% block title %}JellyCreep{% endblock %} · JellyCreep</title>
-  <link rel="manifest" href="/static/manifest.webmanifest" crossorigin="use-credentials">
+  <link rel="manifest" href="{{ '/me/manifest.webmanifest' if user.is_viewer else '/static/manifest.webmanifest' }}" crossorigin="use-credentials">
   <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/icon-180.png">
   <link rel="stylesheet" href="/static/style.css?v={{ version }}">
@@ -21,7 +21,14 @@
 {% set path = request.url.path %}
 {% set more_on = path.startswith('/add') or path.startswith('/invites') or path.startswith('/users') or path.startswith('/media') or path.startswith('/events') or path.startswith('/settings') %}
 <header class="top">
-  <a class="brand" href="/"><img src="/static/icon.svg" width="26" height="26" alt=""><span>JellyCreep</span></a>
+  <a class="brand" href="{{ '/me' if user.is_viewer else '/' }}"><img src="/static/icon.svg" width="26" height="26" alt=""><span>JellyCreep</span></a>
+  {% if user.is_viewer %}
+  <nav class="nav-desktop">
+    <a href="/me" class="{{ 'on' if path == '/me' }}">Home</a>
+    <a href="/me/history" class="{{ 'on' if path.startswith('/me/history') }}">History</a>
+    <a href="/me/upcoming" class="{{ 'on' if path.startswith('/me/upcoming') }}">Coming up</a>
+  </nav>
+  {% else %}
   <nav class="nav-desktop">
     <a href="/" class="{{ 'on' if path == '/' }}">Activity</a>
     <a href="/history" class="{{ 'on' if path.startswith('/history') }}">History</a>
@@ -33,16 +40,36 @@
     {% if user.is_admin %}<a href="/invites" class="{{ 'on' if path.startswith('/invites') }}">Invites</a>{% endif %}
     {% if user.is_admin %}<a href="/settings" class="{{ 'on' if path.startswith('/settings') }}">Settings</a>{% endif %}
   </nav>
+  {% endif %}
   <div class="spacer"></div>
   <button class="theme-btn fx-desk" type="button" data-fx-toggle aria-label="Toggle glass effects"><span data-fx-label>✨ Glass</span></button>
   <button class="theme-btn" type="button" data-theme-toggle aria-label="Change theme"><span data-theme-label>🌓 Auto</span></button>
   <div class="who">{{ user.name }}{% if user.is_admin %} · admin{% endif %}</div>
+  {% if user.is_viewer %}<a class="theme-btn fx-desk" href="/logout">Sign out</a>{% endif %}
 </header>
 
 <main>
 {% block content %}{% endblock %}
 </main>
 
+{% if user.is_viewer %}
+<nav class="tabbar" aria-label="Main">
+  <a href="/me" class="{{ 'on' if path == '/me' }}">
+    <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>Home</a>
+  <a href="/me/history" class="{{ 'on' if path.startswith('/me/history') }}">
+    <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>History</a>
+  <a href="/me/upcoming" class="{{ 'on' if path.startswith('/me/upcoming') }}">
+    <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Coming up</a>
+  <details>
+    <summary><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</summary>
+    <div class="more-sheet">
+      <button type="button" class="sheet-btn" data-theme-toggle><span data-theme-label>🌓 Auto</span></button>
+      <button type="button" class="sheet-btn" data-fx-toggle><span data-fx-label>✨ Glass effects: on</span></button>
+      <a href="/logout">Sign out ({{ user.name }})</a>
+    </div>
+  </details>
+</nav>
+{% else %}
 <nav class="tabbar" aria-label="Main">
   <a href="/" class="{{ 'on' if path == '/' }}">
     <svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Activity</a>
@@ -66,6 +93,7 @@
     </div>
   </details>
 </nav>
+{% endif %}
 <script src="/static/app.js?v={{ version }}"></script>
 </body>
 </html>
