@@ -206,15 +206,83 @@ class JellystatClient(Upstream):
         return await self.post("/stats/getMostViewedByType", json={"days": days, "type": kind}) or []
 
 
+class SabnzbdClient(Upstream):
+    """SABnzbd's API takes the key as a query parameter: /api?mode=…&output=json&apikey=…"""
+
+    async def api(self, mode: str, **params: str) -> dict:
+        data = await self.get("/api", params={"mode": mode, "output": "json", "apikey": self.svc.api_key or "", **params})
+        if isinstance(data, dict) and data.get("error"):
+            raise UpstreamError(f"SABnzbd: {data['error']}")
+        return data or {}
+
+    async def test(self) -> str:
+        await self.api("queue", limit="1")  # version needs no key; queue proves the key works
+        ver = await self.api("version")
+        return f"SABnzbd {ver.get('version', '')}".strip()
+
+    async def queue(self, limit: int = 30) -> dict:
+        return (await self.api("queue", limit=str(limit))).get("queue", {})
+
+    async def history(self, limit: int = 20) -> list[dict]:
+        return (await self.api("history", limit=str(limit))).get("history", {}).get("slots", [])
+
+
+class WizarrClient(Upstream):
+    """Wizarr's REST API (/api/docs on your instance). Key from Wizarr → Settings → API Keys."""
+
+    def __init__(self, svc: Service) -> None:
+        super().__init__(svc)
+        self.app_headers = {"X-API-Key": svc.api_key or ""}
+
+    async def test(self) -> str:
+        v = await self.get("/api/version")
+        return f"Wizarr {v.get('version', '')}".strip()
+
+    async def status(self) -> dict:
+        return await self.get("/api/status") or {}
+
+    async def servers(self) -> list[dict]:
+        return (await self.get("/api/servers") or {}).get("servers", [])
+
+    async def libraries(self) -> list[dict]:
+        return (await self.get("/api/libraries") or {}).get("libraries", [])
+
+    async def invitations(self) -> list[dict]:
+        return (await self.get("/api/invitations") or {}).get("invitations", [])
+
+    async def users(self) -> list[dict]:
+        return (await self.get("/api/users") or {}).get("users", [])
+
+    async def create_invitation(self, body: dict) -> dict:
+        data = await self.post("/api/invitations", json=body)
+        return (data or {}).get("invitation", {})
+
+    async def delete_invitation(self, inv_id: int) -> None:
+        await self.request("DELETE", f"/api/invitations/{inv_id}")
+
+    async def user_action(self, user_id: int, action: str, days: int = 30) -> str:
+        if action == "delete":
+            data = await self.request("DELETE", f"/api/users/{user_id}")
+        elif action == "extend":
+            data = await self.post(f"/api/users/{user_id}/extend", json={"days": days})
+        elif action in ("enable", "disable"):
+            data = await self.post(f"/api/users/{user_id}/{action}")
+        else:
+            raise UpstreamError(f"Unknown action {action}")
+        return (data or {}).get("message", "Done")
+
+
 FACTORIES = {
     "jellyfin": JellyfinClient,
     "sonarr": ArrClient,
     "radarr": ArrClient,
     "lidarr": ArrClient,
     "prowlarr": ArrClient,
+    "sabnzbd": SabnzbdClient,
     "qbittorrent": QbitClient,
     "jellyseerr": SeerrClient,
     "jellystat": JellystatClient,
+    "wizarr": WizarrClient,
 }
 
 

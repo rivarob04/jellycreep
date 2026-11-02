@@ -327,6 +327,9 @@ async def _arr_panel(svc: Service) -> dict:
     elif svc.kind == "qbittorrent":
         (panel["torrents"], e1), (panel["transfer"], e2) = await asyncio.gather(safe(client.torrents()), safe(client.transfer()))
         panel["error"] = e1 or e2
+    elif svc.kind == "sabnzbd":
+        (panel["sab"], e1), (panel["sab_history"], e2) = await asyncio.gather(safe(client.queue()), safe(client.history()))
+        panel["error"] = e1 or e2
     elif svc.kind == "jellyseerr":
         (panel["requests"], e1), (panel["counts"], e2) = await asyncio.gather(safe(client.requests()), safe(client.counts()))
         panel["error"] = e1 or e2
@@ -335,7 +338,7 @@ async def _arr_panel(svc: Service) -> dict:
 
 @app.get("/automation", response_class=HTMLResponse)
 async def page_automation(request: Request, user: User = Depends(current_user)):
-    svcs = services(("sonarr", "radarr", "lidarr", "prowlarr", "qbittorrent", "jellyseerr"))
+    svcs = services(("sonarr", "radarr", "lidarr", "prowlarr", "sabnzbd", "qbittorrent", "jellyseerr"))
     panels = await asyncio.gather(*(_arr_panel(s) for s in svcs))
     calendar = []
     for p in panels:
@@ -361,6 +364,87 @@ async def page_events(request: Request, source: str | None = None, user: User = 
         rows = list(db.scalars(stmt))
         sources = [s for (s,) in db.execute(select(Event.source).distinct())]
     return render(request, "events.html", user, rows=rows, sources=sources, source=source or "")
+
+
+# --- invites (Wizarr) -------------------------------------------------------------------
+def _wizarr(sid: int) -> Service:
+    with SessionLocal() as db:
+        svc = db.get(Service, sid)
+    if not svc or svc.kind != "wizarr":
+        raise HTTPException(404, "Wizarr service not found")
+    return svc
+
+
+@app.get("/invites", response_class=HTMLResponse)
+async def page_invites(request: Request, user: User = Depends(admin_user)):
+    panels = []
+    for svc in services(("wizarr",)):
+        client = await client_for(svc)
+        (status, e1), (servers, e2), (libs, e3), (invs, e4), (users, e5) = await asyncio.gather(
+            safe(client.status()), safe(client.servers()), safe(client.libraries()), safe(client.invitations()),
+            safe(client.users()))
+        invs = sorted(invs or [], key=lambda i: i.get("created") or "", reverse=True)
+        panels.append({"svc": svc, "status": status or {}, "servers": [s for s in servers or [] if s.get("verified", True)],
+                       "libs": libs or [], "invites": invs, "users": users or [], "error": e1 or e2 or e3 or e4 or e5})
+    flash = request.session.pop("flash", None)
+    new_invite = request.session.pop("new_invite", None)
+    return render(request, "invites.html", user, panels=panels, flash=flash, new_invite=new_invite)
+
+
+@app.post("/invites/{sid}/create")
+async def create_invite(sid: int, request: Request, user: User = Depends(admin_user)):
+    await verify_csrf(request)
+    form = await request.form()
+    svc = _wizarr(sid)
+    server_ids = [int(x) for x in form.getlist("server_ids") if str(x).isdigit()]
+    if not server_ids:
+        request.session["flash"] = {"ok": False, "msg": "Pick at least one media server for the invite."}
+        return RedirectResponse("/invites", status_code=303)
+    body: dict[str, Any] = {
+        "server_ids": server_ids,
+        "library_ids": [int(x) for x in form.getlist("library_ids") if str(x).isdigit()],
+        "allow_downloads": form.get("allow_downloads") == "on",
+        "allow_live_tv": form.get("allow_live_tv") == "on",
+    }
+    exp = str(form.get("expires_in_days") or "")
+    if exp in ("1", "7", "30"):
+        body["expires_in_days"] = int(exp)
+    duration = str(form.get("duration") or "").strip()
+    if duration.isdigit() and int(duration) > 0:
+        body.update(duration=duration, unlimited=False)
+    else:
+        body.update(duration="unlimited", unlimited=True)
+    client = await client_for(svc)
+    inv, err = await safe(client.create_invitation(body))
+    if err:
+        request.session["flash"] = {"ok": False, "msg": err}
+    else:
+        request.session["new_invite"] = {"url": inv.get("url"), "code": inv.get("code"), "server": inv.get("display_name")}
+        log.info("%s created Wizarr invite %s", user.name, inv.get("code"))
+    return RedirectResponse("/invites", status_code=303)
+
+
+@app.post("/invites/{sid}/invitation/{inv_id}/delete")
+async def delete_invite(sid: int, inv_id: int, request: Request, user: User = Depends(admin_user)):
+    await verify_csrf(request)
+    client = await client_for(_wizarr(sid))
+    _, err = await safe(client.delete_invitation(inv_id))
+    request.session["flash"] = {"ok": not err, "msg": err or "Invitation deleted."}
+    return RedirectResponse("/invites", status_code=303)
+
+
+@app.post("/invites/{sid}/users/{user_id}/{action}")
+async def wizarr_user_action(sid: int, user_id: int, action: str, request: Request, user: User = Depends(admin_user)):
+    await verify_csrf(request)
+    if action not in ("extend", "enable", "disable", "delete"):
+        raise HTTPException(400)
+    form = await request.form()
+    days = int(form.get("days") or 30) if str(form.get("days") or "30").isdigit() else 30
+    client = await client_for(_wizarr(sid))
+    msg, err = await safe(client.user_action(user_id, action, days))
+    request.session["flash"] = {"ok": not err, "msg": err or msg}
+    log.info("%s ran Wizarr %s on user %s", user.name, action, user_id)
+    return RedirectResponse("/invites#users", status_code=303)
 
 
 # --- settings ------------------------------------------------------------------------

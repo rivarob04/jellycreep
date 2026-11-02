@@ -17,14 +17,14 @@
     {% if svc %}<input type="hidden" name="id" value="{{ svc.id }}">{% else %}<input type="hidden" name="kind" value="{{ kind }}">{% endif %}
     <label>Name<input name="name" value="{{ svc.name if svc else kinds[kind] }}" required></label>
     <label>URL JellyCreep uses
-      <input name="url" type="url" inputmode="url" value="{{ svc.url if svc }}" placeholder="{{ 'http://jellyfin:8096' if kind == 'jellyfin' else 'https://' ~ kind ~ '.example.com' }}" required>
+      <input name="url" type="url" inputmode="url" value="{{ svc.url if svc }}" placeholder="{{ {'jellyfin': 'http://jellyfin:8096', 'jellystat': 'http://jellystat:3000', 'wizarr': 'http://wizarr:5690', 'sabnzbd': 'http://sabnzbd:8080'}.get(kind, 'https://' ~ kind ~ '.example.com') }}" required>
       <span class="hint">Internal (http://container:port) or the public URL behind Authentik.</span></label>
     <label>Link URL (optional)<input name="public_url" type="url" inputmode="url" value="{{ svc.public_url or '' if svc }}" placeholder="URL your phone opens"></label>
 
-    {% if kind in ('jellyfin', 'sonarr', 'radarr', 'lidarr', 'prowlarr', 'jellyseerr', 'jellystat') %}
+    {% if kind in ('jellyfin', 'sonarr', 'radarr', 'lidarr', 'prowlarr', 'sabnzbd', 'jellyseerr', 'jellystat', 'wizarr') %}
     <label>API key{% if svc and svc.api_key_enc %} <span class="badge b-ok">saved</span>{% endif %}
       <input name="api_key" type="password" placeholder="{{ 'Leave blank to keep · type clear to remove' if svc and svc.api_key_enc else '' }}">
-      <span class="hint">{% if kind == 'jellyfin' %}Dashboard → API Keys{% elif kind == 'jellystat' %}Jellystat → Settings → API Keys{% elif kind == 'jellyseerr' %}Settings → General → API Key{% else %}Settings → General → Security → API Key{% endif %}</span></label>
+      <span class="hint">{% if kind == 'jellyfin' %}Dashboard → API Keys{% elif kind == 'jellystat' %}Jellystat → Settings → API Keys{% elif kind == 'wizarr' %}Wizarr → Settings → API Keys{% elif kind == 'sabnzbd' %}Config → General → Security → API Key (not the NZB key){% elif kind == 'jellyseerr' %}Settings → General → API Key{% else %}Settings → General → Security → API Key{% endif %}</span></label>
     {% endif %}
     {% if kind == 'qbittorrent' %}
     <label>qBittorrent username<input name="username" value="{{ svc.username or '' if svc }}" autocapitalize="off"></label>

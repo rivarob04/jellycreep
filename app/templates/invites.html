@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Invites{% endblock %}
+{% block content %}
+<h1>Invites</h1>
+
+{% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}
+
+{% if new_invite %}
+<div class="card mb" style="border-color: var(--ok)">
+  <h2>✅ Invite ready{% if new_invite.server %} · {{ new_invite.server }}{% endif %}</h2>
+  <div class="copy-box"><code>{{ new_invite.url or new_invite.code }}</code></div>
+  <div class="actions" style="margin-top:10px">
+    <button class="btn primary" type="button" data-share="{{ new_invite.url or new_invite.code }}" data-share-title="You're invited to my media server">Share…</button>
+    <button class="btn" type="button" data-copy="{{ new_invite.url or new_invite.code }}">Copy link</button>
+  </div>
+</div>
+{% endif %}
+
+{% if not panels %}
+<div class="card empty">Connect Wizarr to create invites from here. <a href="/settings?new=wizarr#edit">Add Wizarr</a></div>
+{% endif %}
+
+{% for p in panels %}
+{% set svc = p.svc %}
+{% if panels|length > 1 %}<h2 class="section-title">{{ svc.name }}</h2>{% endif %}
+{% if p.error %}<div class="notice bad">{{ p.error }}</div>{% endif %}
+
+<div class="grid g4 mb">
+  <div class="card tile"><div class="n">{{ p.status.users or 0 }}</div><div class="l">Users</div></div>
+  <div class="card tile"><div class="n">{{ p.status.pending or 0 }}</div><div class="l">Pending invites</div></div>
+  <div class="card tile"><div class="n">{{ p.status.invites or 0 }}</div><div class="l">All invites</div></div>
+  <div class="card tile"><div class="n">{{ p.status.expired or 0 }}</div><div class="l">Expired</div></div>
+</div>
+
+<div class="card mb">
+  <details {{ 'open' if not new_invite }}>
+    <summary style="cursor:pointer; padding:4px 0"><strong>New invite</strong></summary>
+    <form method="post" action="/invites/{{ svc.id }}/create" class="form" style="margin-top:12px">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <fieldset class="full">
+        <legend>Media server</legend>
+        {% for s in p.servers %}
+        <label class="check"><input type="checkbox" name="server_ids" value="{{ s.id }}" {{ 'checked' if loop.first }}> {{ s.name }} <span class="muted small">{{ s.server_type }}</span></label>
+        {% else %}<p class="muted small">No verified servers in Wizarr yet.</p>{% endfor %}
+      </fieldset>
+      <label>Invite link expires
+        <select name="expires_in_days">
+          <option value="1">In 1 day</option>
+          <option value="7" selected>In 7 days</option>
+          <option value="30">In 30 days</option>
+          <option value="">Never</option>
+        </select></label>
+      <label>Account access lasts (days)
+        <input name="duration" type="number" inputmode="numeric" min="1" placeholder="Blank = unlimited"></label>
+      {% if p.libs %}
+      <fieldset class="full">
+        <legend>Libraries <span class="muted">(none ticked = Wizarr default)</span></legend>
+        {% for l in p.libs if l.enabled is not sameas false %}
+        <label class="check"><input type="checkbox" name="library_ids" value="{{ l.id }}"> {{ l.name }}{% if p.servers|length > 1 %} <span class="muted small">{{ l.server_name }}</span>{% endif %}</label>
+        {% endfor %}
+      </fieldset>
+      {% endif %}
+      <label class="check"><input type="checkbox" name="allow_downloads"> Allow downloads</label>
+      <label class="check"><input type="checkbox" name="allow_live_tv"> Allow Live TV</label>
+      <div class="actions full"><button class="btn primary">Create invite</button></div>
+    </form>
+  </details>
+</div>
+
+<div class="card mb">
+  <h2>Invitations</h2>
+  <div class="list">
+    {% for i in p.invites %}
+    {% set st = (i.status or '')|lower %}
+    <div>
+      <div class="spread">
+        <span class="mono">{{ i.code }}</span>
+        <span class="badge {{ 'b-ok' if st == 'used' else ('b-warn' if st == 'pending' else ('b-bad' if st == 'expired' else '')) }}">{{ i.status or '?' }}</span>
+      </div>
+      <div class="meta">
+        {{ i.display_name or (i.server_names or [])|join(', ') }}
+        {% if i.used_by %} · used by {{ i.used_by }}{% endif %}
+        {% if i.expires %} · link expires {{ i.expires[:10] }}{% endif %}
+        · access {{ 'unlimited' if i.unlimited else (i.duration ~ ' days') }}
+      </div>
+      <div class="row" style="margin-top:8px; gap:8px">
+        {% if st == 'pending' and i.url %}
+        <button class="btn sm" type="button" data-share="{{ i.url }}" data-share-title="You're invited to my media server">Share</button>
+        <button class="btn sm" type="button" data-copy="{{ i.url }}">Copy</button>
+        {% endif %}
+        <form method="post" action="/invites/{{ svc.id }}/invitation/{{ i.id }}/delete" data-confirm="Delete invite {{ i.code }}?">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm danger">Delete</button></form>
+      </div>
+    </div>
+    {% else %}<p class="muted small">No invitations yet.</p>{% endfor %}
+  </div>
+</div>
+
+<div class="card mb" id="users">
+  <h2>Users</h2>
+  <div class="list">
+    {% for u in p.users %}
+    <div>
+      <div class="spread"><strong class="ellip" style="max-width:65%">{{ u.username }}</strong>
+        {% if u.expires %}<span class="badge b-warn">expires {{ u.expires[:10] }}</span>{% else %}<span class="badge">no expiry</span>{% endif %}</div>
+      <div class="meta ellip">{{ u.email or 'no email' }} · {{ u.server }}{% if u.created_at %} · joined {{ u.created_at[:10] }}{% endif %}</div>
+      <details style="margin-top:6px">
+        <summary class="muted small" style="cursor:pointer; padding:6px 0">Manage…</summary>
+        <div class="row" style="gap:8px; margin-top:6px">
+          <form method="post" action="/invites/{{ svc.id }}/users/{{ u.id }}/extend" class="row" style="gap:6px; flex-wrap:nowrap">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <input name="days" type="number" inputmode="numeric" value="30" min="1" style="width:84px">
+            <button class="btn sm">+ days</button></form>
+          <form method="post" action="/invites/{{ svc.id }}/users/{{ u.id }}/disable"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm">Disable</button></form>
+          <form method="post" action="/invites/{{ svc.id }}/users/{{ u.id }}/enable"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm">Enable</button></form>
+          <form method="post" action="/invites/{{ svc.id }}/users/{{ u.id }}/delete" data-confirm="Delete {{ u.username }} from Wizarr and the media server?"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm danger">Delete</button></form>
+        </div>
+      </details>
+    </div>
+    {% else %}<p class="muted small">No users yet.</p>{% endfor %}
+  </div>
+  <a class="btn sm" style="margin-top:10px" href="{{ svc.link }}" target="_blank" rel="noopener">Open Wizarr ↗</a>
+</div>
+{% endfor %}
+{% endblock %}

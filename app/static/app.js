@@ -34,12 +34,29 @@
     });
   });
 
-  document.querySelectorAll("[data-copy]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      navigator.clipboard?.writeText(btn.dataset.copy);
-      btn.textContent = "Copied";
-    });
-  });
+  const copy = async (text, btn) => {
+    try { await navigator.clipboard.writeText(text); }
+    catch (_) { // older iOS / non-https fallback
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
+    }
+    if (btn) { const t = btn.textContent; btn.textContent = "Copied ✓"; setTimeout(() => (btn.textContent = t), 1500); }
+  };
+
+  document.querySelectorAll("[data-copy]").forEach((btn) =>
+    btn.addEventListener("click", () => copy(btn.dataset.copy, btn)));
+
+  // Native share sheet on phones (Messages, WhatsApp…); falls back to copying.
+  document.querySelectorAll("[data-share]").forEach((btn) =>
+    btn.addEventListener("click", async () => {
+      const url = btn.dataset.share;
+      if (navigator.share) {
+        try { await navigator.share({ title: btn.dataset.shareTitle || "Invite", text: btn.dataset.shareTitle || "", url }); return; }
+        catch (e) { if (e.name === "AbortError") return; }
+      }
+      copy(url, btn);
+    }));
 
   // Show only the proxy fields relevant to the selected mode.
   const mode = document.querySelector('select[name="proxy_auth"]');

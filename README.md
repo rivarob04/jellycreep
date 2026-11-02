@@ -5,9 +5,11 @@
 - **Live activity:** who's watching what, direct play vs transcode (with codecs, resolution, bitrate and the transcode reason), progress, IP and device. Admins can stop a stream and send the user a message.
 - **Watch history it records itself.** It polls Jellyfin's sessions like Tautulli does, counting play time minus pauses. It survives restarts and supports several Jellyfin servers.
 - **Users and stats:** top users, movies and shows, plays per day, peak hours, play methods and clients.
-- **Automation in one place:** Sonarr/Radarr/Lidarr queues, upcoming calendar, health and disk space; qBittorrent downloads; Prowlarr indexers; Seerr requests.
+- **Automation in one place:** Sonarr/Radarr/Lidarr queues, upcoming calendar, health and disk space; SABnzbd and qBittorrent downloads (failed jobs flagged); Prowlarr indexers; Seerr requests.
+- **Invite and manage users with Wizarr:** create an invite on your phone (server, libraries, expiry, access length, downloads/Live TV), then send it through your phone's share sheet. You can also extend, disable or delete Wizarr users.
 - **Events timeline:** grabs, imports, requests and health alerts pushed in by webhooks from the *arrs, Seerr and Jellyfin.
-- **Jellystat bundled** in the same stack. Its stats show up inside JellyCreep, and you can still open its own UI.
+- **Connects to your existing Jellystat.** Its stats show up inside JellyCreep, with a link to open its own UI.
+- **Every app is a connection, not a container.** Jellyfin, Jellystat, Wizarr, Sonarr, Radarr, Lidarr, Prowlarr, SABnzbd, qBittorrent and Seerr are your existing installs. You add each one by URL and API key, from Settings or from stack variables.
 - **Works with apps behind Authentik.** Each upstream app can be reached through Authentik with a service account (app password or OAuth2 client credentials), or with custom headers for Cloudflare Access and similar.
 - **Phone-first UI:** bottom tab bar, card layouts, large tap targets, dark theme. *Add to Home Screen* makes it open full-screen like an app.
 - **Read-only REST API** with tokens, for Homepage, scripts or other apps. Docs are at `/api/docs`.
@@ -29,15 +31,26 @@
 
    | Variable | Value |
    |---|---|
-   | `JELLYCREEP_SECRET_KEY` | `openssl rand -base64 48` |
-   | `JELLYSTAT_DB_PASSWORD` | a password |
-   | `JELLYSTAT_JWT_SECRET` | `openssl rand -base64 48` |
+   | `JELLYCREEP_SECRET_KEY` | `openssl rand -base64 48` (the only required one) |
    | `JELLYCREEP_BASE_URL` | `https://jellycreep.example.com` |
    | `JELLYFIN_URL` / `JELLYFIN_API_KEY` | e.g. `http://jellyfin:8096` / key from Dashboard → API Keys |
 
-   Every other option is listed in [`.env.example`](.env.example). You can also add services later from **Settings** on your phone.
-4. **Deploy.** The stack runs three containers: `jellycreep` (port 8484), `jellystat` (port 3000) and `jellystat-db`.
-5. Open Jellystat once, create its admin account, connect it to Jellyfin, then make an API key (**Settings → API Keys**). Paste the key into JellyCreep under **Settings → Jellystat → Edit**.
+   Every other app is optional, and the full list is in [`.env.example`](.env.example). The easiest route is to deploy first and then add apps from **Settings → Add a service** on your phone. Each one has a **Save & test** button.
+4. **Deploy.** The stack runs one container, `jellycreep` (port 8484). It reaches your other containers by name over the shared `proxy` network, or by any URL you give it.
+
+### Connecting your apps
+
+| App | URL example | Credential |
+|---|---|---|
+| Jellyfin | `http://jellyfin:8096` | Dashboard → API Keys |
+| Jellystat | `http://jellystat:3000` | Jellystat → Settings → API Keys |
+| Wizarr | `http://wizarr:5690` | Wizarr → Settings → API Keys |
+| Sonarr / Radarr / Lidarr / Prowlarr | `http://sonarr:8989` or `https://sonarr.example.com` | Settings → General → API Key |
+| SABnzbd | `http://sabnzbd:8080` | Config → General → **API Key** (not the NZB key) |
+| qBittorrent | `http://qbittorrent:8080` | Web UI username + password |
+| Jellyseerr / Seerr | `http://jellyseerr:5055` | Settings → General → API Key |
+
+Any of these can also sit behind Authentik; see below.
 
 > The image is built by GitHub Actions to `ghcr.io/rivarob04/jellycreep`. GHCR packages start out private, so either make the package public (GitHub → Packages → jellycreep → Package settings) or let Dockhand build it. The compose file has `build: .` as a fallback.
 
@@ -103,6 +116,16 @@ Custom headers are added in every mode. The session cookie Authentik sets is reu
 **Same Docker network, no Authentik?** Use the container URL (`http://sonarr:8989`) with proxy auth set to *None*. That's the fastest path.
 
 ---
+
+## Inviting users (Wizarr)
+
+Connect Wizarr in **Settings**, then open **More → Invite a user** (admins only):
+
+1. Pick the media server, how long the invite link stays valid (1, 7 or 30 days, or never) and how long the account lasts (blank means unlimited).
+2. Optionally restrict libraries and allow downloads or Live TV.
+3. Tap **Create invite**, then **Share…**. Your phone's share sheet opens so you can send it by Messages, WhatsApp or email. On desktop the link is copied instead.
+
+The same page lists every invitation with its status (pending, used or expired) and every Wizarr user. From there you can **extend** a user by N days, **disable**, **enable** or **delete** them.
 
 ## Webhooks → Events
 

@@ -60,9 +60,11 @@ SERVICE_KINDS = {
     "radarr": "Radarr",
     "lidarr": "Lidarr",
     "prowlarr": "Prowlarr",
+    "sabnzbd": "SABnzbd",
     "qbittorrent": "qBittorrent",
     "jellyseerr": "Jellyseerr / Seerr",
     "jellystat": "Jellystat",
+    "wizarr": "Wizarr",
 }
 
 PROXY_AUTH_MODES = {

@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Automation</h1>
 {% if not panels %}
-<div class="card empty">No Sonarr, Radarr, Prowlarr, qBittorrent or Seerr configured yet.{% if user.is_admin %} <a href="/settings">Add them in Settings</a>.{% endif %}</div>
+<div class="card empty">No Sonarr, Radarr, Prowlarr, SABnzbd, qBittorrent or Seerr connected yet.{% if user.is_admin %} <a href="/settings">Add them in Settings</a>.{% endif %}</div>
 {% else %}
 <div class="tabs">
   {% if calendar %}<a href="#upcoming">Upcoming</a>{% endif %}
@@ -84,6 +84,36 @@
         <span class="muted small">{{ i.protocol }}{% if not i.enable %} · disabled{% elif i.id in p.failing %} · failing{% endif %}</span></div>
       {% else %}<p class="muted small">No indexers.</p>{% endfor %}
     </div>
+
+  {% elif p.svc.kind == 'sabnzbd' %}
+    {% set q = p.sab or {} %}
+    <div class="grid g4 mb">
+      <div class="tile"><div class="n">{{ (q.kbpersec|float * 1024)|bytes }}/s</div><div class="l">{{ 'Paused' if q.paused else 'Speed' }}</div></div>
+      <div class="tile"><div class="n">{{ q.sizeleft or '0 B' }}</div><div class="l">Left · {{ q.timeleft or '0:00:00' }}</div></div>
+    </div>
+    <h2 class="small muted" style="text-transform:uppercase; letter-spacing:.05em">Queue ({{ (q.slots or [])|length }})</h2>
+    <div class="list mb">
+      {% for j in q.slots or [] %}
+      <div>
+        <div class="ellip">{{ j.filename }}</div>
+        <div class="meta spread"><span>{{ j.status }}{% if j.cat and j.cat != '*' %} · {{ j.cat }}{% endif %} · {{ j.size or ((j.mb|float)|round(0)|int ~ ' MB') }}</span><span>{{ j.percentage }}%{% if j.timeleft %} · {{ j.timeleft }}{% endif %}</span></div>
+        <div class="bar"><i style="width: {{ j.percentage }}%"></i></div>
+      </div>
+      {% else %}<p class="muted small">Queue is empty.</p>{% endfor %}
+    </div>
+    {% if p.sab_history %}
+    <details>
+      <summary class="muted" style="padding:8px 0; cursor:pointer">History ({{ p.sab_history|length }}){% set failed = p.sab_history|selectattr('status', 'equalto', 'Failed')|list %}{% if failed %} · <span class="bad-text">{{ failed|length }} failed</span>{% endif %}</summary>
+      <div class="list">
+        {% for h in p.sab_history %}
+        <div>
+          <div class="ellip">{{ h.name }}</div>
+          <div class="meta">{% if h.status == 'Failed' %}<span class="bad-text">Failed</span>{% else %}{{ h.status }}{% endif %}{% if h.category and h.category != '*' %} · {{ h.category }}{% endif %} · {{ (h.bytes or 0)|bytes }}{% if h.fail_message %} · <span class="bad-text">{{ h.fail_message }}</span>{% endif %}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </details>
+    {% endif %}
 
   {% elif p.svc.kind == 'qbittorrent' %}
     {% if p.transfer %}
