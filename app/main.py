@@ -8,7 +8,7 @@ import math
 import os
 import secrets
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -20,7 +20,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_, select
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import __version__, stats, tracker, webhooks
+from . import __version__, calendar_view, stats, tracker, webhooks
 from .auth import (CSRF_COOKIE, LoginRequired, User, admin_user, api_user, csrf_token, current_user, oauth,
                    user_from_claims, verify_csrf)
 from .config import settings
@@ -208,6 +208,7 @@ async def page_activity(request: Request, user: User = Depends(current_user)):
         recent = list(db.scalars(select(Play).order_by(Play.stopped_at.desc()).limit(8)))
         today = stats.summary(db, 1)
     return render(request, "activity.html", user, streams=streams, errors=errors, recent=recent, today=today,
+                  health=services(),
                   has_servers=bool(services(("jellyfin",), enabled_only=False)))
 
 
@@ -237,15 +238,15 @@ async def stop_stream(server_id: int, session_id: str, request: Request, user: U
 
 
 @app.get("/img/{server_id}/{item_id}")
-async def image(server_id: int, item_id: str, h: int = 300, user: User = Depends(current_user)):
-    if not item_id.isalnum():
+async def image(server_id: int, item_id: str, h: int = 300, t: str = "Primary", user: User = Depends(current_user)):
+    if not item_id.isalnum() or t not in ("Primary", "Backdrop", "Thumb", "Logo"):
         raise HTTPException(400)
     with SessionLocal() as db:
         svc = db.get(Service, server_id)
     if not svc or svc.kind != "jellyfin":
         raise HTTPException(404)
     client = await client_for(svc)
-    r, err = await safe(client.image(item_id, max_height=min(max(h, 50), 900)))
+    r, err = await safe(client.image(item_id, kind=t, max_height=min(max(h, 50), 900)))
     if err or r is None:
         return Response(status_code=404)
     return Response(r.content, media_type=r.headers.get("content-type", "image/jpeg"),
@@ -295,10 +296,11 @@ async def page_stats(request: Request, days: int = 30, user: User = Depends(curr
         ctx = dict(
             days=days, summary=stats.summary(db, days), top_users=stats.top_users(db, days),
             top_movies=stats.top_movies(db, days), top_shows=stats.top_shows(db, days),
-            per_day=stats.plays_per_day(db, days), by_hour=stats.plays_by_hour(db, days),
+            per_day=stats.plays_per_day(db, days),
             methods=stats.grouped(db, Play.play_method, days), clients=stats.grouped(db, Play.client, days),
             types=stats.grouped(db, Play.item_type, days),
         )
+        ctx["heat"], ctx["by_hour"], ctx["heat_peak"] = stats.heatmap(db, days, TZ)
     jellystat = []
     for svc in services(("jellystat",)):
         client = await client_for(svc)
@@ -320,19 +322,27 @@ async def page_media(request: Request, user: User = Depends(current_user)):
     return render(request, "media.html", user, servers=servers)
 
 
-async def _arr_panel(svc: Service) -> dict:
+AUTOMATION_TABS = {
+    "calendar": ("Calendar", ("sonarr", "radarr", "lidarr")),
+    "queue": ("Queue", ("sonarr", "radarr", "lidarr")),
+    "downloads": ("Downloads", ("sabnzbd", "qbittorrent")),
+    "requests": ("Requests", ("jellyseerr",)),
+    "indexers": ("Indexers", ("prowlarr",)),
+}
+
+
+async def _arr_panel(svc: Service, tab: str) -> dict:
     client = await client_for(svc)
     panel: dict[str, Any] = {"svc": svc}
-    if svc.kind in ("sonarr", "radarr", "lidarr"):
-        (panel["queue"], e1), (panel["calendar"], e2), (panel["history"], e3), (panel["health"], e4), (panel["disk"], e5) = \
-            await asyncio.gather(safe(client.queue()), safe(client.calendar()), safe(client.history(15)),
-                                 safe(client.health()), safe(client.diskspace()))
-        panel["error"] = e1 or e2 or e3 or e4 or e5
+    if tab == "queue" and svc.kind in ("sonarr", "radarr", "lidarr"):
+        (panel["queue"], e1), (panel["history"], e2), (panel["health"], e3), (panel["disk"], e4) = \
+            await asyncio.gather(safe(client.queue()), safe(client.history(15)), safe(client.health()),
+                                 safe(client.diskspace()))
+        panel["error"] = e1 or e2 or e3 or e4
     elif svc.kind == "prowlarr":
         (panel["indexers"], e1), (panel["status"], e2), (panel["health"], e3) = await asyncio.gather(
             safe(client.indexers()), safe(client.indexer_status()), safe(client.health()))
-        failing = {s.get("indexerId") for s in panel["status"] or []}
-        panel["failing"] = failing
+        panel["failing"] = {s.get("indexerId") for s in panel["status"] or []}
         panel["error"] = e1 or e2 or e3
     elif svc.kind == "qbittorrent":
         (panel["torrents"], e1), (panel["transfer"], e2) = await asyncio.gather(safe(client.torrents()), safe(client.transfer()))
@@ -346,23 +356,53 @@ async def _arr_panel(svc: Service) -> dict:
     return panel
 
 
+async def _calendar(ym: str | None) -> tuple[dict, list[str]]:
+    today = datetime.now(TZ).date()
+    year, month = calendar_view.month_bounds(ym, today)
+    start, end = calendar_view.grid_range(year, month)
+    items, errors = [], []
+
+    async def one(svc: Service):
+        client = await client_for(svc)
+        # pad a day each side so time-zone shifts don't drop evening episodes
+        raw, err = await safe(client.calendar(start - timedelta(days=1), end + timedelta(days=1)))
+        if err:
+            errors.append(f"{svc.name}: {err}")
+        else:
+            items.extend(calendar_view.items_for(svc, raw, TZ, start, end))
+
+    await asyncio.gather(*(one(s) for s in services(("sonarr", "radarr", "lidarr"))))
+    return calendar_view.build(year, month, items, today), errors
+
+
 @app.get("/automation", response_class=HTMLResponse)
-async def page_automation(request: Request, user: User = Depends(current_user)):
-    svcs = services(("sonarr", "radarr", "lidarr", "prowlarr", "sabnzbd", "qbittorrent", "jellyseerr"))
-    panels = await asyncio.gather(*(_arr_panel(s) for s in svcs))
-    calendar = []
-    for p in panels:
-        for c in p.get("calendar") or []:
-            if p["svc"].kind == "sonarr":
-                title = f"{(c.get('series') or {}).get('title', '?')} S{c.get('seasonNumber', 0):02d}E{c.get('episodeNumber', 0):02d}"
-                when = c.get("airDateUtc")
-            else:
-                title = c.get("title") or (c.get("album") or {}).get("title", "?")
-                when = c.get("digitalRelease") or c.get("physicalRelease") or c.get("inCinemas") or c.get("releaseDate")
-            if when:
-                calendar.append({"when": when[:10], "title": title, "source": p["svc"].name, "has_file": c.get("hasFile")})
-    calendar.sort(key=lambda x: x["when"])
-    return render(request, "automation.html", user, panels=panels, calendar=calendar[:40])
+async def page_automation(request: Request, tab: str = "calendar", m: str | None = None,
+                          user: User = Depends(current_user)):
+    available = {k: v for k, v in AUTOMATION_TABS.items() if services(v[1])}
+    if tab not in available:
+        tab = next(iter(available), "calendar")
+    ctx: dict[str, Any] = {"tab": tab, "tabs": available, "panels": [], "cal": None, "errors": []}
+    if tab == "calendar" and available:
+        ctx["cal"], ctx["errors"] = await _calendar(m)
+    elif available:
+        ctx["panels"] = await asyncio.gather(*(_arr_panel(s, tab) for s in services(available[tab][1])))
+    return render(request, "automation.html", user, **ctx)
+
+
+@app.get("/arrimg/{sid}/{item_id}")
+async def arr_image(sid: int, item_id: int, t: str = "poster", user: User = Depends(current_user)):
+    if t not in ("poster", "fanart"):
+        raise HTTPException(400)
+    with SessionLocal() as db:
+        svc = db.get(Service, sid)
+    if not svc or svc.kind not in ("sonarr", "radarr"):
+        raise HTTPException(404)
+    client = await client_for(svc)
+    r, err = await safe(client.cover(item_id, t))
+    if err or r is None or not r.headers.get("content-type", "").startswith("image"):
+        return Response(status_code=404)
+    return Response(r.content, media_type=r.headers.get("content-type"),
+                    headers={"Cache-Control": "private, max-age=604800"})
 
 
 @app.get("/events", response_class=HTMLResponse)

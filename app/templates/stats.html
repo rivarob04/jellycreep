@@ -58,12 +58,19 @@
 </div>
 
 <div class="card mb">
-  <h2>Plays by hour of day (UTC)</h2>
-  {% set mh = (by_hour|max) or 1 %}
-  <div class="chart" style="height:110px">
-    {% for n in by_hour %}<div class="col" title="{{ '%02d'|format(loop.index0) }}:00 – {{ n }} plays"><i class="c-ep" style="height: {{ (n / mh * 100)|round(2) }}%"></i></div>{% endfor %}
+  <div class="spread"><h2 style="margin:0">When people watch</h2><span class="muted small">local time</span></div>
+  {% if heat_peak %}
+  <div class="heat mt">
+    <span></span>{% for h in range(24) %}<span class="hr">{{ h if h % 6 == 0 else '' }}</span>{% endfor %}
+    {% for row in heat %}
+    <span class="lbl">{{ ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][loop.index0] }}</span>
+    {% set wd = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][loop.index0] %}
+    {% for n in row %}<span class="c" title="{{ wd }} {{ '%02d'|format(loop.index0) }}:00 – {{ n }} play{{ 's' if n != 1 }}"{% if n %} style="background: rgba(169,107,255,{{ (0.18 + 0.82 * n / heat_peak)|round(2) }})"{% endif %}></span>{% endfor %}
+    {% endfor %}
   </div>
-  <div class="legend"><span>00</span><span style="margin-left:auto">12</span><span style="margin-left:auto">23</span></div>
+  {% set best = by_hour.index(by_hour|max) %}
+  <p class="muted small" style="margin:10px 0 0">Busiest hour: <strong style="color:var(--text)">{{ '%d:00'|format(best) }}–{{ '%d:00'|format((best + 1) % 24) }}</strong></p>
+  {% else %}<p class="muted small mt">No plays in this period yet.</p>{% endif %}
 </div>
 
 {% for j in jellystat %}

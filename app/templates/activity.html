@@ -4,6 +4,14 @@
 {% if not has_servers %}
 <div class="notice">No Jellyfin server yet. {% if user.is_admin %}<a href="/settings?new=jellyfin">Add one in Settings</a> to start tracking.{% else %}Ask an admin to add one.{% endif %}</div>
 {% endif %}
+{% if health %}
+<div class="health-strip" aria-label="Connected apps">
+  {% for s in health %}
+  <a href="{{ ('/settings#svc-' ~ s.id) if user.is_admin else ('/automation' if s.kind not in ('jellyfin', 'jellystat', 'wizarr') else '/') }}" title="{{ s.last_status or 'Not checked yet' }}">
+    <span class="dot {{ 'ok' if s.last_ok else ('bad' if s.last_ok is sameas false else '') }}"></span>{{ s.name }}</a>
+  {% endfor %}
+</div>
+{% endif %}
 <div class="grid g4 mb">
   <div class="card tile"><div class="n">{{ streams|length }}</div><div class="l">Streams now</div></div>
   <div class="card tile"><div class="n">{{ streams|selectattr('play_method', 'equalto', 'Transcode')|list|length }}</div><div class="l">Transcoding</div></div>

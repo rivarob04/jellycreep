@@ -14,7 +14,7 @@ class JellyfinClient(Upstream):
         super().__init__(svc)
         key = (svc.api_key or "").strip()
         mb = (f'MediaBrowser Client="JellyCreep", Device="JellyCreep", DeviceId="jellycreep-{svc.id}", '
-              f'Version="0.1.0", Token="{key}"')
+              f'Version="0.2.0", Token="{key}"')
         # Jellyfin 10.11+ only accepts `Authorization: MediaBrowser Token=…` by default
         # (legacy X-Emby-Token is off). Older servers still read X-Emby-Token.
         self.app_headers = {"X-Emby-Authorization": mb, "X-Emby-Token": key}
@@ -90,13 +90,22 @@ class ArrClient(Upstream):
         data = await self.get(self.p("queue"), params=params)
         return (data or {}).get("records", [])
 
-    async def calendar(self, days: int = 14) -> list[dict]:
+    async def calendar(self, start=None, end=None, days: int = 14) -> list[dict]:
         now = datetime.now(timezone.utc)
-        params = {"start": (now - timedelta(days=1)).date().isoformat(),
-                  "end": (now + timedelta(days=days)).date().isoformat()}
+        start = start or (now - timedelta(days=1)).date()
+        end = end or (now + timedelta(days=days)).date()
+        params = {"start": start.isoformat(), "end": end.isoformat(), "unmonitored": "false"}
         if self.svc.kind == "sonarr":
-            params["includeSeries"] = "true"
+            params.update(includeSeries="true", includeEpisodeFile="false")
+        elif self.svc.kind == "lidarr":
+            params["includeArtist"] = "true"
         return await self.get(self.p("calendar"), params=params) or []
+
+    async def cover(self, item_id: int, cover: str = "poster"):
+        """Poster/fanart for a series (Sonarr) or movie (Radarr), small size."""
+        size = "-250" if cover == "poster" else "-360"
+        return await self.get(self.p(f"mediacover/{item_id}/{cover}{size}.jpg"), expect_json=False,
+                              headers={"Accept": "image/*"})
 
     async def history(self, size: int = 25) -> list[dict]:
         params = {"pageSize": str(size), "sortKey": "date", "sortDirection": "descending"}

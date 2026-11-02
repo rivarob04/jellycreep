@@ -84,3 +84,16 @@ def users_table(db) -> list[dict]:
                     "last_client": last_play.client if last_play else None,
                     "last_ip": last_play.ip if last_play else None})
     return out
+
+
+def heatmap(db, days: int, tz) -> tuple[list[list[int]], list[int], int]:
+    """Plays by weekday (Sun..Sat) x hour, in the display time zone."""
+    from datetime import timezone as _tz
+    grid = [[0] * 24 for _ in range(7)]
+    rows = db.execute(select(Play.started_at).where(Play.started_at >= _since(days))).all()
+    for (ts,) in rows:
+        local = ts.replace(tzinfo=_tz.utc).astimezone(tz)
+        grid[(local.weekday() + 1) % 7][local.hour] += 1
+    by_hour = [sum(grid[d][h] for d in range(7)) for h in range(24)]
+    peak = max((max(r) for r in grid), default=0)
+    return grid, by_hour, peak

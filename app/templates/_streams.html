@@ -3,6 +3,7 @@
 <div class="streams">
   {% for s in streams %}
   <div class="stream">
+    {% if s.poster_id %}<div class="backdrop" style="background-image:url('/img/{{ s.server_id }}/{{ s.poster_id }}?t=Backdrop&h=360')"></div>{% endif %}
     {% if s.poster_id %}<img class="poster" loading="lazy" src="/img/{{ s.server_id }}/{{ s.poster_id }}?h=280" alt="">{% else %}<div class="poster"></div>{% endif %}
     <div class="body">
       <div class="spread">

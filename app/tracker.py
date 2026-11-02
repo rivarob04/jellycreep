@@ -172,12 +172,31 @@ async def poll_once() -> None:
     await asyncio.to_thread(finalize_stale)
 
 
+async def check_services() -> None:
+    """Background health check so status dots stay current without pressing Test."""
+    with SessionLocal() as db:
+        svcs = list(db.scalars(select(Service).where(Service.enabled.is_(True))))
+    for svc in svcs:
+        try:
+            client = await client_for(svc)
+            msg, ok = await client.test(), True
+        except Exception as e:  # noqa: BLE001
+            msg, ok = str(e), False
+        with SessionLocal() as db:
+            row = db.get(Service, svc.id)
+            if row:
+                row.last_ok, row.last_status, row.last_checked = ok, (msg or "")[:500], utcnow()
+                db.commit()
+
+
 async def run_forever() -> None:
     log.info("Activity tracker started (every %ss)", settings.poll_interval)
     ticks = 0
     while True:
         try:
             await poll_once()
+            if ticks % max(1, 300 // settings.poll_interval) == 0:
+                await check_services()
             ticks += 1
             if ticks % 360 == 0:
                 await asyncio.to_thread(prune)

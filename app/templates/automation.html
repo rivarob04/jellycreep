@@ -1,63 +1,154 @@
 {% extends "base.html" %}
 {% block title %}Automation{% endblock %}
-{% block content %}
-<h1>Automation</h1>
-{% if not panels %}
-<div class="card empty">No Sonarr, Radarr, Prowlarr, SABnzbd, qBittorrent or Seerr connected yet.{% if user.is_admin %} <a href="/settings">Add them in Settings</a>.{% endif %}</div>
-{% else %}
-<div class="tabs">
-  {% if calendar %}<a href="#upcoming">Upcoming</a>{% endif %}
-  {% for p in panels %}<a href="#svc-{{ p.svc.id }}">{{ p.svc.name }}</a>{% endfor %}
-</div>
 
-{% if calendar %}
-<div class="card mb" id="upcoming">
-  <h2>Upcoming</h2>
-  <div class="list">
-    {% for c in calendar %}
-    <div class="spread"><span class="ellip" style="max-width:68%">{{ c.title }}</span>
-      <span class="small muted">{{ c.when }} · {{ c.source }}{% if c.has_file %} <span class="badge b-ok">✓</span>{% endif %}</span></div>
-    {% endfor %}
+{% macro poster(src, kind, label) -%}
+<span class="thumb k-bg-{{ kind }}">{% if src %}<img loading="lazy" src="{{ src }}" alt="" onerror="this.remove()">{% endif %}<b>{{ (label or '?')[:1] }}</b></span>
+{%- endmacro %}
+
+{% macro sec(title, n=None) -%}
+<h3 class="sec">{{ title }}{% if n is not none %} <span>{{ n }}</span>{% endif %}</h3>
+{%- endmacro %}
+
+{% block content %}
+<div class="spread"><h1>Automation</h1></div>
+
+{% if not tabs %}
+<div class="card empty">
+  <div class="empty-icon">📡</div>
+  No Sonarr, Radarr, Prowlarr, SABnzbd, qBittorrent or Seerr connected yet.
+  {% if user.is_admin %}<div class="mt"><a class="btn primary" href="/settings">Connect an app</a></div>{% endif %}
+</div>
+{% else %}
+
+<nav class="seg mb" aria-label="Automation sections">
+  {% for key, t in tabs.items() %}
+  <a href="/automation?tab={{ key }}" class="{{ 'on' if key == tab }}">{{ t[0] }}</a>
+  {% endfor %}
+</nav>
+
+{% for e in errors %}<div class="notice bad small">{{ e }}</div>{% endfor %}
+
+{# ============================ CALENDAR ============================ #}
+{% if tab == 'calendar' and cal %}
+<div class="card cal-card mb">
+  <div class="cal-head">
+    <a class="icon-btn" href="/automation?tab=calendar&m={{ cal.prev }}" aria-label="Previous month">‹</a>
+    <h2>{{ cal.label }}</h2>
+    <a class="icon-btn" href="/automation?tab=calendar&m={{ cal.next }}" aria-label="Next month">›</a>
+    {% if not cal.is_current %}<a class="btn sm" href="/automation?tab=calendar">Today</a>{% endif %}
+  </div>
+  <div class="legend cal-legend">
+    {% if cal.counts.tv %}<span><i class="k-bg-tv"></i>{{ cal.counts.tv }} episodes</span>{% endif %}
+    {% if cal.counts.movie %}<span><i class="k-bg-movie"></i>{{ cal.counts.movie }} movies</span>{% endif %}
+    {% if cal.counts.music %}<span><i class="k-bg-music"></i>{{ cal.counts.music }} albums</span>{% endif %}
+    {% if cal.counts.have %}<span class="ok-text">✓ {{ cal.counts.have }} downloaded</span>{% endif %}
+    {% if not (cal.counts.tv or cal.counts.movie or cal.counts.music) %}<span>Nothing scheduled this month</span>{% endif %}
+  </div>
+
+  <div class="cal-grid">
+    {% for wd in ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] %}<div class="cal-wd">{{ wd }}</div>{% endfor %}
+    {% for week in cal.weeks %}{% for d in week %}
+    <a class="cal-day{{ ' out' if not d.in_month }}{{ ' today' if d.today }}{{ ' past' if d.past }}{{ ' has' if d.entries }}"
+       {% if d.entries and d.in_month %}href="#d-{{ d.date.isoformat() }}"{% endif %}>
+      <span class="num">{{ d.date.day }}</span>
+      {% if d.entries %}
+      <span class="dots">{% for i in d.entries[:5] %}<i class="k-bg-{{ i.kind }}{{ ' have' if i.has_file }}"></i>{% endfor %}{% if d.entries|length > 5 %}<em>+</em>{% endif %}</span>
+      <span class="chips">
+        {% for i in d.entries[:3] %}<span class="chip k-{{ i.kind }}{{ ' have' if i.has_file }}" title="{{ i.title }} · {{ i.sub }}">{{ i.title }}</span>{% endfor %}
+        {% if d.entries|length > 3 %}<span class="chip more">+{{ d.entries|length - 3 }} more</span>{% endif %}
+      </span>
+      {% endif %}
+    </a>
+    {% endfor %}{% endfor %}
   </div>
 </div>
+
+{% set ns = namespace(shown=0, past=[]) %}
+{% for day, its in cal.agenda %}{% if cal.is_current and day < cal.today %}{% set ns.past = ns.past + [(day, its)] %}{% endif %}{% endfor %}
+
+{% macro agenda_day(day, its) -%}
+<section class="agenda-day" id="d-{{ day.isoformat() }}">
+  <h3 class="agenda-h{{ ' is-today' if day == cal.today }}">
+    {%- if day == cal.today %}Today{% elif (day - cal.today).days == 1 %}Tomorrow{% elif (day - cal.today).days == -1 %}Yesterday{% else %}{{ day.strftime('%A') }}{% endif -%}
+    <span>{{ day.strftime('%b %-d') }}</span></h3>
+  <div class="card flush">
+    {% for i in its %}
+    <a class="agenda-item k-{{ i.kind }}" href="{{ i.link }}" target="_blank" rel="noopener">
+      {{ poster(i.poster, i.kind, i.title) }}
+      <span class="ai-body">
+        <span class="ai-title">{{ i.title }}</span>
+        <span class="ai-sub">{{ i.sub }}</span>
+        <span class="ai-meta">{% if i.time %}{{ i.time }} · {% endif %}{% if i.network %}{{ i.network }} · {% endif %}{{ i.source }}
+          {% if i.premiere %}<span class="badge b-acc">Premiere</span>{% endif %}
+          {% if i.finale %}<span class="badge b-warn">{{ i.finale|capitalize }} finale</span>{% endif %}</span>
+      </span>
+      <span class="ai-status">
+        {% if i.has_file %}<span class="badge b-ok">✓ Got it</span>
+        {% elif day < cal.today %}<span class="badge b-bad">Missing</span>
+        {% elif day == cal.today %}<span class="badge b-acc">Today</span>
+        {% else %}<span class="badge">{{ (day - cal.today).days }}d</span>{% endif %}
+      </span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{%- endmacro %}
+
+{% if ns.past %}
+<details class="mb earlier">
+  <summary>Earlier this month · {{ ns.past|length }} day{{ 's' if ns.past|length != 1 }}</summary>
+  {% for day, its in ns.past %}{{ agenda_day(day, its) }}{% endfor %}
+</details>
+{% endif %}
+{% for day, its in cal.agenda %}
+  {% if not (cal.is_current and day < cal.today) %}{{ agenda_day(day, its) }}{% set ns.shown = ns.shown + 1 %}{% endif %}
+{% endfor %}
+{% if ns.shown == 0 and not ns.past %}<div class="card empty"><div class="empty-icon">🗓️</div>Nothing on the calendar for {{ cal.label }}.</div>
+{% elif ns.shown == 0 %}<div class="card empty small">No more releases this month. <a href="/automation?tab=calendar&m={{ cal.next }}">See next month →</a></div>{% endif %}
 {% endif %}
 
+{# ============================ OTHER TABS ============================ #}
 {% for p in panels %}
-<div class="card mb" id="svc-{{ p.svc.id }}">
+<div class="card mb svc-card" id="svc-{{ p.svc.id }}">
   <div class="spread mb">
-    <h2 style="margin:0">{{ p.svc.name }}</h2>
+    <h2 style="margin:0" class="row"><span class="svc-logo k-svc-{{ p.svc.kind }}">{{ p.svc.kind_label[:1] }}</span>{{ p.svc.name }}</h2>
     <a class="btn sm" href="{{ p.svc.link }}" target="_blank" rel="noopener">Open ↗</a>
   </div>
   {% if p.error %}<div class="notice bad">{{ p.error }}</div>{% endif %}
-
-  {% for h in p.health or [] %}
-  <div class="notice {{ 'bad' if h.type == 'error' else '' }} small">⚠ {{ h.message }}</div>
-  {% endfor %}
+  {% for h in p.health or [] %}<div class="notice {{ 'bad' if h.type == 'error' else 'warn' }} small">⚠ {{ h.message }}</div>{% endfor %}
 
   {% if p.svc.kind in ('sonarr', 'radarr', 'lidarr') %}
-    <h2 class="small muted" style="text-transform:uppercase; letter-spacing:.05em">Queue ({{ (p.queue or [])|length }})</h2>
+    {{ sec('Queue', (p.queue or [])|length) }}
     {% if p.queue %}
     <div class="list mb">
       {% for q in p.queue %}
       {% set pct = ((1 - (q.sizeleft or 0) / q.size) * 100) if q.size else 0 %}
-      <div>
-        <div class="ellip">{% if q.series %}{{ q.series.title }}{% if q.episode %} S{{ '%02d'|format(q.episode.seasonNumber) }}E{{ '%02d'|format(q.episode.episodeNumber) }}{% endif %}{% elif q.movie %}{{ q.movie.title }}{% elif q.artist %}{{ q.artist.artistName }}{% else %}{{ q.title }}{% endif %}</div>
-        <div class="meta spread"><span>{{ q.status }}{% if q.trackedDownloadState and q.trackedDownloadState != 'downloading' %} · {{ q.trackedDownloadState }}{% endif %} · {{ q.protocol }}</span><span>{{ pct|round|int }}%{% if q.timeleft %} · {{ q.timeleft }}{% endif %}</span></div>
-        <div class="bar"><i style="width: {{ pct }}%"></i></div>
-        {% for m in q.statusMessages or [] %}{% for msg in m.messages %}<div class="meta bad-text">{{ msg }}</div>{% endfor %}{% endfor %}
+      {% set pid = q.seriesId or q.movieId %}
+      {% set kind = 'tv' if q.series else ('movie' if q.movie else 'music') %}
+      {% set name = (q.series.title if q.series else (q.movie.title if q.movie else (q.artist.artistName if q.artist else q.title))) %}
+      <div class="media-row">
+        {{ poster(('/arrimg/' ~ p.svc.id ~ '/' ~ pid) if pid and p.svc.kind != 'lidarr' else None, kind, name) }}
+        <div class="mr-body">
+          <div class="ellip"><strong>{{ name }}</strong>{% if q.episode %} <span class="muted">S{{ '%02d'|format(q.episode.seasonNumber) }}E{{ '%02d'|format(q.episode.episodeNumber) }}</span>{% endif %}</div>
+          <div class="meta spread"><span>{{ q.status|capitalize }}{% if q.trackedDownloadState and q.trackedDownloadState != 'downloading' %} · {{ q.trackedDownloadState }}{% endif %} · {{ q.protocol }}{% if q.quality and q.quality.quality %} · {{ q.quality.quality.name }}{% endif %}</span><span>{{ pct|round|int }}%{% if q.timeleft %} · {{ q.timeleft }}{% endif %}</span></div>
+          <div class="bar{{ ' warn' if q.trackedDownloadStatus == 'warning' }}"><i style="width: {{ pct }}%"></i></div>
+          {% for m in q.statusMessages or [] %}{% for msg in m.messages %}<div class="meta bad-text">{{ msg }}</div>{% endfor %}{% endfor %}
+        </div>
       </div>
       {% endfor %}
     </div>
-    {% else %}<p class="muted small">Queue is empty.</p>{% endif %}
+    {% else %}<p class="muted small">Queue is empty. 🎉</p>{% endif %}
 
     {% if p.history %}
     <details>
-      <summary class="muted" style="padding:8px 0; cursor:pointer">Recent activity ({{ p.history|length }})</summary>
+      <summary class="sum">Recent activity ({{ p.history|length }})</summary>
       <div class="list">
         {% for h in p.history %}
-        <div>
-          <div class="ellip">{% if h.series %}{{ h.series.title }}{% if h.episode %} S{{ '%02d'|format(h.episode.seasonNumber) }}E{{ '%02d'|format(h.episode.episodeNumber) }}{% endif %}{% elif h.movie %}{{ h.movie.title }}{% else %}{{ h.sourceTitle }}{% endif %}</div>
-          <div class="meta">{{ h.eventType }} · {{ (h.date or '')[:16]|replace('T', ' ') }}{% if h.quality and h.quality.quality %} · {{ h.quality.quality.name }}{% endif %}</div>
+        {% set ev = h.eventType or '' %}
+        <div class="spread">
+          <span style="min-width:0;flex:1"><span class="ellip" style="display:block">{% if h.series %}{{ h.series.title }}{% if h.episode %} S{{ '%02d'|format(h.episode.seasonNumber) }}E{{ '%02d'|format(h.episode.episodeNumber) }}{% endif %}{% elif h.movie %}{{ h.movie.title }}{% else %}{{ h.sourceTitle }}{% endif %}</span>
+            <span class="meta">{{ (h.date or '')[:16]|replace('T', ' ') }}{% if h.quality and h.quality.quality %} · {{ h.quality.quality.name }}{% endif %}</span></span>
+          <span class="badge {{ 'b-ok' if 'Imported' in ev or 'downloadFolder' in ev else ('b-bad' if 'Fail' in ev else ('b-acc' if ev == 'grabbed' else '')) }}">{{ {'grabbed': 'Grabbed', 'downloadFolderImported': 'Imported', 'downloadFailed': 'Failed', 'episodeFileDeleted': 'Deleted', 'movieFileDeleted': 'Deleted', 'episodeFileRenamed': 'Renamed', 'movieFileRenamed': 'Renamed'}.get(ev, ev) }}</span>
         </div>
         {% endfor %}
       </div>
@@ -66,22 +157,28 @@
 
     {% if p.disk %}
     <details>
-      <summary class="muted" style="padding:8px 0; cursor:pointer">Disk space</summary>
+      <summary class="sum">Disk space</summary>
       {% for d in p.disk %}
       {% set used = ((1 - d.freeSpace / d.totalSpace) * 100) if d.totalSpace else 0 %}
-      <div style="margin:6px 0">
-        <div class="spread small"><span class="mono ellip" style="max-width:60%">{{ d.path }}</span><span class="muted">{{ d.freeSpace|bytes }} free of {{ d.totalSpace|bytes }}</span></div>
-        <div class="bar"><i style="width: {{ used }}%; {{ 'background: var(--bad)' if used > 90 }}"></i></div>
+      <div style="margin:8px 0">
+        <div class="spread small"><span class="mono ellip" style="max-width:55%">{{ d.path }}</span><span class="muted">{{ d.freeSpace|bytes }} free of {{ d.totalSpace|bytes }}</span></div>
+        <div class="bar"><i style="width: {{ used }}%; {{ 'background: var(--bad)' if used > 90 else ('background: var(--warn)' if used > 80) }}"></i></div>
       </div>
       {% endfor %}
     </details>
     {% endif %}
 
   {% elif p.svc.kind == 'prowlarr' %}
+    {% set total = (p.indexers or [])|length %}
+    {% set off = (p.indexers or [])|rejectattr('enable')|list|length %}
+    <div class="grid g4 mb">
+      <div class="tile"><div class="n">{{ total }}</div><div class="l">Indexers</div></div>
+      <div class="tile"><div class="n {{ 'bad-text' if p.failing }}">{{ p.failing|length }}</div><div class="l">Failing</div></div>
+    </div>
     <div class="list">
-      {% for i in p.indexers or [] %}
-      <div class="spread"><span class="row" style="gap:8px"><span class="dot {{ 'bad' if i.id in p.failing else ('ok' if i.enable else '') }}"></span>{{ i.name }}</span>
-        <span class="muted small">{{ i.protocol }}{% if not i.enable %} · disabled{% elif i.id in p.failing %} · failing{% endif %}</span></div>
+      {% for i in (p.indexers or [])|sort(attribute='name') %}
+      <div class="spread"><span class="row" style="gap:10px"><span class="dot {{ 'bad' if i.id in p.failing else ('ok' if i.enable else '') }}"></span>{{ i.name }}</span>
+        <span class="muted small">{{ i.protocol }}{% if not i.enable %} · disabled{% elif i.id in p.failing %} · <span class="bad-text">failing</span>{% endif %}</span></div>
       {% else %}<p class="muted small">No indexers.</p>{% endfor %}
     </div>
 
@@ -91,7 +188,7 @@
       <div class="tile"><div class="n">{{ (q.kbpersec|float * 1024)|bytes }}/s</div><div class="l">{{ 'Paused' if q.paused else 'Speed' }}</div></div>
       <div class="tile"><div class="n">{{ q.sizeleft or '0 B' }}</div><div class="l">Left · {{ q.timeleft or '0:00:00' }}</div></div>
     </div>
-    <h2 class="small muted" style="text-transform:uppercase; letter-spacing:.05em">Queue ({{ (q.slots or [])|length }})</h2>
+    {{ sec('Queue', (q.slots or [])|length) }}
     <div class="list mb">
       {% for j in q.slots or [] %}
       <div>
@@ -102,8 +199,9 @@
       {% else %}<p class="muted small">Queue is empty.</p>{% endfor %}
     </div>
     {% if p.sab_history %}
-    <details>
-      <summary class="muted" style="padding:8px 0; cursor:pointer">History ({{ p.sab_history|length }}){% set failed = p.sab_history|selectattr('status', 'equalto', 'Failed')|list %}{% if failed %} · <span class="bad-text">{{ failed|length }} failed</span>{% endif %}</summary>
+    {% set failed = p.sab_history|selectattr('status', 'equalto', 'Failed')|list %}
+    <details {{ 'open' if failed }}>
+      <summary class="sum">History ({{ p.sab_history|length }}){% if failed %} · <span class="bad-text">{{ failed|length }} failed</span>{% endif %}</summary>
       <div class="list">
         {% for h in p.sab_history %}
         <div>
@@ -118,12 +216,12 @@
   {% elif p.svc.kind == 'qbittorrent' %}
     {% if p.transfer %}
     <div class="grid g4 mb">
-      <div class="tile"><div class="n">{{ (p.transfer.dl_info_speed or 0)|bytes }}/s</div><div class="l">Download</div></div>
-      <div class="tile"><div class="n">{{ (p.transfer.up_info_speed or 0)|bytes }}/s</div><div class="l">Upload</div></div>
+      <div class="tile"><div class="n">{{ (p.transfer.dl_info_speed or 0)|bytes }}/s</div><div class="l">↓ Download</div></div>
+      <div class="tile"><div class="n">{{ (p.transfer.up_info_speed or 0)|bytes }}/s</div><div class="l">↑ Upload</div></div>
     </div>
     {% endif %}
     {% set active = (p.torrents or [])|rejectattr('progress', 'ge', 1)|list %}
-    <h2 class="small muted" style="text-transform:uppercase; letter-spacing:.05em">Downloading ({{ active|length }})</h2>
+    {{ sec('Downloading', active|length) }}
     <div class="list mb">
       {% for t in active %}
       <div>
@@ -134,7 +232,7 @@
       {% else %}<p class="muted small">Nothing downloading.</p>{% endfor %}
     </div>
     <details>
-      <summary class="muted" style="padding:8px 0; cursor:pointer">Recently added ({{ (p.torrents or [])|length }})</summary>
+      <summary class="sum">Recently added ({{ (p.torrents or [])|length }})</summary>
       <div class="list">
         {% for t in (p.torrents or [])[:25] %}
         <div><div class="ellip">{{ t.name }}</div><div class="meta">{{ t.state }} · ratio {{ t.ratio|round(2) }} · {{ t.size|bytes }}</div></div>
@@ -145,7 +243,7 @@
   {% elif p.svc.kind == 'jellyseerr' %}
     {% if p.counts %}
     <div class="grid g4 mb">
-      <div class="tile"><div class="n">{{ p.counts.pending or 0 }}</div><div class="l">Pending</div></div>
+      <div class="tile"><div class="n {{ 'warn-text' if p.counts.pending }}">{{ p.counts.pending or 0 }}</div><div class="l">Pending</div></div>
       <div class="tile"><div class="n">{{ p.counts.processing or 0 }}</div><div class="l">Processing</div></div>
       <div class="tile"><div class="n">{{ p.counts.available or 0 }}</div><div class="l">Available</div></div>
       <div class="tile"><div class="n">{{ p.counts.total or 0 }}</div><div class="l">Total</div></div>
@@ -155,10 +253,13 @@
     <div class="list">
       {% for r in p.requests or [] %}
       {% set st = rstatus.get(r.status, ('?', '')) %}
-      <div class="spread">
-        <span style="min-width:0; flex:1"><span class="ellip" style="display:block">{{ r._title or ('TMDB ' ~ ((r.media or {}).tmdbId or '?')) }}{% if r._year %} <span class="muted">({{ r._year }})</span>{% endif %}</span>
-          <span class="meta">{{ r.type }} · {{ (r.requestedBy or {}).displayName or '?' }} · {{ (r.createdAt or '')[:10] }}</span></span>
-        <span class="badge {{ st[1] }}">{{ st[0] }}</span>
+      <div class="media-row">
+        {{ poster(None, 'movie' if r.type == 'movie' else 'tv', r._title) }}
+        <div class="mr-body">
+          <div class="spread"><span class="ellip" style="flex:1;min-width:0"><strong>{{ r._title or ('TMDB ' ~ ((r.media or {}).tmdbId or '?')) }}</strong>{% if r._year %} <span class="muted">({{ r._year }})</span>{% endif %}</span>
+            <span class="badge {{ st[1] }}">{{ st[0] }}</span></div>
+          <div class="meta">{{ 'Movie' if r.type == 'movie' else 'Series' }} · {{ (r.requestedBy or {}).displayName or '?' }} · {{ (r.createdAt or '')[:10] }}</div>
+        </div>
       </div>
       {% else %}<p class="muted small">No requests.</p>{% endfor %}
     </div>
