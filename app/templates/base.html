@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f1115" id="theme-color">
-  <script>(function(){try{var t=localStorage.getItem("jc-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}catch(e){}})();</script>
+  <meta name="theme-color" content="#0a0a10" id="theme-color">
+  <script>(function(){try{var d=document.documentElement,t=localStorage.getItem("jc-theme");if(t==="light"||t==="dark")d.dataset.theme=t;if(localStorage.getItem("jc-fx")==="off")d.dataset.fx="off";}catch(e){}})();</script>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="/static/style.css?v={{ version }}">
 </head>
 <body>
+<div class="ambient" aria-hidden="true">{% if ambient %}<div class="ambient-img" style="background-image:url('{{ ambient }}')"></div>{% endif %}</div>
 {% set path = request.url.path %}
 {% set more_on = path.startswith('/add') or path.startswith('/invites') or path.startswith('/users') or path.startswith('/media') or path.startswith('/events') or path.startswith('/settings') %}
 <header class="top">
@@ -33,6 +34,7 @@
     {% if user.is_admin %}<a href="/settings" class="{{ 'on' if path.startswith('/settings') }}">Settings</a>{% endif %}
   </nav>
   <div class="spacer"></div>
+  <button class="theme-btn fx-desk" type="button" data-fx-toggle aria-label="Toggle glass effects"><span data-fx-label>✨ Glass</span></button>
   <button class="theme-btn" type="button" data-theme-toggle aria-label="Change theme"><span data-theme-label>🌓 Auto</span></button>
   <div class="who">{{ user.name }}{% if user.is_admin %} · admin{% endif %}</div>
 </header>
@@ -59,6 +61,7 @@
       <a href="/media" class="{{ 'on' if path.startswith('/media') }}">Media &amp; libraries</a>
       <a href="/events" class="{{ 'on' if path.startswith('/events') }}">Events</a>
       {% if user.is_admin %}<a href="/settings" class="{{ 'on' if path.startswith('/settings') }}">Settings</a>{% endif %}
+      <button type="button" class="sheet-btn" data-fx-toggle><span data-fx-label>✨ Glass effects: on</span></button>
       {% if auth_mode != 'none' %}<a href="/auth/logout">Sign out ({{ user.name }})</a>{% endif %}
     </div>
   </details>

@@ -17,7 +17,8 @@
 - **Per-user pages** with favourite shows/movies, devices, watch-time chart, heatmap, streaks and biggest binge.
 - **Concurrent-stream stats** (daily peak streams and transcodes) and a local-time viewing heatmap.
 - **Import history from Jellystat** so stats go back before JellyCreep was installed.
-- **Light/dark/auto theme** and pull-to-refresh in the installed app.
+- **Jellyfin-style glass UI**: frosted panels over a blurred backdrop of what's playing (or last watched), Jellyfin's purple→blue palette, light/dark/auto theme, a per-device "Glass effects" switch for slower phones, and pull-to-refresh.
+- **Storage on the Media tab**: every drive Jellyfin (10.11+) and Sonarr/Radarr/Lidarr can see, merged per physical disk, with free space, which libraries live where, and a "full in ~N days" estimate from daily readings.
 - **Read-only REST API** with tokens, for Homepage, scripts or other apps. Docs are at `/api/docs`.
 
 ---

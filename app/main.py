@@ -20,7 +20,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_, select
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import __version__, calendar_view, importer, notify, stats, tracker, webhooks
+from . import __version__, calendar_view, importer, notify, stats, storage, tracker, webhooks
 from .auth import (CSRF_COOKIE, LoginRequired, User, admin_user, api_user, csrf_token, current_user, oauth,
                    user_from_claims, verify_csrf)
 from .config import settings
@@ -147,8 +147,35 @@ templates.env.filters.update(duration=fmt_duration, local=fmt_local, ago=fmt_ago
 templates.env.globals.update(version=__version__, kinds=SERVICE_KINDS, proxy_modes=PROXY_AUTH_MODES)
 
 
+_AMBIENT: dict[str, Any] = {"at": 0.0, "url": None}
+
+
+def ambient_url() -> str | None:
+    """Backdrop for the glass background: what's playing now, else the last thing watched (cached 60 s)."""
+    import time as _t
+    if _t.time() - _AMBIENT["at"] < 60:
+        return _AMBIENT["url"]
+    url = None
+    try:
+        with SessionLocal() as db:
+            act = db.scalar(select(ActiveStream).order_by(ActiveStream.started_at.desc()))
+            if act:
+                d = json.loads(act.data)
+                if d.get("poster_id"):
+                    url = f"/img/{act.server_id}/{d['poster_id']}?t=Backdrop&h=720"
+            if not url:
+                p = db.scalar(select(Play).where(Play.poster_id.is_not(None)).order_by(Play.stopped_at.desc()))
+                if p:
+                    url = f"/img/{p.server_id}/{p.poster_id}?t=Backdrop&h=720"
+    except Exception:  # noqa: BLE001
+        url = None
+    _AMBIENT.update(at=_t.time(), url=url)
+    return url
+
+
 def render(request: Request, name: str, user: User, **ctx: Any) -> HTMLResponse:
-    ctx.update(request=request, user=user, csrf=csrf_token(request), auth_mode=settings.auth_mode)
+    ctx.update(request=request, user=user, csrf=csrf_token(request), auth_mode=settings.auth_mode,
+               ambient=ambient_url())
     return templates.TemplateResponse(request, name, ctx)
 
 
@@ -320,7 +347,12 @@ async def page_media(request: Request, user: User = Depends(current_user)):
             safe(client.recently_added()), safe(client.libraries()), safe(client.counts()), safe(client.system_info()))
         servers.append({"svc": svc, "recent": recent or [], "libs": libs or [], "counts": counts or {}, "info": info or {},
                         "error": e1 or e2 or e3 or e4})
-    return render(request, "media.html", user, servers=servers)
+    drives, notes = await storage.collect()
+    if drives:
+        await asyncio.to_thread(storage.record, drives)
+        await asyncio.to_thread(storage.forecast, drives)
+    return render(request, "media.html", user, servers=servers, drives=drives, storage_notes=notes,
+                  storage_sum=storage.summary(drives))
 
 
 AUTOMATION_TABS = {

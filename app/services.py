@@ -14,7 +14,7 @@ class JellyfinClient(Upstream):
         super().__init__(svc)
         key = (svc.api_key or "").strip()
         mb = (f'MediaBrowser Client="JellyCreep", Device="JellyCreep", DeviceId="jellycreep-{svc.id}", '
-              f'Version="0.3.0", Token="{key}"')
+              f'Version="0.4.0", Token="{key}"')
         # Jellyfin 10.11+ only accepts `Authorization: MediaBrowser Token=…` by default
         # (legacy X-Emby-Token is off). Older servers still read X-Emby-Token.
         self.app_headers = {"X-Emby-Authorization": mb, "X-Emby-Token": key}
@@ -40,6 +40,10 @@ class JellyfinClient(Upstream):
 
     async def counts(self) -> dict:
         return await self.get("/Items/Counts") or {}
+
+    async def storage(self) -> dict:
+        """Jellyfin 10.11+: per-library and server-folder disk usage (admin key)."""
+        return await self.get("/System/Info/Storage") or {}
 
     async def recently_added(self, limit: int = 18) -> list[dict]:
         data = await self.get("/Items", params={

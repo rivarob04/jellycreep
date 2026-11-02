@@ -1,7 +1,66 @@
 {% extends "base.html" %}
 {% block title %}Media{% endblock %}
+
+{% macro level(p) -%}{{ 'bad' if p >= 95 else ('warn' if p >= 85 else 'ok') }}{%- endmacro %}
+
 {% block content %}
 <h1>Media</h1>
+
+{# ============================ STORAGE ============================ #}
+{% if drives %}
+{% set sm = storage_sum %}
+<div class="card mb storage-card">
+  <div class="storage-top">
+    <div class="ring lvl-{{ level(sm.pct) }}" style="--p: {{ sm.pct }}">
+      <div class="ring-in"><b>{{ (100 - sm.pct)|round|int }}%</b><span>free</span></div>
+    </div>
+    <div class="storage-sum">
+      <h2 style="margin:0 0 4px">Storage</h2>
+      <div class="big">{{ sm.free|bytes }} <span class="muted">free</span></div>
+      <div class="muted small">{{ sm.used|bytes }} used of {{ sm.total|bytes }} · {{ sm.drives }} drive{{ 's' if sm.drives != 1 }}</div>
+      {% if sm.soonest is not none %}
+      <div class="small" style="margin-top:6px">
+        {% if sm.soonest < 30 %}<span class="badge b-bad">⚠ A drive fills in ~{{ sm.soonest }} days</span>
+        {% elif sm.soonest < 90 %}<span class="badge b-warn">A drive fills in ~{{ sm.soonest }} days</span>
+        {% else %}<span class="badge b-ok">Plenty of room · {{ sm.soonest }}+ days</span>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="drives">
+    {% for d in drives %}
+    <div class="drive lvl-{{ level(d.pct) }}">
+      <div class="spread">
+        <span class="drive-name"><span class="drive-ico">{{ '🎞️' if d.libraries else ('⚙️' if d.roles else '💽') }}</span>{{ d.name }}</span>
+        <span class="drive-free"><b>{{ d.free|bytes }}</b> free</span>
+      </div>
+      <div class="bar fat"><i style="width: {{ d.pct }}%"></i></div>
+      <div class="meta spread">
+        <span>{{ d.used|bytes }} of {{ d.total|bytes }} · {{ d.pct|round|int }}% used</span>
+        <span>{% if d.days_left is not none and d.days_left > 730 %}2+ years left{% elif d.days_left is not none %}full in ~{{ d.days_left }}d{% elif d.per_day is not none and d.per_day < 0 %}freeing up{% elif d.per_day is not none %}steady{% endif %}</span>
+      </div>
+      {% if d.libraries or d.roles or d.paths %}
+      <details class="drive-more"><summary>What's on it</summary>
+        <div class="chips-row">
+          {% for l in d.libraries %}<span class="pill">{{ l }}</span>{% endfor %}
+          {% for r in d.roles %}<span class="pill muted-pill">{{ r }}</span>{% endfor %}
+        </div>
+        {% for p in d.paths[:6] %}<div class="mono small muted ellip">{{ p }}</div>{% endfor %}
+        <div class="meta">Seen by {{ d.sources|join(', ') }}{% if d.per_day is not none and d.per_day > 0 %} · growing ~{{ d.per_day|bytes }}/day{% endif %}</div>
+      </details>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% for n in storage_notes %}<div class="notice small" style="margin:12px 0 0">{{ n }}</div>{% endfor %}
+  <p class="hint" style="margin:10px 0 0">Fill-up estimates appear after a couple of days of readings.</p>
+</div>
+{% elif storage_notes %}
+<div class="card mb"><h2>Storage</h2>{% for n in storage_notes %}<div class="notice small">{{ n }}</div>{% endfor %}</div>
+{% endif %}
+
+{# ============================ SERVERS ============================ #}
 {% for s in servers %}
 <div class="card mb">
   <div class="spread mb">

@@ -283,5 +283,15 @@ def set_setting(key: str, value) -> None:
         db.commit()
 
 
+class DiskSnapshot(Base):
+    """One reading per drive per day, used to estimate how fast storage fills up."""
+    __tablename__ = "disk_snapshots"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    day: Mapped[str] = mapped_column(String(10), primary_key=True)
+    total: Mapped[float] = mapped_column(Float)
+    free: Mapped[float] = mapped_column(Float)
+
+
 def init_db() -> None:
     Base.metadata.create_all(engine)

@@ -99,7 +99,7 @@
   const apply = (t) => {
     if (t === "auto") delete root.dataset.theme; else root.dataset.theme = t;
     const light = t === "light" || (t === "auto" && matchMedia("(prefers-color-scheme: light)").matches);
-    if (meta) meta.content = light ? "#ffffff" : "#0f1115";
+    if (meta) meta.content = light ? "#eef0f7" : "#0a0a10";
     document.querySelectorAll("[data-theme-label]").forEach((el) => (el.textContent = label[t]));
   };
   apply(get());
@@ -153,4 +153,23 @@
   };
   boxes.forEach((b) => b.addEventListener("change", sync));
   sync();
+})();
+
+// Glass effects on/off (per device) – off = no blur, for slower phones.
+(function () {
+  const root = document.documentElement;
+  const get = () => { try { return localStorage.getItem("jc-fx") === "off" ? "off" : "on"; } catch (_) { return "on"; } };
+  const paint = () => {
+    const on = get() === "on";
+    if (on) delete root.dataset.fx; else root.dataset.fx = "off";
+    document.querySelectorAll("[data-fx-label]").forEach((el) => {
+      el.textContent = el.closest(".sheet-btn") ? `✨ Glass effects: ${on ? "on" : "off"}` : (on ? "✨ Glass" : "▫️ Flat");
+    });
+  };
+  paint();
+  document.querySelectorAll("[data-fx-toggle]").forEach((b) => b.addEventListener("click", (e) => {
+    e.preventDefault();
+    try { localStorage.setItem("jc-fx", get() === "on" ? "off" : "on"); } catch (_) {}
+    paint();
+  }));
 })();

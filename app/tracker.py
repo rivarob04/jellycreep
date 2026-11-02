@@ -215,6 +215,12 @@ async def run_forever() -> None:
             await poll_once()
             if ticks % max(1, 300 // settings.poll_interval) == 0:
                 await check_services()
+            if ticks % max(1, 21600 // settings.poll_interval) == 0:   # every 6 h → daily storage snapshot
+                try:
+                    from .storage import snapshot_now
+                    await snapshot_now()
+                except Exception:  # noqa: BLE001
+                    log.exception("Storage snapshot failed")
             ticks += 1
             if ticks % 360 == 0:
                 await asyncio.to_thread(prune)
