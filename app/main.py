@@ -800,9 +800,11 @@ async def me_arr_image(sid: int, item_id: int, t: str = "poster", user: User = D
 async def me_manifest():
     return JSONResponse({
         "name": "JellyCreep", "short_name": "JellyCreep", "start_url": "/me", "scope": "/", "display": "standalone",
-        "background_color": "#0a0a10", "theme_color": "#0a0a10",
-        "icons": [{"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png"},
-                  {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}],
+        "background_color": "#0e0828", "theme_color": "#0a0a10",
+        "icons": [{"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+                  {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+                  {"src": "/static/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+                  {"src": "/static/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}],
     }, media_type="application/manifest+json")
 
 

@@ -801,3 +801,12 @@ h1 { letter-spacing: -.01em; }
 .title-hero { margin-left: -12px; margin-right: -12px; padding-left: 12px; padding-right: 12px; }
 @media (min-width: 760px) { .title-hero { margin-left: 0; margin-right: 0; padding-left: 28px; padding-right: 28px; } }
 .ptype { top: auto; bottom: 6px; }
+
+/* ===================== v0.7.1 logo ===================== */
+.brand-logo { display: block; height: 36px; width: auto; }
+.login-brand .brand-logo { height: 64px; max-width: 100%; }
+.login-brand { margin-bottom: 22px; }
+/* the wordmark has white lettering, so give it its own dark badge on light themes */
+:root[data-theme="light"] .brand-logo { background: #0e0828; border-radius: 10px; padding: 4px 10px; box-sizing: content-box; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .brand-logo { background: #0e0828; border-radius: 10px; padding: 4px 10px; box-sizing: content-box; } }
+@media (max-width: 360px) { .brand-logo { height: 30px; } }

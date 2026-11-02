@@ -11,7 +11,9 @@
   <script>(function(){try{var d=document.documentElement,t=localStorage.getItem("jc-theme");if(t==="light"||t==="dark")d.dataset.theme=t;}catch(e){}})();</script>
   <title>Sign in · JellyCreep</title>
   <link rel="manifest" href="/me/manifest.webmanifest" crossorigin="use-credentials">
-  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="/static/favicon.ico" sizes="any">
+  <link rel="icon" href="/static/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="/static/favicon-64.png" type="image/png" sizes="64x64">
   <link rel="apple-touch-icon" href="/static/icon-180.png">
   <link rel="stylesheet" href="/static/style.css?v={{ version }}">
 </head>
@@ -19,7 +21,7 @@
 <div class="ambient" aria-hidden="true"></div>
 <main class="login-main">
   <div class="card login-card">
-    <div class="login-brand"><img src="/static/icon.svg" width="54" height="54" alt=""><span>JellyCreep</span></div>
+    <div class="login-brand"><img class="brand-logo" src="/static/logo.png?v={{ version }}" height="64" alt="JellyCreep"></div>
     {% if bye %}<div class="notice ok small">You're signed out.</div>{% endif %}
     {% if error %}<div class="notice bad small" role="alert">{{ error }}</div>{% endif %}
 

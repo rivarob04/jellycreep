@@ -12,7 +12,9 @@
   <meta name="csrf" content="{{ csrf }}">
   <title>{% block title %}JellyCreep{% endblock %} · JellyCreep</title>
   <link rel="manifest" href="{{ '/me/manifest.webmanifest' if user.is_viewer else '/static/manifest.webmanifest' }}" crossorigin="use-credentials">
-  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="/static/favicon.ico" sizes="any">
+  <link rel="icon" href="/static/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="/static/favicon-64.png" type="image/png" sizes="64x64">
   <link rel="apple-touch-icon" href="/static/icon-180.png">
   <link rel="stylesheet" href="/static/style.css?v={{ version }}">
 </head>
@@ -21,7 +23,7 @@
 {% set path = request.url.path %}
 {% set more_on = path.startswith('/add') or path.startswith('/invites') or path.startswith('/users') or path.startswith('/media') or path.startswith('/events') or path.startswith('/settings') %}
 <header class="top">
-  <a class="brand" href="{{ '/me' if user.is_viewer else '/' }}"><img src="/static/icon.svg" width="26" height="26" alt=""><span>JellyCreep</span></a>
+  <a class="brand" href="{{ '/me' if user.is_viewer else '/' }}" aria-label="JellyCreep home"><img class="brand-logo" src="/static/logo.png?v={{ version }}" height="30" alt="JellyCreep"></a>
   {% if user.is_viewer %}
   <nav class="nav-desktop">
     <a href="/me" class="{{ 'on' if path == '/me' }}">Home</a>
