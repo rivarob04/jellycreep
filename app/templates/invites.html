@@ -54,10 +54,16 @@
         <input name="duration" type="number" inputmode="numeric" min="1" placeholder="Blank = unlimited"></label>
       {% if p.libs %}
       <fieldset class="full">
-        <legend>Libraries <span class="muted">(none ticked = Wizarr default)</span></legend>
-        {% for l in p.libs if l.enabled is not sameas false %}
-        <label class="check"><input type="checkbox" name="library_ids" value="{{ l.id }}"> {{ l.name }}{% if p.servers|length > 1 %} <span class="muted small">{{ l.server_name }}</span>{% endif %}</label>
-        {% endfor %}
+        <legend>Libraries</legend>
+        <p class="hint" style="margin:0 0 6px">Leave all unticked to use Wizarr's default libraries.</p>
+        {% for srv in p.servers %}{% if p.libs.get(srv.id) %}
+        <div class="lib-group" data-server="{{ srv.id }}">
+          {% if p.servers|length > 1 %}<div class="lib-server">{{ srv.name }}</div>{% endif %}
+          {% for l in p.libs[srv.id] %}
+          <label class="check"><input type="checkbox" name="library_ids" value="{{ l.id }}"> {{ l.name }}</label>
+          {% endfor %}
+        </div>
+        {% endif %}{% endfor %}
       </fieldset>
       {% endif %}
       <label class="check"><input type="checkbox" name="allow_downloads"> Allow downloads</label>

@@ -393,3 +393,5 @@ details.add-form[open] > summary { opacity: .6; }
 .ptr.ready { color: var(--accent); }
 .ptr.spin span { display: inline-block; animation: ptrspin .7s linear infinite; }
 @keyframes ptrspin { to { transform: rotate(360deg); } }
+.lib-server { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 8px 0 2px; }
+.lib-group[hidden] { display: none !important; }

@@ -427,6 +427,30 @@ def _wizarr(sid: int) -> Service:
     return svc
 
 
+def _clean_libraries(libs: list[dict], servers: list[dict]) -> dict[int, list[dict]]:
+    """Wizarr can list the same library more than once (re-scans, or an old unverified
+    server entry). Keep one per (server, library), only for verified servers, grouped by server."""
+    server_ids = {s.get("id") for s in servers}
+    out: dict[int, list[dict]] = {sid: [] for sid in server_ids}
+    seen: set = set()
+    for lib in sorted(libs, key=lambda l: (l.get("enabled") is False, l.get("id") or 0)):
+        sid = lib.get("server_id")
+        if lib.get("enabled") is False:
+            continue
+        if sid is None and len(server_ids) == 1:
+            sid = next(iter(server_ids))  # library without server info → the only server
+        if servers and sid not in server_ids:
+            continue  # belongs to an unverified / removed server
+        key = (sid, lib.get("external_id") or (lib.get("name") or "").strip().lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.setdefault(sid, []).append(lib)
+    for sid in out:
+        out[sid].sort(key=lambda l: (l.get("name") or "").lower())
+    return {k: v for k, v in out.items() if v}
+
+
 @app.get("/invites", response_class=HTMLResponse)
 async def page_invites(request: Request, user: User = Depends(admin_user)):
     panels = []
@@ -436,8 +460,10 @@ async def page_invites(request: Request, user: User = Depends(admin_user)):
             safe(client.status()), safe(client.servers()), safe(client.libraries()), safe(client.invitations()),
             safe(client.users()))
         invs = sorted(invs or [], key=lambda i: i.get("created") or "", reverse=True)
-        panels.append({"svc": svc, "status": status or {}, "servers": [s for s in servers or [] if s.get("verified", True)],
-                       "libs": libs or [], "invites": invs, "users": users or [], "error": e1 or e2 or e3 or e4 or e5})
+        verified = [s for s in servers or [] if s.get("verified", True)]
+        panels.append({"svc": svc, "status": status or {}, "servers": verified,
+                       "libs": _clean_libraries(libs or [], verified), "invites": invs, "users": users or [],
+                       "error": e1 or e2 or e3 or e4 or e5})
     flash = request.session.pop("flash", None)
     new_invite = request.session.pop("new_invite", None)
     return render(request, "invites.html", user, panels=panels, flash=flash, new_invite=new_invite)

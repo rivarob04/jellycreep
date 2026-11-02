@@ -138,3 +138,19 @@
     y0 = null; dy = 0;
   });
 })();
+
+// Invites: only show libraries for the media servers that are ticked.
+(function () {
+  const boxes = document.querySelectorAll('input[name="server_ids"]');
+  if (!boxes.length) return;
+  const sync = () => {
+    const on = new Set([...boxes].filter((b) => b.checked).map((b) => b.value));
+    document.querySelectorAll(".lib-group[data-server]").forEach((g) => {
+      const show = on.has(g.dataset.server);
+      g.hidden = !show;
+      if (!show) g.querySelectorAll("input").forEach((i) => (i.checked = false));
+    });
+  };
+  boxes.forEach((b) => b.addEventListener("change", sync));
+  sync();
+})();
