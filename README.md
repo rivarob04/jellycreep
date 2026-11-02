@@ -62,6 +62,9 @@ Plain Docker works the same way: `cp .env.example .env`, edit it, then `docker c
 
 ### Option A: proxy provider / forward auth (recommended)
 
+**nginx:** a ready-to-use config is in [`deploy/nginx/jellycreep.conf`](deploy/nginx/jellycreep.conf). It protects the UI with Authentik and leaves `/api/` open for token-authenticated webhooks, so you don't need Authentik's Unauthenticated Paths with it.
+
+
 1. In Authentik: **Applications → Create with provider → Proxy Provider**
    - *Forward auth (single application)* if you use Traefik, Caddy or NPM, or *Proxy* if the outpost serves traffic directly.
    - External host: `https://jellycreep.example.com`. Internal host (Proxy mode): `http://jellycreep:8484`.
