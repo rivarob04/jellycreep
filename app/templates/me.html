@@ -81,23 +81,10 @@
 </div>
 {% endif %}
 
-{% if my_requests %}
-<div class="spread section-title"><h2 style="margin:0">Your requests</h2></div>
-{% set rstatus = {1: ('Waiting for approval', 'b-warn'), 2: ('Approved', 'b-acc'), 3: ('Declined', 'b-bad'), 4: ('Failed', 'b-bad'), 5: ('Available', 'b-ok')} %}
-{% set mstatus = {5: ('Available', 'b-ok'), 4: ('Partly available', 'b-acc'), 3: ('Downloading', 'b-acc')} %}
-<div class="card mb">
-  <div class="list">
-    {% for r in my_requests %}
-    {% set ms = (r.media or {}).status %}
-    {% set st = mstatus.get(ms) if r.status == 2 and mstatus.get(ms) else rstatus.get(r.status, ('Requested', '')) %}
-    <div class="spread">
-      <span style="min-width:0;flex:1"><span class="ellip" style="display:block"><strong>{{ r._title or 'Request' }}</strong>{% if r._year %} <span class="muted">({{ r._year }})</span>{% endif %}</span>
-        <span class="meta">{{ 'Movie' if r.type == 'movie' else 'Series' }} · requested {{ (r.createdAt or '')[:10] }}</span></span>
-      <span class="badge {{ st[1] }}">{{ st[0] }}</span>
-    </div>
-    {% endfor %}
-  </div>
-</div>
+{% if home_requests %}
+{% from "_seerr.html" import rcard %}
+<div class="spread section-title"><h2 style="margin:0">{{ 'Recently requested' if everyone else 'Your requests' }}</h2><a class="small" href="/me/requests">All →</a></div>
+<div class="prow mb">{% for r in home_requests %}{{ rcard(r) }}{% endfor %}</div>
 {% endif %}
 
 {% if u %}

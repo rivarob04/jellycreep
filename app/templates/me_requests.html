@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "_seerr.html" import req_item, quota_line, not_linked %}
+{% block title %}Requests{% endblock %}
+{% block content %}
+{% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}
+<div class="spread"><h1>Requests</h1>{% if portal_seerr %}<a class="btn sm primary" href="/me/discover">＋ Request something</a>{% endif %}</div>
+{{ not_linked(seerr) }}
+{{ quota_line(quota) }}
+
+{% if seerr.everyone %}
+<div class="seg mb">
+  <a href="?view=everyone&f={{ f }}" class="{{ 'on' if view == 'everyone' }}">Everyone</a>
+  <a href="?view=mine&f={{ f }}" class="{{ 'on' if view == 'mine' }}">Mine</a>
+</div>
+{% endif %}
+<div class="fchips mb">
+  {% for k, label in filters.items() %}<a class="fchip{{ ' on' if f == k }}" href="?view={{ view }}&f={{ k }}">{{ label }}</a>{% endfor %}
+</div>
+
+{% if error %}<div class="notice bad small">Couldn't reach Seerr: {{ error }}</div>{% endif %}
+<div class="card flush">
+  {% for r in rows %}{{ req_item(r, csrf, '/me/requests?view=' ~ view ~ '&f=' ~ f ~ '&page=' ~ page) }}
+  {% else %}<div class="empty"><div class="empty-icon">📭</div>No requests here yet.</div>{% endfor %}
+</div>
+
+{% if pages > 1 %}
+<div class="pager">
+  {% if page > 1 %}<a class="btn sm" href="?view={{ view }}&f={{ f }}&page={{ page - 1 }}">← Newer</a>{% endif %}
+  <span class="muted small">Page {{ page }} of {{ pages }}</span>
+  {% if page < pages %}<a class="btn sm" href="?view={{ view }}&f={{ f }}&page={{ page + 1 }}">Older →</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

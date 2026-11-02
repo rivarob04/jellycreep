@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "_seerr.html" import pcard, req_item, quota_line, not_linked %}
+{% block title %}{{ t.title }}{% endblock %}
+{% block content %}
+{% set p = seerr.perms %}
+{% set can = p.movie if t.type == 'movie' else p.tv %}
+{% set can4k = (p['4k_movie'] if t.type == 'movie' else p['4k_tv']) and (has4k.movie if t.type == 'movie' else has4k.tv) %}
+{% set here = '/me/discover/' ~ t.type ~ '/' ~ t.id %}
+
+{% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}
+<a class="small back-link" href="/me/discover">← Discover</a>
+
+<section class="title-hero"{% if t.backdrop %} style="--bd:url('{{ t.backdrop }}')"{% endif %}>
+  <div class="th-inner">
+    <span class="th-poster">{% if t.poster %}<img src="{{ t.poster }}" alt="">{% endif %}</span>
+    <div class="th-info">
+      <span class="badge">{{ 'Movie' if t.type == 'movie' else 'Series' }}</span>
+      <h1>{{ t.title }}</h1>
+      <div class="th-meta">{{ [t.year, (t.runtime ~ ' min') if t.runtime, t.network]|select|join(' · ') }}{% if t.rating %} · ★ {{ t.rating }}{% endif %}</div>
+      {% if t.genres %}<div class="th-meta">{{ t.genres|join(', ') }}</div>{% endif %}
+      <div class="th-badges">
+        {% if t.badge %}<span class="badge {{ t.badge[1] }}">{{ t.badge[0] }}</span>{% endif %}
+        {% if t.status4k in (2,3,4,5) %}<span class="badge">4K: {{ {2:'Pending',3:'Requested',4:'Partly available',5:'Available'}[t.status4k] }}</span>{% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+{% if t.tagline %}<p class="tagline">“{{ t.tagline }}”</p>{% endif %}
+{% if t.overview %}<p class="overview">{{ t.overview }}</p>{% endif %}
+{% if t.trailer %}<p><a class="btn sm" href="{{ t.trailer }}" target="_blank" rel="noopener">▶ Watch trailer</a></p>{% endif %}
+
+<div class="card mb req-card">
+  <h2>Request</h2>
+  {{ not_linked(seerr) }}
+  {% if seerr.acct %}
+    {% if not can %}
+      <p class="muted small">Your Seerr account isn't allowed to request {{ 'movies' if t.type == 'movie' else 'series' }}. Ask the admin.</p>
+    {% elif t.type == 'movie' %}
+      {% if t.status in (1, 7) or (can4k and t.status4k in (1, 7)) %}
+      <div class="req-buttons">
+        {% if t.status in (1, 7) %}
+        <form method="post" action="{{ here }}/request"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary">＋ Request</button></form>
+        {% endif %}
+        {% if can4k and t.status4k in (1, 7) %}
+        <form method="post" action="{{ here }}/request"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="is4k" value="1"><button class="btn">＋ Request in 4K</button></form>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% if t.status == 5 %}<p class="small">✅ It's already on the server — open Jellyfin to watch it.</p>
+      {% elif t.status in (2,3,4) %}<p class="small muted">Already requested — see who asked for it below.</p>{% endif %}
+    {% else %}
+      {% if t.free_seasons %}
+      <form method="post" action="{{ here }}/request" class="seasons" data-seasons>
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label class="season all"><input type="checkbox" data-all checked> <b>All available seasons</b></label>
+        {% for s in t.seasons %}
+        <label class="season{{ ' off' if not s.free }}">
+          <input type="checkbox" name="season" value="{{ s.n }}" {{ 'checked' if s.free else 'disabled' }}>
+          <span class="s-name">{{ s.name }}</span><span class="muted small">{{ s.eps }} ep{{ 's' if s.eps != 1 }}{% if s.year %} · {{ s.year }}{% endif %}</span>
+          {% if s.tag %}<span class="badge {{ s.tag[1] }}">{{ s.tag[0] }}</span>{% endif %}
+        </label>
+        {% endfor %}
+        <div class="req-buttons">
+          <button class="btn primary">＋ Request selected</button>
+          {% if can4k %}<button class="btn" name="is4k" value="1">＋ Request in 4K</button>{% endif %}
+        </div>
+      </form>
+      {% else %}
+      <p class="small">{{ '✅ Every season is already on the server.' if t.status == 5 else 'Every season has already been requested — see below.' }}</p>
+      {% for s in t.seasons %}<div class="spread small season-ro"><span>{{ s.name }}</span>{% if s.tag %}<span class="badge {{ s.tag[1] }}">{{ s.tag[0] }}</span>{% endif %}</div>{% endfor %}
+      {% endif %}
+    {% endif %}
+    {{ quota_line(quota) }}
+  {% endif %}
+</div>
+
+{% if t.requests or t.hidden_requests %}
+<div class="card mb">
+  <h2>Who requested it</h2>
+  {% for r in t.requests %}{{ req_item(r, csrf, here, show_title=False) }}{% endfor %}
+  {% if t.hidden_requests %}<p class="muted small">{{ t.hidden_requests }} request{{ 's' if t.hidden_requests != 1 }} by other people.</p>{% endif %}
+</div>
+{% endif %}
+
+{% if similar %}
+<div class="spread section-title"><h2 style="margin:0">More like this</h2></div>
+<div class="prow mb">{% for c in similar %}{{ pcard(c) }}{% endfor %}</div>
+{% endif %}
+{% endblock %}

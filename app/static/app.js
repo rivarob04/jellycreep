@@ -219,3 +219,12 @@
   };
   if (wasRunning || document.getElementById("q-bar")) tick();
 })();
+
+// Seerr season picker: "All seasons" toggles every free season
+document.querySelectorAll("[data-seasons]").forEach((form) => {
+  const all = form.querySelector("[data-all]");
+  const boxes = [...form.querySelectorAll('input[name="season"]:not([disabled])')];
+  const sync = () => { all.checked = boxes.every((b) => b.checked); };
+  all?.addEventListener("change", () => boxes.forEach((b) => (b.checked = all.checked)));
+  boxes.forEach((b) => b.addEventListener("change", sync));
+});

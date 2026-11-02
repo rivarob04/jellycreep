@@ -25,6 +25,8 @@
   {% if user.is_viewer %}
   <nav class="nav-desktop">
     <a href="/me" class="{{ 'on' if path == '/me' }}">Home</a>
+    {% if portal_seerr %}<a href="/me/discover" class="{{ 'on' if path.startswith('/me/discover') }}">Discover</a>
+    <a href="/me/requests" class="{{ 'on' if path.startswith('/me/requests') }}">Requests</a>{% endif %}
     <a href="/me/history" class="{{ 'on' if path.startswith('/me/history') }}">History</a>
     <a href="/me/upcoming" class="{{ 'on' if path.startswith('/me/upcoming') }}">Coming up</a>
   </nav>
@@ -56,13 +58,22 @@
 <nav class="tabbar" aria-label="Main">
   <a href="/me" class="{{ 'on' if path == '/me' }}">
     <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>Home</a>
+  {% if portal_seerr %}
+  <a href="/me/discover" class="{{ 'on' if path.startswith('/me/discover') }}">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Discover</a>
+  <a href="/me/requests" class="{{ 'on' if path.startswith('/me/requests') }}">
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/><rect x="3" y="3" width="18" height="18" rx="4"/></svg>Requests</a>
+  {% endif %}
   <a href="/me/history" class="{{ 'on' if path.startswith('/me/history') }}">
     <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>History</a>
+  {% if not portal_seerr %}
   <a href="/me/upcoming" class="{{ 'on' if path.startswith('/me/upcoming') }}">
     <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Coming up</a>
-  <details>
+  {% endif %}
+  <details class="{{ 'on' if portal_seerr and path.startswith('/me/upcoming') }}">
     <summary><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</summary>
     <div class="more-sheet">
+      {% if portal_seerr %}<a href="/me/upcoming" class="{{ 'on' if path.startswith('/me/upcoming') }}">📅 Coming up</a>{% endif %}
       <button type="button" class="sheet-btn" data-theme-toggle><span data-theme-label>🌓 Auto</span></button>
       <button type="button" class="sheet-btn" data-fx-toggle><span data-fx-label>✨ Glass effects: on</span></button>
       <a href="/logout">Sign out ({{ user.name }})</a>

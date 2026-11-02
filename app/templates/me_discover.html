@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "_seerr.html" import pcard, rcard, quota_line, not_linked %}
+{% block title %}Discover{% endblock %}
+{% block content %}
+{% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}
+<form class="disc-search" method="get" action="/me/discover" role="search">
+  <input type="search" name="q" value="{{ q }}" placeholder="Search movies & series" enterkeyhint="search" autocomplete="off" aria-label="Search">
+  <button class="btn primary">Search</button>
+</form>
+
+{% if not seerr %}
+<div class="card empty"><div class="empty-icon">🎬</div>Requests aren't switched on for this server.</div>
+{% else %}
+{{ not_linked(seerr) }}
+
+{% if q or row %}
+<div class="spread section-title"><h2 style="margin:0">{% if q %}Results for “{{ q }}”{% else %}{{ row_title }}{% endif %}</h2>
+  <a class="small" href="/me/discover">← Discover</a></div>
+{% if error %}<div class="notice bad small">Couldn't reach Seerr: {{ error }}</div>{% endif %}
+<div class="pgrid">{% for c in results %}{{ pcard(c) }}{% else %}<p class="muted">Nothing found.</p>{% endfor %}</div>
+{% if results|length >= 20 %}
+<div class="pager"><a class="btn" href="?{{ 'q=' ~ q|urlencode if q else 'row=' ~ row }}&page={{ page + 1 }}">More →</a></div>
+{% endif %}
+
+{% else %}
+{{ quota_line(quota) }}
+{% if recent %}
+<div class="spread section-title"><h2 style="margin:0">{{ 'Recently requested' if seerr.everyone else 'Your requests' }}</h2><a class="small" href="/me/requests">All →</a></div>
+<div class="prow mb">{% for r in recent %}{{ rcard(r) }}{% endfor %}</div>
+{% endif %}
+{% if error and not rows %}<div class="notice bad small">Couldn't reach Seerr: {{ error }}</div>{% endif %}
+{% for r in rows %}
+<div class="spread section-title"><h2 style="margin:0">{{ r.title }}</h2><a class="small" href="/me/discover?row={{ r.key }}">See all →</a></div>
+<div class="prow mb">{% for c in r['items'] %}{{ pcard(c) }}{% endfor %}</div>
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endblock %}

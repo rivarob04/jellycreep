@@ -1,0 +1,64 @@
+{# Shared bits for the Seerr pages in the Jellyfin-user portal #}
+
+{% macro pcard(c) %}
+<a class="pcard" href="/me/discover/{{ c.type }}/{{ c.id }}" title="{{ c.title }}{{ ' (' ~ c.year ~ ')' if c.year }}">
+  <span class="pimg">{% if c.poster %}<img loading="lazy" src="{{ c.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ c.title[:1] }}</b>
+    {% if c.badge %}<i class="pchip {{ c.badge[1] }}">{{ '✓' if c.status == 5 else c.badge[0] }}</i>{% endif %}
+    <em class="ptype">{{ 'Movie' if c.type == 'movie' else 'Series' }}</em></span>
+  <span class="pcap">{{ c.title }}</span>
+  <span class="pcap muted">{{ c.year }}{% if c.rating %} · ★ {{ c.rating }}{% endif %}</span>
+</a>
+{% endmacro %}
+
+{# a request shown as a poster, with who asked for it #}
+{% macro rcard(r) %}
+<a class="pcard" href="/me/discover/{{ r.type }}/{{ r.tmdb }}" title="{{ r.title }} — requested by {{ r.by }}">
+  <span class="pimg">{% if r.poster %}<img loading="lazy" src="{{ r.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ r.title[:1] }}</b>
+    <i class="pchip {{ r.badge[1] }}">{{ r.badge[0] if r.badge[0] != 'Waiting for approval' else 'Waiting' }}</i>
+    {% if r.progress is not none %}<span class="pbar"><i style="width:{{ r.progress }}%"></i></span>{% endif %}</span>
+  <span class="pcap">{{ r.title }}</span>
+  <span class="pby"><span class="avatar xs" style="background:{{ r.colour }}">{{ r.initial }}</span>{{ r.by }}</span>
+</a>
+{% endmacro %}
+
+{# a request as a list row #}
+{% macro req_item(r, csrf, nxt, show_title=True) %}
+<div class="req-item">
+  {% if show_title %}
+  <a class="req-thumb" href="/me/discover/{{ r.type }}/{{ r.tmdb }}">{% if r.poster %}<img loading="lazy" src="{{ r.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ r.title[:1] }}</b></a>
+  {% endif %}
+  <div class="req-body">
+    {% if show_title %}<a class="req-title" href="/me/discover/{{ r.type }}/{{ r.tmdb }}">{{ r.title }}{% if r.year %} <span class="muted">({{ r.year }})</span>{% endif %}</a>{% endif %}
+    <div class="req-who"><span class="avatar" style="background:{{ r.colour }}">{{ r.initial }}</span>
+      <span>{% if r.mine %}<b>You</b> requested{% else %}Requested by <b>{{ r.by }}</b>{% endif %}{% if r.ago %} · {{ r.ago }}{% endif %}</span></div>
+    <div class="req-tags">
+      <span class="badge {{ r.badge[1] }}">{{ r.badge[0] }}</span>
+      {% if r.is4k %}<span class="badge">4K</span>{% endif %}
+      {% if r.seasons %}<span class="badge">{{ 'Season' if r.seasons|length == 1 else 'Seasons' }} {{ r.seasons|join(', ') }}</span>{% elif r.type == 'tv' %}<span class="badge">Series</span>{% else %}<span class="badge">Movie</span>{% endif %}
+      {% if r.modified_by %}<span class="muted small">by {{ r.modified_by }}</span>{% endif %}
+    </div>
+    {% if r.progress is not none %}<div class="mini-bar"><i style="width:{{ r.progress }}%"></i></div><div class="small muted">Downloading · {{ r.progress }}%</div>{% endif %}
+    {% if r.can_cancel or r.can_manage %}
+    <div class="req-actions">
+      {% if r.can_manage %}
+      <form method="post" action="/me/requests/{{ r.id }}/approve"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ nxt }}"><button class="btn sm ok">Approve</button></form>
+      <form method="post" action="/me/requests/{{ r.id }}/decline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ nxt }}"><button class="btn sm danger">Decline</button></form>
+      {% endif %}
+      {% if r.can_cancel %}
+      <form method="post" action="/me/requests/{{ r.id }}/cancel" onsubmit="return confirm('Cancel this request?')"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ nxt }}"><button class="btn sm">Cancel request</button></form>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+{% macro quota_line(quota) %}
+{% if quota %}<p class="quota small muted">{% for k, q in quota.items() %}{{ 'Movies' if k == 'movie' else 'Series' }}: <b>{{ q.remaining }}</b> of {{ q.limit }} requests left{% if q.days %} this {{ 'week' if q.days == 7 else (q.days ~ ' days') }}{% endif %}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
+{% endmacro %}
+
+{% macro not_linked(seerr) %}
+{% if seerr and not seerr.acct %}
+<div class="notice bad small mb">{% if seerr.error %}Seerr isn't reachable right now — try again in a minute.{% else %}Your Jellyfin account isn't linked to Seerr yet, so you can browse but not request. Ask the admin to import you in Seerr (Users → Import Jellyfin users).{% endif %}</div>
+{% endif %}
+{% endmacro %}

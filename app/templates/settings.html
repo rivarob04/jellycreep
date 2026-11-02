@@ -103,8 +103,14 @@
     <fieldset class="full"><legend>What users can see</legend>
       <label class="check"><input type="checkbox" name="recent" {{ 'checked' if signin.recent }}> Recently added (only libraries they can access)</label>
       <label class="check"><input type="checkbox" name="upcoming" {{ 'checked' if signin.upcoming }}> Upcoming episodes &amp; movies (Sonarr/Radarr calendar)</label>
-      <label class="check"><input type="checkbox" name="requests" {{ 'checked' if signin.requests }}> Their own Seerr requests and status</label>
+      <label class="check"><input type="checkbox" name="requests" {{ 'checked' if signin.requests }}> Seerr requests (home page row and Requests page)</label>
       <label class="check"><input type="checkbox" name="server_activity" {{ 'checked' if signin.server_activity }}> How many other people are watching (count only, no names)</label>
+    </fieldset>
+    <fieldset class="full"><legend>Seerr</legend>
+      <label class="check"><input type="checkbox" name="seerr_discover" {{ 'checked' if signin.seerr_discover }}> Discover &amp; request — browse trending/popular/upcoming, search, and request movies and series</label>
+      <label class="check"><input type="checkbox" name="seerr_everyone" {{ 'checked' if signin.seerr_everyone }}> Show who requested what — everyone's requests with their display name (never e-mail)</label>
+      <label class="check"><input type="checkbox" name="seerr_autolink" {{ 'checked' if signin.seerr_autolink }}> Create a Seerr account automatically for Jellyfin users who don't have one</label>
+      <p class="hint" style="margin:4px 0 0">Requests are made as the signed-in person's own Seerr account, so Seerr's permissions, quotas and auto-approve rules apply and it shows them as the requester.</p>
     </fieldset>
     {% if not jellyfins %}<p class="notice bad small full">Connect a Jellyfin server first.</p>{% endif %}
     <div class="actions full"><button class="btn primary">Save</button>

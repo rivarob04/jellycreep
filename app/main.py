@@ -21,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_, select
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import __version__, calendar_view, explain, importer, notify, quality, stats, storage, tracker, webhooks
+from . import __version__, calendar_view, explain, importer, notify, quality, seerr_portal, stats, storage, tracker, webhooks
 from .auth import (CSRF_COOKIE, LoginRequired, User, ViewerOnly, admin_user, api_user, bust_login_cache, client_ip,
                    csrf_token, current_user, jellyfin_login_enabled, limiter, login_settings, oauth, staff_user,
                    user_from_claims, verify_csrf)
@@ -198,7 +198,10 @@ def ambient_url(user: User | None = None) -> str | None:
 
 def render(request: Request, name: str, user: User, **ctx: Any) -> HTMLResponse:
     ctx.update(request=request, user=user, csrf=csrf_token(request), auth_mode=settings.auth_mode,
-               ambient=ambient_url(user), imgp="/me/img" if user.is_viewer else "/img")
+               ambient=ctx.get("ambient") or ambient_url(user), imgp="/me/img" if user.is_viewer else "/img")
+    if user.is_viewer:
+        ctx.setdefault("portal_seerr", login_settings()["seerr_discover"] and bool(services(("jellyseerr",))))
+        ctx.setdefault("flash", request.session.pop("flash", None))
     return templates.TemplateResponse(request, name, ctx)
 
 
@@ -783,21 +786,6 @@ async def _upcoming(days: int = 14) -> list[dict]:
     return out[:30]
 
 
-async def _my_requests(user: User) -> list[dict]:
-    res: list[dict] = []
-    for svc in services(("jellyseerr",)):
-        client = await client_for(svc)
-        data, err = await safe(client.requests(take=60))
-        if err:
-            continue
-        for r in data or []:
-            rb = r.get("requestedBy") or {}
-            names = {str(rb.get(k) or "").lower() for k in ("jellyfinUsername", "username", "displayName", "plexUsername")}
-            if user.name.lower() in names:
-                res.append(r)
-    return res[:15]
-
-
 @app.get("/me/img/{server_id}/{item_id}")
 async def me_image(server_id: int, item_id: str, h: int = 300, t: str = "Primary", user: User = Depends(current_user)):
     return await image(server_id, item_id, h, t, user)
@@ -840,12 +828,12 @@ async def page_me(request: Request, user: User = Depends(current_user)):
         return None
     added_job = safe((await client_for(svc)).recently_added(16, user.jf_id)) if (svc and cfg["recent"]) else none()
     up_job = _upcoming(14) if cfg["upcoming"] else none()
-    req_job = _my_requests(user) if cfg["requests"] else none()
+    req_job = _home_requests(user) if cfg["requests"] else none()
     added, upcoming, reqs = await asyncio.gather(added_job, up_job, req_job)
     if isinstance(added, tuple):
         added = added[0] or []
     return render(request, "me.html", user, streams=streams, others=others if cfg["server_activity"] else None,
-                  last=last, recent=recent, u=prof, added=added or [], upcoming=upcoming or [], my_requests=reqs or [],
+                  last=last, recent=recent, u=prof, added=added or [], upcoming=upcoming or [], home_requests=reqs or [], everyone=cfg["seerr_everyone"],
                   server_ok=bool(svc and svc.last_ok is not False), server_name=svc.name if svc else "Jellyfin",
                   tips=tips)
 
@@ -885,6 +873,149 @@ async def page_my_upcoming(request: Request, user: User = Depends(current_user))
     return render(request, "me_upcoming.html", user, upcoming=up)
 
 
+# --- Seerr inside the Jellyfin-user portal (Discover / Requests) ----------------------
+async def _seerr(user: User, need_discover: bool = True) -> dict | None:
+    cfg = login_settings()
+    svc = next(iter(services(("jellyseerr",))), None)
+    if not svc or (need_discover and not cfg["seerr_discover"]):
+        return None
+    client = await client_for(svc)
+    acct, err = await safe(seerr_portal.account(client, svc.id, user, cfg["seerr_autolink"]))
+    p = seerr_portal.perms(acct)
+    return {"svc": svc, "client": client, "acct": acct, "uid": (acct or {}).get("id"), "perms": p,
+            "everyone": cfg["seerr_everyone"], "error": err, "manage": bool(acct) and p["manage"]}
+
+
+async def _home_requests(user: User) -> list[dict]:
+    sc = await _seerr(user, need_discover=False)
+    if not sc or sc["error"]:
+        return []
+    rows, _ = (await safe(seerr_portal.feed(sc["client"], sc["svc"].id, sc["uid"], everyone=sc["everyone"], take=12)))[0] or ([], 0)
+    return rows
+
+
+def _viewer_page(user: User, fallback: str = "/automation?tab=requests"):
+    return None if user.is_viewer else RedirectResponse(fallback, status_code=303)
+
+
+@app.get("/me/discover", response_class=HTMLResponse)
+async def page_discover(request: Request, q: str = "", row: str = "", page: int = 1, user: User = Depends(current_user)):
+    if (r := _viewer_page(user)):
+        return r
+    sc = await _seerr(user)
+    ctx: dict[str, Any] = {"seerr": sc, "q": q.strip()[:100], "row": row if row in seerr_portal.ROW_BY_KEY else "",
+                           "page": max(1, min(page, 50)), "rows": [], "results": [], "recent": [], "error": None, "quota": None}
+    if sc:
+        c, sid = sc["client"], sc["svc"].id
+        if ctx["q"]:
+            ctx["results"], ctx["error"] = await safe(seerr_portal.search(c, ctx["q"], ctx["page"]))
+        elif ctx["row"]:
+            ctx["results"], ctx["error"] = await safe(seerr_portal.browse(c, sid, ctx["row"], ctx["page"]))
+            ctx["row_title"] = seerr_portal.ROW_BY_KEY[ctx["row"]][0]
+        else:
+            (rows, e1), (recent, _), quota = await asyncio.gather(
+                safe(seerr_portal.discover(c, sid)),
+                safe(seerr_portal.feed(c, sid, sc["uid"], everyone=sc["everyone"], take=16)),
+                seerr_portal.quota(c, sc["uid"]) if sc["uid"] else asyncio.sleep(0))
+            ctx.update(rows=rows or [], recent=(recent or ([], 0))[0], error=e1, quota=quota)
+    return render(request, "me_discover.html", user, **ctx)
+
+
+@app.get("/me/discover/{mt}/{tmdb}", response_class=HTMLResponse)
+async def page_title(request: Request, mt: str, tmdb: int, user: User = Depends(current_user)):
+    if (r := _viewer_page(user)):
+        return r
+    if mt not in ("movie", "tv"):
+        raise HTTPException(404)
+    sc = await _seerr(user)
+    if not sc:
+        return RedirectResponse("/me", status_code=303)
+    c, sid = sc["client"], sc["svc"].id
+    (t, err), similar, has4k, quota = await asyncio.gather(
+        safe(seerr_portal.detail(c, sid, mt, tmdb, sc["uid"], everyone=sc["everyone"], can_manage=sc["manage"])),
+        seerr_portal.similar(c, sid, mt, tmdb), seerr_portal.has_4k(c, sid),
+        seerr_portal.quota(c, sc["uid"]) if sc["uid"] else asyncio.sleep(0))
+    if err or not t:
+        raise HTTPException(404, "Couldn't load that title from Seerr")
+    return render(request, "me_title.html", user, seerr=sc, t=t, similar=similar, has4k=has4k, quota=quota,
+                  ambient=t.get("backdrop"))
+
+
+@app.post("/me/discover/{mt}/{tmdb}/request")
+async def act_request(request: Request, mt: str, tmdb: int, user: User = Depends(current_user)):
+    await verify_csrf(request)
+    if not user.is_viewer or mt not in ("movie", "tv"):
+        raise HTTPException(404)
+    sc = await _seerr(user)
+    back = RedirectResponse(f"/me/discover/{mt}/{tmdb}", status_code=303)
+    if not sc or not sc["uid"]:
+        request.session["flash"] = {"ok": False, "msg": "Your account isn't linked to Seerr yet — ask the admin."}
+        return back
+    form = await request.form()
+    is4k = form.get("is4k") == "1"
+    seasons = sorted({int(x) for x in form.getlist("season") if str(x).isdigit() and int(x) > 0})
+    if mt == "tv" and not seasons:
+        request.session["flash"] = {"ok": False, "msg": "Pick at least one season."}
+        return back
+    try:
+        res = await seerr_portal.make_request(sc["client"], sc["uid"], mt, tmdb, seasons, is4k)
+    except UpstreamError as e:
+        request.session["flash"] = {"ok": False, "msg": seerr_portal.err_text(e)}
+        return back
+    seerr_portal.forget("row")
+    seerr_portal.forget("similar")
+    log.info("Seerr request by %s: %s %s seasons=%s 4k=%s", user.name, mt, tmdb, seasons, is4k)
+    auto = (res or {}).get("status") == 2
+    request.session["flash"] = {"ok": True, "msg": "Requested — it was approved automatically and will start downloading."
+                                if auto else "Requested! It'll start downloading once it's approved."}
+    return back
+
+
+@app.get("/me/requests", response_class=HTMLResponse)
+async def page_requests(request: Request, view: str = "everyone", f: str = "all", page: int = 1,
+                        user: User = Depends(current_user)):
+    if (r := _viewer_page(user)):
+        return r
+    sc = await _seerr(user, need_discover=False)
+    if not sc or not login_settings()["requests"]:
+        return RedirectResponse("/me", status_code=303)
+    everyone = sc["everyone"] and view != "mine"
+    page = max(1, min(page, 200))
+    f = f if f in seerr_portal.FILTERS else "all"
+    (res, err), quota = await asyncio.gather(
+        safe(seerr_portal.feed(sc["client"], sc["svc"].id, sc["uid"], everyone=everyone, can_manage=sc["manage"],
+                               flt=f, page=page)),
+        seerr_portal.quota(sc["client"], sc["uid"]) if sc["uid"] else asyncio.sleep(0))
+    rows, pages = res or ([], 1)
+    return render(request, "me_requests.html", user, seerr=sc, rows=rows, pages=pages, page=page, f=f,
+                  view="everyone" if everyone else "mine", error=err, quota=quota, filters=seerr_portal.FILTERS)
+
+
+@app.post("/me/requests/{req_id}/{action}")
+async def act_my_request(request: Request, req_id: int, action: str, user: User = Depends(current_user)):
+    await verify_csrf(request)
+    if not user.is_viewer or action not in ("cancel", "approve", "decline"):
+        raise HTTPException(404)
+    form = await request.form()
+    nxt = str(form.get("next") or "/me/requests")
+    if not nxt.startswith("/me"):
+        nxt = "/me/requests"
+    sc = await _seerr(user, need_discover=False)
+    if not sc or not sc["uid"] or (action != "cancel" and not sc["manage"]):
+        raise HTTPException(403)
+    try:
+        if action == "cancel":
+            await seerr_portal.cancel(sc["client"], sc["uid"], req_id)
+        else:
+            await seerr_portal.moderate(sc["client"], sc["uid"], req_id, action)
+        seerr_portal.forget("row")
+        request.session["flash"] = {"ok": True, "msg": {"cancel": "Request cancelled.", "approve": "Approved.",
+                                                        "decline": "Declined."}[action]}
+    except UpstreamError as e:
+        request.session["flash"] = {"ok": False, "msg": seerr_portal.err_text(e)}
+    return RedirectResponse(nxt, status_code=303)
+
+
 @app.post("/settings/signin")
 async def save_signin(request: Request, user: User = Depends(admin_user)):
     await verify_csrf(request)
@@ -894,6 +1025,8 @@ async def save_signin(request: Request, user: User = Depends(admin_user)):
         "enabled": form.get("enabled") == "on", "server_id": int(sid) if sid.isdigit() else None,
         "upcoming": form.get("upcoming") == "on", "recent": form.get("recent") == "on",
         "requests": form.get("requests") == "on", "server_activity": form.get("server_activity") == "on",
+        "seerr_discover": form.get("seerr_discover") == "on", "seerr_everyone": form.get("seerr_everyone") == "on",
+        "seerr_autolink": form.get("seerr_autolink") == "on",
     })
     bust_login_cache()
     request.session["flash"] = {"ok": True, "msg": "Sign-in settings saved."}

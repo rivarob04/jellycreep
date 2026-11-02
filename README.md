@@ -138,6 +138,22 @@ They never see other users, IP addresses, devices other than their own, download
 
 When a viewer's stream is being transcoded, JellyCreep explains why in plain English ("These subtitles have to be burned into the picture", "Your device can't play this audio track (TRUEHD)") and adds a tip they can act on. Their history marks each converted play with its reason, and the home page sums up how many recent plays were converted, the most common cause and the device it happened on.
 
+### Requesting with Seerr (like Moonfin)
+
+If Seerr is connected, signed-in Jellyfin users also get **Discover** and **Requests** tabs:
+
+- **Discover**: rows for Trending, Popular movies, Popular series, Upcoming movies and Upcoming series, plus search. Each poster shows whether the title is available, requested or pending.
+- **Title page**: backdrop, overview, trailer, a **Request** button (and **Request in 4K** when the person is allowed and you have a 4K Radarr/Sonarr), a season picker for series, "Who requested it", and "More like this".
+- **Requests**: everyone's requests with the requester's name, status, seasons, 4K and download progress. Filters: All, Waiting, Approved, Available. People can cancel their own pending requests. Seerr managers can approve or decline.
+- The home page and Discover start with a **Recently requested** row.
+
+**How it works.** JellyCreep matches each person to their own Seerr account (Jellyfin user ID first, then username). It sends their requests with your Seerr API key and the header `X-API-User`, so Seerr records them as the requester and applies their permissions, quotas and auto-approve rules. They never need a separate Seerr password. Only display names are shown, never email addresses.
+
+Settings → Sign-in → **Seerr** has three switches:
+- Discover & request.
+- Show who requested what. Turn it off to show people only their own requests.
+- Create Seerr accounts automatically for Jellyfin users who don't have one. The alternative is to import them yourself in Seerr → Users → Import Jellyfin users.
+
 1. **Settings → Sign-in → Allow Jellyfin users to sign in**, then pick what users can see. Or set `JELLYFIN_LOGIN=true`.
 2. **nginx:** let the user pages bypass Authentik. Everything else stays protected. Add the following to your JellyCreep server block, above `location /`. It's also in [`deploy/nginx/jellycreep.conf`](deploy/nginx/jellycreep.conf).
    ```nginx

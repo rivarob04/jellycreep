@@ -95,7 +95,9 @@ def login_settings() -> dict:
     env = (settings.jellyfin_login_default or "").lower() in ("1", "true", "yes", "on")
     out = {"enabled": bool(val.get("enabled", env)), "server_id": val.get("server_id"),
            "upcoming": bool(val.get("upcoming", True)), "recent": bool(val.get("recent", True)),
-           "requests": bool(val.get("requests", True)), "server_activity": bool(val.get("server_activity", True))}
+           "requests": bool(val.get("requests", True)), "server_activity": bool(val.get("server_activity", True)),
+           "seerr_discover": bool(val.get("seerr_discover", True)), "seerr_everyone": bool(val.get("seerr_everyone", True)),
+           "seerr_autolink": bool(val.get("seerr_autolink", False))}
     _CACHE.update(at=time.time(), val=out)
     return out
 
