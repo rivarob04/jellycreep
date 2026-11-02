@@ -17,6 +17,7 @@ from sqlalchemy import delete, select
 
 from .config import settings
 from .db import ActiveStream, Event, Play, Service, SessionLocal, utcnow
+from . import notify
 from .services import client_for
 from .upstream import UpstreamError
 
@@ -105,9 +106,11 @@ def _finalize(db, stream: ActiveStream, stopped_at) -> Play | None:
     return play
 
 
-def process_sessions(server_id: int, sessions: list[dict]) -> None:
-    """Apply one poll's worth of sessions for one server (pure DB logic, testable)."""
+def process_sessions(server_id: int, sessions: list[dict]) -> list[dict]:
+    """Apply one poll's worth of sessions for one server (pure DB logic, testable).
+    Returns snapshots of streams that started in this poll."""
     now = utcnow()
+    started: list[dict] = []
     max_gap = settings.poll_interval * 3
     with SessionLocal() as db:
         existing = {s.key: s for s in db.scalars(select(ActiveStream).where(ActiveStream.server_id == server_id))}
@@ -123,6 +126,7 @@ def process_sessions(server_id: int, sessions: list[dict]) -> None:
                 stream = ActiveStream(key=key, server_id=server_id, session_id=sess.get("Id") or "",
                                       started_at=now, last_seen=now, watched_seconds=0, paused_seconds=0)
                 db.add(stream)
+                started.append(snap)
             else:
                 gap = min((now - stream.last_seen).total_seconds(), max_gap)
                 # Count the interval in the state the stream was in during it.
@@ -138,6 +142,7 @@ def process_sessions(server_id: int, sessions: list[dict]) -> None:
             if key not in seen:
                 _finalize(db, stream, now)
         db.commit()
+    return started
 
 
 def finalize_stale() -> None:
@@ -168,7 +173,14 @@ async def poll_once() -> None:
         except UpstreamError as e:
             log.warning("Polling %s failed: %s", svc.name, e)
             continue
-        await asyncio.to_thread(process_sessions, svc.id, sessions)
+        started = await asyncio.to_thread(process_sessions, svc.id, sessions)
+        for snap in started:
+            what = snap["title"] if snap["item_type"] != "Episode" else f"{snap['series_name']} – {snap['title']}"
+            line = f"{snap['user_name']} · {what}\n{snap['client'] or '?'} on {snap['device'] or '?'}"
+            if snap["play_method"] == "Transcode":
+                reason = f"\nReason: {snap['transcode_reasons']}" if snap.get("transcode_reasons") else ""
+                await notify.send("transcode", "⚠️ Transcoding started", line + reason, priority="default")
+            await notify.send("stream_start", "▶️ Now playing", line, priority="low")
     await asyncio.to_thread(finalize_stale)
 
 
@@ -182,11 +194,17 @@ async def check_services() -> None:
             msg, ok = await client.test(), True
         except Exception as e:  # noqa: BLE001
             msg, ok = str(e), False
+        was = None
         with SessionLocal() as db:
             row = db.get(Service, svc.id)
             if row:
+                was = row.last_ok
                 row.last_ok, row.last_status, row.last_checked = ok, (msg or "")[:500], utcnow()
                 db.commit()
+        if was is True and not ok:
+            await notify.send("app_down", f"🔴 {svc.name} is down", (msg or "")[:300], url=svc.link, priority="high")
+        elif was is False and ok:
+            await notify.send("app_down", f"🟢 {svc.name} is back", msg or "", url=svc.link)
 
 
 async def run_forever() -> None:

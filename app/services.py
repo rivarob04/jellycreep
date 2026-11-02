@@ -14,7 +14,7 @@ class JellyfinClient(Upstream):
         super().__init__(svc)
         key = (svc.api_key or "").strip()
         mb = (f'MediaBrowser Client="JellyCreep", Device="JellyCreep", DeviceId="jellycreep-{svc.id}", '
-              f'Version="0.2.0", Token="{key}"')
+              f'Version="0.3.0", Token="{key}"')
         # Jellyfin 10.11+ only accepts `Authorization: MediaBrowser Token=…` by default
         # (legacy X-Emby-Token is off). Older servers still read X-Emby-Token.
         self.app_headers = {"X-Emby-Authorization": mb, "X-Emby-Token": key}
@@ -125,6 +125,39 @@ class ArrClient(Upstream):
     async def indexer_status(self) -> list[dict]:
         return await self.get(self.p("indexerstatus")) or []
 
+    async def queue_retry(self, queue_id: int) -> None:
+        """Remove a stuck/failed download, blocklist the release, and let the *arr search for another."""
+        await self.request("DELETE", self.p(f"queue/{queue_id}"),
+                           params={"removeFromClient": "true", "blocklist": "true", "skipRedownload": "false"})
+
+    async def queue_remove(self, queue_id: int) -> None:
+        await self.request("DELETE", self.p(f"queue/{queue_id}"),
+                           params={"removeFromClient": "true", "blocklist": "false", "skipRedownload": "true"})
+
+    # --- search & add (Sonarr / Radarr) ---
+    async def lookup(self, term: str) -> list[dict]:
+        path = "series/lookup" if self.svc.kind == "sonarr" else "movie/lookup"
+        return (await self.get(self.p(path), params={"term": term}) or [])[:20]
+
+    async def profiles(self) -> list[dict]:
+        return await self.get(self.p("qualityprofile")) or []
+
+    async def root_folders(self) -> list[dict]:
+        return await self.get(self.p("rootfolder")) or []
+
+    async def add(self, item: dict, profile_id: int, root: str, monitor: str, search: bool) -> dict:
+        body = dict(item)
+        body.update(qualityProfileId=profile_id, rootFolderPath=root, monitored=monitor != "none")
+        if self.svc.kind == "sonarr":
+            body.setdefault("languageProfileId", 1)
+            body["seasonFolder"] = True
+            body["addOptions"] = {"monitor": monitor if monitor != "none" else "none",
+                                  "searchForMissingEpisodes": search, "searchForCutoffUnmetEpisodes": False}
+            return await self.post(self.p("series"), json=body) or {}
+        body["minimumAvailability"] = body.get("minimumAvailability") or "released"
+        body["addOptions"] = {"searchForMovie": search, "monitor": "movieOnly" if monitor != "none" else "none"}
+        return await self.post(self.p("movie"), json=body) or {}
+
 
 class QbitClient(Upstream):
     def __init__(self, svc: Service) -> None:
@@ -154,6 +187,28 @@ class QbitClient(Upstream):
                 await self._login()
                 return await self.get(path, **kw)
             raise
+
+    async def call_post(self, path: str, data: dict) -> Any:
+        if not self._logged_in:
+            await self._login()
+        try:
+            return await self.post(path, data=data, expect_json=False)
+        except UpstreamError as e:
+            if "403" in str(e):
+                self._logged_in = False
+                await self._login()
+                return await self.post(path, data=data, expect_json=False)
+            raise
+
+    async def set_paused(self, paused: bool, hashes: str = "all") -> None:
+        # qBittorrent 5 renamed pause/resume to stop/start; try the new name first.
+        new, old = ("stop", "pause") if paused else ("start", "resume")
+        try:
+            await self.call_post(f"/api/v2/torrents/{new}", {"hashes": hashes})
+        except UpstreamError as e:
+            if "404" not in str(e):
+                raise
+            await self.call_post(f"/api/v2/torrents/{old}", {"hashes": hashes})
 
     async def test(self) -> str:
         r = await self.call("/api/v2/app/version", expect_json=False)
@@ -198,6 +253,11 @@ class SeerrClient(Upstream):
     async def counts(self) -> dict:
         return await self.get("/api/v1/request/count") or {}
 
+    async def set_status(self, request_id: int, action: str) -> None:
+        if action not in ("approve", "decline"):
+            raise UpstreamError("Unknown action")
+        await self.post(f"/api/v1/request/{request_id}/{action}")
+
 
 class JellystatClient(Upstream):
     """Jellystat has no formal API docs; these are the endpoints its own UI and
@@ -217,6 +277,10 @@ class JellystatClient(Upstream):
 
     async def most_active_users(self, days: int) -> list[dict]:
         return await self.post("/stats/getMostActiveUsers", json={"days": days}) or []
+
+    async def history_page(self, page: int, size: int = 250) -> dict:
+        return await self.get("/api/getHistory", params={"page": str(page), "size": str(size),
+                                                         "sort": "ActivityDateInserted", "desc": "true"}) or {}
 
     async def most_viewed(self, days: int, kind: str) -> list[dict]:
         return await self.post("/stats/getMostViewedByType", json={"days": days, "type": kind}) or []
@@ -241,6 +305,15 @@ class SabnzbdClient(Upstream):
 
     async def history(self, limit: int = 20) -> list[dict]:
         return (await self.api("history", limit=str(limit))).get("history", {}).get("slots", [])
+
+    async def set_paused(self, paused: bool, nzo_id: str | None = None) -> None:
+        if nzo_id:
+            await self.api("queue", name="pause" if paused else "resume", value=nzo_id)
+        else:
+            await self.api("pause" if paused else "resume")
+
+    async def retry(self, nzo_id: str) -> None:
+        await self.api("retry", value=nzo_id)
 
 
 class WizarrClient(Upstream):

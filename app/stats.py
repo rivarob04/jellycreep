@@ -97,3 +97,114 @@ def heatmap(db, days: int, tz) -> tuple[list[list[int]], list[int], int]:
     by_hour = [sum(grid[d][h] for d in range(7)) for h in range(24)]
     peak = max((max(r) for r in grid), default=0)
     return grid, by_hour, peak
+
+
+def _local(ts, tz):
+    from datetime import timezone as _tz
+    return ts.replace(tzinfo=_tz.utc).astimezone(tz)
+
+
+def user_profile(db, name: str, tz) -> dict | None:
+    from collections import Counter, defaultdict
+    from datetime import timedelta as _td
+    plays = list(db.scalars(select(Play).where(Play.user_name == name).order_by(Play.started_at)))
+    if not plays:
+        return None
+    today = _local(utcnow(), tz).date()
+    days = sorted({_local(p.started_at, tz).date() for p in plays})
+    # streaks
+    longest, run, prev = 1, 1, None
+    for d in days:
+        if prev and (d - prev).days == 1:
+            run += 1
+            longest = max(longest, run)
+        elif prev:
+            run = 1
+        prev = d
+    current = 0
+    if days and (today - days[-1]).days <= 1:
+        current, d = 1, days[-1]
+        s = set(days)
+        while d - _td(days=1) in s:
+            current += 1
+            d -= _td(days=1)
+    # biggest binge: most episodes of one series in one day
+    binge = Counter()
+    for p in plays:
+        if p.item_type == "Episode" and p.series_name:
+            binge[(_local(p.started_at, tz).date(), p.series_name)] += 1
+    best_binge = None
+    if binge:
+        (bday, bseries), bcount = binge.most_common(1)[0]
+        if bcount >= 2:
+            best_binge = {"day": bday, "series": bseries, "count": bcount}
+    shows, movies, devices = Counter(), Counter(), {}
+    show_secs, show_poster, movie_poster = defaultdict(float), {}, {}
+    for p in plays:
+        if p.item_type == "Episode" and p.series_name:
+            shows[p.series_name] += 1
+            show_secs[p.series_name] += p.watched_seconds or 0
+            show_poster[p.series_name] = (p.server_id, p.poster_id)
+        elif p.item_type == "Movie":
+            key = f"{p.title} ({p.year})" if p.year else p.title
+            movies[key] += 1
+            movie_poster[key] = (p.server_id, p.poster_id)
+        dk = (p.client or "?", p.device or "?")
+        d = devices.setdefault(dk, {"client": dk[0], "device": dk[1], "plays": 0, "last": p.stopped_at, "ip": p.ip})
+        d["plays"] += 1
+        if p.stopped_at and p.stopped_at >= d["last"]:
+            d["last"], d["ip"] = p.stopped_at, p.ip
+    # last 30 days of watch time
+    per_day = defaultdict(float)
+    for p in plays:
+        per_day[_local(p.started_at, tz).date()] += (p.watched_seconds or 0)
+    last30 = [{"day": today - _td(days=i), "seconds": per_day.get(today - _td(days=i), 0)} for i in range(29, -1, -1)]
+    grid = [[0] * 24 for _ in range(7)]
+    for p in plays:
+        lt = _local(p.started_at, tz)
+        grid[(lt.weekday() + 1) % 7][lt.hour] += 1
+    methods = Counter(p.play_method or "Unknown" for p in plays)
+    total = sum(p.watched_seconds or 0 for p in plays)
+    return {
+        "name": name, "plays": len(plays), "seconds": int(total), "first": plays[0].started_at, "last": plays[-1].stopped_at,
+        "active_days": len(days), "streak_current": current, "streak_longest": longest if days else 0,
+        "binge": best_binge, "completed": sum(1 for p in plays if p.completed),
+        "top_shows": [{"title": t, "plays": n, "seconds": int(show_secs[t]), "poster": show_poster[t]} for t, n in shows.most_common(8)],
+        "top_movies": [{"title": t, "plays": n, "poster": movie_poster[t]} for t, n in movies.most_common(8)],
+        "devices": sorted(devices.values(), key=lambda d: d["last"], reverse=True),
+        "last30": last30, "heat": grid, "heat_peak": max(max(r) for r in grid),
+        "methods": [{"label": k, "plays": v, "seconds": 0} for k, v in methods.most_common()],
+        "recent": list(reversed(plays[-15:])),
+    }
+
+
+def concurrency(db, days: int, tz) -> dict:
+    """Peak simultaneous streams (and transcodes) per local day, via a sweep over play intervals."""
+    from collections import defaultdict
+    from datetime import timedelta as _td
+    rows = db.execute(select(Play.started_at, Play.stopped_at, Play.play_method)
+                      .where(Play.stopped_at >= _since(days))).all()
+    events = []
+    for st, sp, method in rows:
+        if not st or not sp or sp <= st:
+            continue
+        tc = 1 if method == "Transcode" else 0
+        events.append((st, 1, tc))
+        events.append((sp, -1, -tc))
+    events.sort(key=lambda e: (e[0], e[1]))  # ends before starts at the same instant
+    cur = cur_tc = 0
+    peak_day, peak_tc_day = defaultdict(int), defaultdict(int)
+    best = {"streams": 0, "at": None, "transcodes": 0}
+    for ts, d, dtc in events:
+        cur += d
+        cur_tc += dtc
+        day = _local(ts, tz).date()
+        if d > 0:
+            peak_day[day] = max(peak_day[day], cur)
+            peak_tc_day[day] = max(peak_tc_day[day], cur_tc)
+            if cur > best["streams"]:
+                best = {"streams": cur, "at": _local(ts, tz), "transcodes": cur_tc}
+    today = _local(utcnow(), tz).date()
+    series = [{"day": today - _td(days=i), "streams": peak_day.get(today - _td(days=i), 0),
+               "transcodes": peak_tc_day.get(today - _td(days=i), 0)} for i in range(min(days, 90) - 1, -1, -1)]
+    return {"days": series, "best": best, "max": max((s["streams"] for s in series), default=0)}

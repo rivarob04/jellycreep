@@ -36,7 +36,7 @@
 <div class="grid g3 mb">
   <div class="card"><h2>Top users</h2>
     {% for u in top_users %}
-    <div class="rank"><span class="muted">#{{ loop.index }}</span><a href="/history?user_name={{ u.user|urlencode }}">{{ u.user }}</a><span class="muted small">{{ u.seconds|duration }} · {{ u.plays }}</span></div>
+    <div class="rank"><span class="muted">#{{ loop.index }}</span><a href="/users/{{ u.user|urlencode }}">{{ u.user }}</a><span class="muted small">{{ u.seconds|duration }} · {{ u.plays }}</span></div>
     {% else %}<div class="muted small">No data</div>{% endfor %}
   </div>
   <div class="card"><h2>Most watched movies</h2>
@@ -55,6 +55,22 @@
   <div class="card"><h2>Play method</h2>{{ hbars(methods) }}</div>
   <div class="card"><h2>Clients</h2>{{ hbars(clients) }}</div>
   <div class="card"><h2>Media type</h2>{{ hbars(types) }}</div>
+</div>
+
+<div class="card mb">
+  <div class="spread"><h2 style="margin:0">Concurrent streams</h2><span class="muted small">daily peak</span></div>
+  {% if conc.max %}
+  <div class="grid g4 mt mb">
+    <div class="tile"><div class="n">{{ conc.best.streams }}</div><div class="l">All-time peak{% if conc.best.at %} · {{ conc.best.at.strftime('%b %-d, %-I %p') }}{% endif %}</div></div>
+    <div class="tile"><div class="n">{{ (conc.days|map(attribute='transcodes')|max) or 0 }}</div><div class="l">Peak transcodes</div></div>
+  </div>
+  <div class="chart" style="height:110px">
+    {% for d in conc.days %}<div class="col" title="{{ d.day.strftime('%a %b %-d') }}: {{ d.streams }} at once, {{ d.transcodes }} transcoding">
+      <i class="c-oth" style="height: {{ (d.transcodes / conc.max * 100)|round(2) }}%"></i>
+      <i class="c-ep" style="height: {{ ((d.streams - d.transcodes) / conc.max * 100)|round(2) }}%"></i></div>{% endfor %}
+  </div>
+  <div class="legend"><span><i class="c-ep"></i>Direct</span><span><i class="c-oth"></i>Transcoding</span><span style="margin-left:auto">max {{ conc.max }} at once</span></div>
+  {% else %}<p class="muted small mt">Not enough history yet.</p>{% endif %}
 </div>
 
 <div class="card mb">

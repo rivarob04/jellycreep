@@ -5,12 +5,17 @@
 <span class="thumb k-bg-{{ kind }}">{% if src %}<img loading="lazy" src="{{ src }}" alt="" onerror="this.remove()">{% endif %}<b>{{ (label or '?')[:1] }}</b></span>
 {%- endmacro %}
 
+{% macro act(url, label, cls='', fields={}, confirm=None) -%}
+<form method="post" action="{{ url }}" class="inline-form"{% if confirm %} data-confirm="{{ confirm }}"{% endif %}><input type="hidden" name="csrf" value="{{ csrf }}">{% for k, v in fields.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}<button class="btn sm {{ cls }}">{{ label }}</button></form>
+{%- endmacro %}
+
 {% macro sec(title, n=None) -%}
 <h3 class="sec">{{ title }}{% if n is not none %} <span>{{ n }}</span>{% endif %}</h3>
 {%- endmacro %}
 
 {% block content %}
-<div class="spread"><h1>Automation</h1></div>
+<div class="spread"><h1>Automation</h1>{% if user.is_admin and (tabs.get('calendar') or tabs.get('queue')) %}<a class="btn sm primary" href="/add">＋ Add</a>{% endif %}</div>
+{% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}
 
 {% if not tabs %}
 <div class="card empty">
@@ -133,6 +138,14 @@
           <div class="meta spread"><span>{{ q.status|capitalize }}{% if q.trackedDownloadState and q.trackedDownloadState != 'downloading' %} · {{ q.trackedDownloadState }}{% endif %} · {{ q.protocol }}{% if q.quality and q.quality.quality %} · {{ q.quality.quality.name }}{% endif %}</span><span>{{ pct|round|int }}%{% if q.timeleft %} · {{ q.timeleft }}{% endif %}</span></div>
           <div class="bar{{ ' warn' if q.trackedDownloadStatus == 'warning' }}"><i style="width: {{ pct }}%"></i></div>
           {% for m in q.statusMessages or [] %}{% for msg in m.messages %}<div class="meta bad-text">{{ msg }}</div>{% endfor %}{% endfor %}
+          {% if user.is_admin and q.id %}
+          <details class="item-actions"><summary>Manage…</summary>
+            <div class="row" style="gap:8px;margin-top:6px">
+              {{ act('/act/arr/' ~ p.svc.id ~ '/queue/' ~ q.id ~ '/retry', '↻ Retry (blocklist + search)', '', {}, 'Remove this release, blocklist it and search for another?') }}
+              {{ act('/act/arr/' ~ p.svc.id ~ '/queue/' ~ q.id ~ '/remove', 'Remove', 'danger', {}, 'Remove this download from the queue and the download client?') }}
+            </div>
+          </details>
+          {% endif %}
         </div>
       </div>
       {% endfor %}
@@ -184,6 +197,9 @@
 
   {% elif p.svc.kind == 'sabnzbd' %}
     {% set q = p.sab or {} %}
+    {% if user.is_admin %}<div class="row mb" style="gap:8px">
+      {% if q.paused %}{{ act('/act/sab/' ~ p.svc.id ~ '/resume', '▶ Resume all', 'primary') }}{% else %}{{ act('/act/sab/' ~ p.svc.id ~ '/pause', '⏸ Pause all') }}{% endif %}
+    </div>{% endif %}
     <div class="grid g4 mb">
       <div class="tile"><div class="n">{{ (q.kbpersec|float * 1024)|bytes }}/s</div><div class="l">{{ 'Paused' if q.paused else 'Speed' }}</div></div>
       <div class="tile"><div class="n">{{ q.sizeleft or '0 B' }}</div><div class="l">Left · {{ q.timeleft or '0:00:00' }}</div></div>
@@ -195,6 +211,9 @@
         <div class="ellip">{{ j.filename }}</div>
         <div class="meta spread"><span>{{ j.status }}{% if j.cat and j.cat != '*' %} · {{ j.cat }}{% endif %} · {{ j.size or ((j.mb|float)|round(0)|int ~ ' MB') }}</span><span>{{ j.percentage }}%{% if j.timeleft %} · {{ j.timeleft }}{% endif %}</span></div>
         <div class="bar"><i style="width: {{ j.percentage }}%"></i></div>
+        {% if user.is_admin and j.nzo_id %}<div class="row" style="gap:8px;margin-top:6px">
+          {% if j.status == 'Paused' %}{{ act('/act/sab/' ~ p.svc.id ~ '/resume', '▶ Resume', '', {'nzo': j.nzo_id}) }}{% else %}{{ act('/act/sab/' ~ p.svc.id ~ '/pause', '⏸ Pause', '', {'nzo': j.nzo_id}) }}{% endif %}
+        </div>{% endif %}
       </div>
       {% else %}<p class="muted small">Queue is empty.</p>{% endfor %}
     </div>
@@ -207,6 +226,7 @@
         <div>
           <div class="ellip">{{ h.name }}</div>
           <div class="meta">{% if h.status == 'Failed' %}<span class="bad-text">Failed</span>{% else %}{{ h.status }}{% endif %}{% if h.category and h.category != '*' %} · {{ h.category }}{% endif %} · {{ (h.bytes or 0)|bytes }}{% if h.fail_message %} · <span class="bad-text">{{ h.fail_message }}</span>{% endif %}</div>
+          {% if user.is_admin and h.status == 'Failed' and h.nzo_id %}<div style="margin-top:6px">{{ act('/act/sab/' ~ p.svc.id ~ '/retry', '↻ Retry', '', {'nzo': h.nzo_id}) }}</div>{% endif %}
         </div>
         {% endfor %}
       </div>
@@ -221,6 +241,9 @@
     </div>
     {% endif %}
     {% set active = (p.torrents or [])|rejectattr('progress', 'ge', 1)|list %}
+    {% if user.is_admin %}<div class="row mb" style="gap:8px">
+      {{ act('/act/qbit/' ~ p.svc.id ~ '/pause', '⏸ Pause all') }}{{ act('/act/qbit/' ~ p.svc.id ~ '/resume', '▶ Resume all') }}
+    </div>{% endif %}
     {{ sec('Downloading', active|length) }}
     <div class="list mb">
       {% for t in active %}
@@ -228,6 +251,9 @@
         <div class="ellip">{{ t.name }}</div>
         <div class="meta spread"><span>{{ t.state }} · {{ t.size|bytes }}{% if t.category %} · {{ t.category }}{% endif %}</span><span>{{ (t.progress * 100)|round(1) }}% · {{ t.dlspeed|bytes }}/s</span></div>
         <div class="bar"><i style="width: {{ t.progress * 100 }}%"></i></div>
+        {% if user.is_admin and t.hash %}<div class="row" style="gap:8px;margin-top:6px">
+          {% if t.state in ('pausedDL', 'stoppedDL', 'pausedUP', 'stoppedUP') %}{{ act('/act/qbit/' ~ p.svc.id ~ '/resume', '▶ Resume', '', {'hash': t.hash}) }}{% else %}{{ act('/act/qbit/' ~ p.svc.id ~ '/pause', '⏸ Pause', '', {'hash': t.hash}) }}{% endif %}
+        </div>{% endif %}
       </div>
       {% else %}<p class="muted small">Nothing downloading.</p>{% endfor %}
     </div>
@@ -259,6 +285,10 @@
           <div class="spread"><span class="ellip" style="flex:1;min-width:0"><strong>{{ r._title or ('TMDB ' ~ ((r.media or {}).tmdbId or '?')) }}</strong>{% if r._year %} <span class="muted">({{ r._year }})</span>{% endif %}</span>
             <span class="badge {{ st[1] }}">{{ st[0] }}</span></div>
           <div class="meta">{{ 'Movie' if r.type == 'movie' else 'Series' }} · {{ (r.requestedBy or {}).displayName or '?' }} · {{ (r.createdAt or '')[:10] }}</div>
+          {% if user.is_admin and r.status == 1 %}<div class="row" style="gap:8px;margin-top:8px">
+            {{ act('/act/seerr/' ~ p.svc.id ~ '/' ~ r.id ~ '/approve', '✓ Approve', 'primary') }}
+            {{ act('/act/seerr/' ~ p.svc.id ~ '/' ~ r.id ~ '/decline', '✕ Decline', 'danger', {}, 'Decline this request?') }}
+          </div>{% endif %}
         </div>
       </div>
       {% else %}<p class="muted small">No requests.</p>{% endfor %}

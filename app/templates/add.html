@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Add{% endblock %}
+{% block content %}
+<div class="spread"><h1>Add a show or movie</h1><a class="btn sm" href="/automation">Back</a></div>
+{% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}
+
+<nav class="seg mb">
+  {% if have_tv %}<a href="/add?kind=tv&q={{ q|urlencode }}" class="{{ 'on' if kind == 'tv' }}">📺 TV show</a>{% endif %}
+  {% if have_movie %}<a href="/add?kind=movie&q={{ q|urlencode }}" class="{{ 'on' if kind == 'movie' }}">🎬 Movie</a>{% endif %}
+</nav>
+
+{% if not svc %}
+<div class="card empty"><div class="empty-icon">🔌</div>Connect {{ 'Sonarr' if kind == 'tv' else 'Radarr' }} in <a href="/settings">Settings</a> to add {{ 'shows' if kind == 'tv' else 'movies' }}.</div>
+{% else %}
+<form method="get" action="/add" class="search-bar mb">
+  <input type="hidden" name="kind" value="{{ kind }}">
+  <input type="search" name="q" value="{{ q }}" placeholder="Search {{ 'TV shows' if kind == 'tv' else 'movies' }}…" enterkeyhint="search" autofocus autocomplete="off">
+  <button class="btn primary">Search</button>
+</form>
+{% if error %}<div class="notice bad">{{ error }}</div>{% endif %}
+
+{% if q and not results and not error %}<div class="card empty">No matches for “{{ q }}”.</div>{% endif %}
+
+<div class="results">
+{% for r in results %}
+  {% set ext = r.tvdbId if kind == 'tv' else r.tmdbId %}
+  {% set in_lib = (r.id or 0) > 0 %}
+  <div class="card result">
+    <div class="res-top">
+      <span class="thumb lg k-bg-{{ 'tv' if kind == 'tv' else 'movie' }}">{% if r.remotePoster %}<img loading="lazy" src="{{ r.remotePoster }}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}<b>{{ (r.title or '?')[:1] }}</b></span>
+      <div class="res-body">
+        <div class="res-title">{{ r.title }}{% if r.year %} <span class="muted">({{ r.year }})</span>{% endif %}</div>
+        <div class="meta">
+          {% if kind == 'tv' %}{{ r.network or '' }}{% if r.seasonCount or r.statistics %} · {{ r.seasonCount or (r.statistics or {}).seasonCount }} season{{ 's' if (r.seasonCount or (r.statistics or {}).seasonCount) != 1 }}{% endif %}{% if r.status %} · {{ r.status|capitalize }}{% endif %}
+          {% else %}{{ r.studio or '' }}{% if r.runtime %} · {{ r.runtime }} min{% endif %}{% if r.certification %} · {{ r.certification }}{% endif %}{% endif %}
+        </div>
+        {% if r.genres %}<div class="meta">{{ r.genres[:3]|join(' · ') }}</div>{% endif %}
+        {% if in_lib %}<span class="badge b-ok" style="margin-top:6px">✓ Already in {{ svc.name }}</span>{% endif %}
+      </div>
+    </div>
+    {% if r.overview %}<p class="overview">{{ r.overview|truncate(220) }}</p>{% endif %}
+    {% if not in_lib and ext %}
+    <details class="add-form">
+      <summary class="btn sm primary">＋ Add to {{ svc.name }}</summary>
+      <form method="post" action="/add/{{ svc.id }}" class="form" style="margin-top:12px">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="ext_id" value="{{ ext }}">
+        <input type="hidden" name="q" value="{{ q }}">
+        <label>Quality profile
+          <select name="profile">{% for pr in profiles %}<option value="{{ pr.id }}">{{ pr.name }}</option>{% endfor %}</select></label>
+        <label>Root folder
+          <select name="root">{% for rf in roots %}<option value="{{ rf.path }}">{{ rf.path }}{% if rf.freeSpace %} ({{ rf.freeSpace|bytes }} free){% endif %}</option>{% endfor %}</select></label>
+        {% if kind == 'tv' %}
+        <label>Monitor
+          <select name="monitor">
+            <option value="all">All episodes</option>
+            <option value="future">Future episodes only</option>
+            <option value="missing">Missing episodes</option>
+            <option value="firstSeason">First season</option>
+            <option value="latestSeason">Latest season</option>
+            <option value="pilot">Pilot only</option>
+            <option value="none">None (just add)</option>
+          </select></label>
+        {% else %}
+        <label>Monitor
+          <select name="monitor"><option value="all">Yes</option><option value="none">No (just add)</option></select></label>
+        {% endif %}
+        <label class="check"><input type="checkbox" name="search" checked> Start searching now</label>
+        <div class="actions full"><button class="btn primary">Add {{ 'show' if kind == 'tv' else 'movie' }}</button></div>
+      </form>
+    </details>
+    {% endif %}
+  </div>
+{% endfor %}
+</div>
+{% endif %}
+{% endblock %}

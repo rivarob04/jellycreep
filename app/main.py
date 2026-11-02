@@ -20,12 +20,12 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_, select
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import __version__, calendar_view, stats, tracker, webhooks
+from . import __version__, calendar_view, importer, notify, stats, tracker, webhooks
 from .auth import (CSRF_COOKIE, LoginRequired, User, admin_user, api_user, csrf_token, current_user, oauth,
                    user_from_claims, verify_csrf)
 from .config import settings
 from .db import (PROXY_AUTH_MODES, SERVICE_KINDS, ActiveStream, ApiToken, Event, Play, Service, SessionLocal,
-                 hash_token, init_db, utcnow)
+                 hash_token, init_db, set_setting, utcnow)
 from .services import client_for
 from .upstream import UpstreamError, pool
 
@@ -301,6 +301,7 @@ async def page_stats(request: Request, days: int = 30, user: User = Depends(curr
             types=stats.grouped(db, Play.item_type, days),
         )
         ctx["heat"], ctx["by_hour"], ctx["heat_peak"] = stats.heatmap(db, days, TZ)
+        ctx["conc"] = stats.concurrency(db, days, TZ)
     jellystat = []
     for svc in services(("jellystat",)):
         client = await client_for(svc)
@@ -381,7 +382,8 @@ async def page_automation(request: Request, tab: str = "calendar", m: str | None
     available = {k: v for k, v in AUTOMATION_TABS.items() if services(v[1])}
     if tab not in available:
         tab = next(iter(available), "calendar")
-    ctx: dict[str, Any] = {"tab": tab, "tabs": available, "panels": [], "cal": None, "errors": []}
+    ctx: dict[str, Any] = {"tab": tab, "tabs": available, "panels": [], "cal": None, "errors": [],
+                           "flash": request.session.pop("flash", None)}
     if tab == "calendar" and available:
         ctx["cal"], ctx["errors"] = await _calendar(m)
     elif available:
@@ -497,6 +499,182 @@ async def wizarr_user_action(sid: int, user_id: int, action: str, request: Reque
     return RedirectResponse("/invites#users", status_code=303)
 
 
+# --- actions: requests & downloads ------------------------------------------------------
+def _svc(sid: int, *kinds: str) -> Service:
+    with SessionLocal() as db:
+        svc = db.get(Service, sid)
+    if not svc or svc.kind not in kinds:
+        raise HTTPException(404, "Service not found")
+    return svc
+
+
+async def _act(request: Request, coro, ok_msg: str, back: str):
+    _, err = await safe(coro)
+    request.session["flash"] = {"ok": not err, "msg": err or ok_msg}
+    return RedirectResponse(back, status_code=303)
+
+
+@app.post("/act/seerr/{sid}/{req_id}/{action}")
+async def act_seerr(sid: int, req_id: int, action: str, request: Request, user: User = Depends(admin_user)):
+    await verify_csrf(request)
+    if action not in ("approve", "decline"):
+        raise HTTPException(400)
+    client = await client_for(_svc(sid, "jellyseerr"))
+    log.info("%s %sd Seerr request %s", user.name, action, req_id)
+    return await _act(request, client.set_status(req_id, action), f"Request {action}d.", "/automation?tab=requests")
+
+
+@app.post("/act/sab/{sid}/{action}")
+async def act_sab(sid: int, action: str, request: Request, user: User = Depends(admin_user)):
+    await verify_csrf(request)
+    form = await request.form()
+    nzo = str(form.get("nzo") or "") or None
+    client = await client_for(_svc(sid, "sabnzbd"))
+    if action in ("pause", "resume"):
+        coro, msg = client.set_paused(action == "pause", nzo), ("Paused." if action == "pause" else "Resumed.")
+    elif action == "retry" and nzo:
+        coro, msg = client.retry(nzo), "Retry started."
+    else:
+        raise HTTPException(400)
+    return await _act(request, coro, msg, "/automation?tab=downloads")
+
+
+@app.post("/act/qbit/{sid}/{action}")
+async def act_qbit(sid: int, action: str, request: Request, user: User = Depends(admin_user)):
+    await verify_csrf(request)
+    if action not in ("pause", "resume"):
+        raise HTTPException(400)
+    form = await request.form()
+    hashes = str(form.get("hash") or "all")
+    if hashes != "all" and not hashes.isalnum():
+        raise HTTPException(400)
+    client = await client_for(_svc(sid, "qbittorrent"))
+    return await _act(request, client.set_paused(action == "pause", hashes),
+                      "Paused." if action == "pause" else "Resumed.", "/automation?tab=downloads")
+
+
+@app.post("/act/arr/{sid}/queue/{qid}/{action}")
+async def act_arr_queue(sid: int, qid: int, action: str, request: Request, user: User = Depends(admin_user)):
+    await verify_csrf(request)
+    client = await client_for(_svc(sid, "sonarr", "radarr", "lidarr"))
+    if action == "retry":
+        coro, msg = client.queue_retry(qid), "Removed and blocklisted — searching for another release."
+    elif action == "remove":
+        coro, msg = client.queue_remove(qid), "Removed from the queue."
+    else:
+        raise HTTPException(400)
+    return await _act(request, coro, msg, "/automation?tab=queue")
+
+
+# --- search & add ----------------------------------------------------------------------
+@app.get("/add", response_class=HTMLResponse)
+async def page_add(request: Request, q: str = "", kind: str = "tv", user: User = Depends(admin_user)):
+    kind = "movie" if kind == "movie" else "tv"
+    svcs = services(("sonarr",) if kind == "tv" else ("radarr",))
+    svc = svcs[0] if svcs else None
+    results, profiles, roots, error = [], [], [], None
+    if svc and q.strip():
+        client = await client_for(svc)
+        (results, e1), (profiles, e2), (roots, e3) = await asyncio.gather(
+            safe(client.lookup(q.strip())), safe(client.profiles()), safe(client.root_folders()))
+        error = e1 or e2 or e3
+    flash = request.session.pop("flash", None)
+    return render(request, "add.html", user, q=q, kind=kind, svc=svc, results=results or [], profiles=profiles or [],
+                  roots=roots or [], error=error, flash=flash,
+                  have_tv=bool(services(("sonarr",))), have_movie=bool(services(("radarr",))))
+
+
+@app.post("/add/{sid}")
+async def do_add(sid: int, request: Request, user: User = Depends(admin_user)):
+    await verify_csrf(request)
+    form = await request.form()
+    svc = _svc(sid, "sonarr", "radarr")
+    client = await client_for(svc)
+    ext = str(form.get("ext_id") or "")
+    if not ext.isdigit():
+        raise HTTPException(400)
+    term = f"tvdb:{ext}" if svc.kind == "sonarr" else f"tmdb:{ext}"
+    found, err = await safe(client.lookup(term))
+    q = str(form.get("q") or "")
+    kind = "tv" if svc.kind == "sonarr" else "movie"
+    if err or not found:
+        request.session["flash"] = {"ok": False, "msg": err or "Couldn't find that title any more."}
+        return RedirectResponse(f"/add?kind={kind}&q={q}", status_code=303)
+    try:
+        profile_id = int(str(form.get("profile")))
+    except ValueError:
+        raise HTTPException(400)
+    root = str(form.get("root") or "")
+    monitor = str(form.get("monitor") or "all")
+    if monitor not in ("all", "future", "missing", "existing", "firstSeason", "latestSeason", "pilot", "none"):
+        monitor = "all"
+    added, err = await safe(client.add(found[0], profile_id, root, monitor, form.get("search") == "on"))
+    title = found[0].get("title")
+    request.session["flash"] = {"ok": not err, "msg": err or f"Added {title} to {svc.name}"
+                                + (" and started searching." if form.get("search") == "on" else ".")}
+    if not err:
+        log.info("%s added %s to %s", user.name, title, svc.name)
+    return RedirectResponse(f"/add?kind={kind}&q={q}", status_code=303)
+
+
+# --- user pages -------------------------------------------------------------------------
+@app.get("/users/{name}", response_class=HTMLResponse)
+async def page_user(name: str, request: Request, user: User = Depends(current_user)):
+    with SessionLocal() as db:
+        prof = stats.user_profile(db, name, TZ)
+    if not prof:
+        raise HTTPException(404, "No plays recorded for that user")
+    return render(request, "user.html", user, u=prof)
+
+
+# --- notifications & import ---------------------------------------------------------------
+@app.post("/settings/notifications")
+async def save_notifications(request: Request, user: User = Depends(admin_user)):
+    await verify_csrf(request)
+    form = await request.form()
+    cur = notify.config()
+    ch = cur.get("channels", {})
+
+    def keep(old, field):
+        v = str(form.get(field) or "").strip()
+        if v == "clear":
+            return ""
+        return v or (old or "")
+
+    ch["ntfy"] = {"server": str(form.get("ntfy_server") or "").strip(), "topic": str(form.get("ntfy_topic") or "").strip(),
+                  "token": keep((ch.get("ntfy") or {}).get("token"), "ntfy_token")}
+    ch["pushover"] = {"user": str(form.get("pushover_user") or "").strip(),
+                      "token": keep((ch.get("pushover") or {}).get("token"), "pushover_token")}
+    ch["discord"] = {"webhook": keep((ch.get("discord") or {}).get("webhook"), "discord_webhook")}
+    ch["webhook"] = {"url": keep((ch.get("webhook") or {}).get("url"), "webhook_url")}
+    triggers = {k: form.get(f"t_{k}") == "on" for k in notify.TRIGGERS}
+    set_setting("notifications", {"channels": ch, "triggers": triggers})
+    if form.get("send_test") == "1":
+        errs = await notify.test(ch)
+        request.session["flash"] = {"ok": not errs, "msg": "; ".join(errs) if errs else "Saved — test notification sent."}
+    else:
+        request.session["flash"] = {"ok": True, "msg": "Notification settings saved."}
+    return RedirectResponse("/settings#notifications", status_code=303)
+
+
+@app.post("/settings/import/jellystat/{sid}")
+async def start_import(sid: int, request: Request, user: User = Depends(admin_user)):
+    await verify_csrf(request)
+    form = await request.form()
+    _svc(sid, "jellystat")
+    if importer.STATUS.get("running"):
+        request.session["flash"] = {"ok": False, "msg": "An import is already running."}
+    else:
+        asyncio.create_task(importer.run(sid, only_before_jellycreep=form.get("all") != "on"))
+        request.session["flash"] = {"ok": True, "msg": "Import started — progress shows below."}
+    return RedirectResponse("/settings#import", status_code=303)
+
+
+@app.get("/settings/import/status")
+async def import_status(user: User = Depends(admin_user)):
+    return importer.STATUS
+
+
 # --- settings ------------------------------------------------------------------------
 @app.get("/settings", response_class=HTMLResponse)
 async def page_settings(request: Request, edit: int | None = None, new: str | None = None,
@@ -507,8 +685,11 @@ async def page_settings(request: Request, edit: int | None = None, new: str | No
         editing = db.get(Service, edit) if edit else None
         counts = {"plays": db.scalar(select(func.count(Play.id))), "events": db.scalar(select(func.count(Event.id)))}
     new_token = request.session.pop("new_token", None)
+    flash = request.session.pop("flash", None)
     return render(request, "settings.html", user, services=svcs, tokens=tokens, editing=editing,
-                  new_kind=new if new in SERVICE_KINDS else None, new_token=new_token, counts=counts, cfg=settings)
+                  new_kind=new if new in SERVICE_KINDS else None, new_token=new_token, counts=counts, cfg=settings,
+                  flash=flash, notif=notify.config(), triggers=notify.TRIGGERS, import_status=importer.STATUS,
+                  jellystats=[x for x in svcs if x.kind == "jellystat"])
 
 
 def _apply_form(svc: Service, form) -> None:
@@ -747,4 +928,17 @@ async def api_webhook(source: str, request: Request, user: User = Depends(api_us
                    payload=json.dumps(payload)[:20000])
         db.add(ev)
         db.commit()
-        return {"ok": True, "id": ev.id}
+        ev_id = ev.id
+    et = str(etype)
+    base = settings.base_url or ""
+    if source in ("sonarr", "radarr", "lidarr") and et in ("DownloadFailed", "ManualInteractionRequired", "ImportFailed"):
+        notify.send_later("download_failed", f"❌ {source.capitalize()}: download failed", f"{title}\n{detail or ''}".strip(),
+                          url=f"{base}/automation?tab=queue", priority="high")
+    elif source in ("sonarr", "radarr", "lidarr", "prowlarr") and et == "Health":
+        notify.send_later("health", f"⚠️ {source.capitalize()} health", str(title), url=f"{base}/automation?tab=queue")
+    elif source in ("jellyseerr", "seerr", "overseerr") and et == "MEDIA_PENDING":
+        notify.send_later("new_request", "🙋 New request", f"{title}\n{detail or ''}".strip(),
+                          url=f"{base}/automation?tab=requests")
+    elif source == "jellyfin" and et in ("UserCreated", "UserAdded"):
+        notify.send_later("new_user", "👋 New Jellyfin user", str(title), url=f"{base}/users")
+    return {"ok": True, "id": ev_id}

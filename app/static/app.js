@@ -71,3 +71,70 @@
   document.querySelectorAll("form[data-confirm]").forEach((f) =>
     f.addEventListener("submit", (e) => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));
 })();
+
+// Live progress for the Jellystat import on the Settings page.
+(function () {
+  const box = document.getElementById("import-status");
+  if (!box) return;
+  const tick = async () => {
+    try {
+      const r = await fetch("/settings/import/status");
+      if (!r.ok) return;
+      const s = await r.json();
+      if (s.message) { box.hidden = false; box.textContent = s.message + (s.imported ? ` (${s.imported} imported)` : ""); }
+      box.className = "notice small" + (s.done ? " ok" : (/failed/i.test(s.message || "") ? " bad" : ""));
+      if (s.running) setTimeout(tick, 1500);
+    } catch (_) {}
+  };
+  tick();
+})();
+
+// Theme: Auto (follows the phone) → Light → Dark, remembered per device.
+(function () {
+  const order = ["auto", "light", "dark"];
+  const label = { auto: "🌓 Auto", light: "☀️ Light", dark: "🌙 Dark" };
+  const root = document.documentElement;
+  const meta = document.getElementById("theme-color");
+  const get = () => { try { return localStorage.getItem("jc-theme") || "auto"; } catch (_) { return "auto"; } };
+  const apply = (t) => {
+    if (t === "auto") delete root.dataset.theme; else root.dataset.theme = t;
+    const light = t === "light" || (t === "auto" && matchMedia("(prefers-color-scheme: light)").matches);
+    if (meta) meta.content = light ? "#ffffff" : "#0f1115";
+    document.querySelectorAll("[data-theme-label]").forEach((el) => (el.textContent = label[t]));
+  };
+  apply(get());
+  document.querySelectorAll("[data-theme-toggle]").forEach((b) => b.addEventListener("click", () => {
+    const next = order[(order.indexOf(get()) + 1) % order.length];
+    try { localStorage.setItem("jc-theme", next); } catch (_) {}
+    apply(next);
+  }));
+})();
+
+// Pull to refresh (mostly for the installed home-screen app, which has no reload button).
+(function () {
+  if (!("ontouchstart" in window)) return;
+  const ind = document.createElement("div");
+  ind.className = "ptr"; ind.innerHTML = "<span>↻</span>";
+  document.body.appendChild(ind);
+  let y0 = null, dy = 0;
+  const skip = ".posters, .seg, .health-strip, .tabs, .table-wrap, .more-sheet, input, textarea, select";
+  window.addEventListener("touchstart", (e) => {
+    if (window.scrollY > 0 || e.touches.length !== 1 || e.target.closest(skip)) { y0 = null; return; }
+    y0 = e.touches[0].clientY; dy = 0;
+  }, { passive: true });
+  window.addEventListener("touchmove", (e) => {
+    if (y0 === null) return;
+    dy = e.touches[0].clientY - y0;
+    if (dy <= 0 || window.scrollY > 0) { ind.style.transform = ""; return; }
+    ind.classList.add("pulling");
+    ind.classList.toggle("ready", dy > 80);
+    ind.style.transform = `translateY(${Math.min(dy * 0.6, 70)}px) rotate(${dy * 2}deg)`;
+  }, { passive: true });
+  window.addEventListener("touchend", () => {
+    if (y0 === null) return;
+    ind.classList.remove("pulling");
+    if (dy > 80) { ind.classList.add("spin"); ind.style.transform = "translateY(56px)"; location.reload(); }
+    else { ind.style.transform = ""; ind.classList.remove("ready"); }
+    y0 = null; dy = 0;
+  });
+})();

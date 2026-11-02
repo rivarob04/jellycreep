@@ -12,6 +12,12 @@
 - **Every app is a connection, not a container.** Jellyfin, Jellystat, Wizarr, Sonarr, Radarr, Lidarr, Prowlarr, SABnzbd, qBittorrent and Seerr are your existing installs. You add each one by URL and API key, from Settings or from stack variables.
 - **Works with apps behind Authentik.** Each upstream app can be reached through Authentik with a service account (app password or OAuth2 client credentials), or with custom headers for Cloudflare Access and similar.
 - **Phone-first UI:** bottom tab bar, card layouts, large tap targets, dark theme. *Add to Home Screen* makes it open full-screen like an app.
+- **Act from your phone:** approve or decline Seerr requests, pause/resume SABnzbd and qBittorrent (all or per item), retry or remove stuck queue items, and search & add shows/movies to Sonarr/Radarr.
+- **Push notifications** to ntfy, Pushover, Discord or any webhook — transcodes, failed downloads, apps going down, new requests, new users.
+- **Per-user pages** with favourite shows/movies, devices, watch-time chart, heatmap, streaks and biggest binge.
+- **Concurrent-stream stats** (daily peak streams and transcodes) and a local-time viewing heatmap.
+- **Import history from Jellystat** so stats go back before JellyCreep was installed.
+- **Light/dark/auto theme** and pull-to-refresh in the installed app.
 - **Read-only REST API** with tokens, for Homepage, scripts or other apps. Docs are at `/api/docs`.
 
 ---

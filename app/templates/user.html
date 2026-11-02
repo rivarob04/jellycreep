@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}{{ u.name }}{% endblock %}
+{% block content %}
+<div class="profile-head">
+  <span class="avatar">{{ u.name[:1]|upper }}</span>
+  <div style="min-width:0">
+    <h1 style="margin:0">{{ u.name }}</h1>
+    <div class="muted small">Watching since {{ u.first|local('%b %-d, %Y') }} · last seen {{ u.last|ago }}</div>
+  </div>
+</div>
+
+<div class="grid g4 mb">
+  <div class="card tile"><div class="n">{{ u.seconds|duration }}</div><div class="l">Watch time</div></div>
+  <div class="card tile"><div class="n">{{ u.plays }}</div><div class="l">Plays · {{ u.completed }} finished</div></div>
+  <div class="card tile"><div class="n">🔥 {{ u.streak_current }}</div><div class="l">Day streak now</div></div>
+  <div class="card tile"><div class="n">{{ u.streak_longest }}</div><div class="l">Longest streak (days)</div></div>
+</div>
+
+{% if u.binge %}
+<div class="card mb binge">
+  <span class="binge-emoji">🍿</span>
+  <div><strong>Biggest binge:</strong> {{ u.binge.count }} episodes of <strong>{{ u.binge.series }}</strong> on {{ u.binge.day.strftime('%a, %b %-d %Y') }}</div>
+</div>
+{% endif %}
+
+<div class="card mb">
+  <h2>Last 30 days</h2>
+  {% set mx = (u.last30|map(attribute='seconds')|max) or 1 %}
+  <div class="chart" style="height:110px">
+    {% for d in u.last30 %}<div class="col" title="{{ d.day.strftime('%a %b %-d') }}: {{ d.seconds|duration }}"><i class="c-ep" style="height: {{ (d.seconds / mx * 100)|round(2) }}%"></i></div>{% endfor %}
+  </div>
+  <div class="legend"><span>{{ u.last30[0].day.strftime('%b %-d') }}</span><span style="margin-left:auto">Today</span></div>
+</div>
+
+<div class="grid g2 mb">
+  <div class="card"><h2>Favourite shows</h2>
+    {% for s in u.top_shows %}
+    <div class="rank"><img class="mini-poster" loading="lazy" src="/img/{{ s.poster[0] }}/{{ s.poster[1] }}?h=100" alt="" onerror="this.style.visibility='hidden'"><span>{{ s.title }}</span><span class="muted small">{{ s.plays }} eps · {{ s.seconds|duration }}</span></div>
+    {% else %}<div class="muted small">No shows yet</div>{% endfor %}
+  </div>
+  <div class="card"><h2>Favourite movies</h2>
+    {% for m in u.top_movies %}
+    <div class="rank"><img class="mini-poster" loading="lazy" src="/img/{{ m.poster[0] }}/{{ m.poster[1] }}?h=100" alt="" onerror="this.style.visibility='hidden'"><span>{{ m.title }}</span><span class="muted small">{{ m.plays }}×</span></div>
+    {% else %}<div class="muted small">No movies yet</div>{% endfor %}
+  </div>
+</div>
+
+<div class="grid g2 mb">
+  <div class="card"><h2>Devices</h2>
+    <div class="list">
+    {% for d in u.devices[:8] %}
+      <div class="spread"><span style="min-width:0;flex:1"><span class="ellip" style="display:block"><strong>{{ d.client }}</strong> · {{ d.device }}</span><span class="meta">{{ d.plays }} plays · last {{ d.last|ago }}{% if d.ip %} · {{ d.ip }}{% endif %}</span></span></div>
+    {% endfor %}
+    </div>
+  </div>
+  <div class="card"><h2>When they watch</h2>
+    <div class="heat">
+      <span></span>{% for h in range(24) %}<span class="hr">{{ h if h % 6 == 0 else '' }}</span>{% endfor %}
+      {% for row in u.heat %}
+      {% set wd = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][loop.index0] %}
+      <span class="lbl">{{ wd }}</span>
+      {% for n in row %}<span class="c" title="{{ wd }} {{ '%02d'|format(loop.index0) }}:00 – {{ n }}"{% if n and u.heat_peak %} style="background: rgba(0,164,220,{{ (0.2 + 0.8 * n / u.heat_peak)|round(2) }})"{% endif %}></span>{% endfor %}
+      {% endfor %}
+    </div>
+    <div class="mt">{% for m in u.methods %}<span class="badge {{ 'b-warn' if m.label == 'Transcode' else 'b-ok' }}" style="margin:0 4px 4px 0">{{ m.label }} · {{ m.plays }}</span>{% endfor %}</div>
+  </div>
+</div>
+
+<div class="spread section-title"><h2 style="margin:0">Recent plays</h2><a class="small" href="/history?user_name={{ u.name|urlencode }}">Full history →</a></div>
+<div class="card flush">
+  {% for p in u.recent %}
+  <div class="agenda-item k-{{ 'tv' if p.item_type == 'Episode' else 'movie' }}">
+    <span class="thumb k-bg-{{ 'tv' if p.item_type == 'Episode' else 'movie' }}">{% if p.poster_id %}<img loading="lazy" src="/img/{{ p.server_id }}/{{ p.poster_id }}?h=120" alt="" onerror="this.remove()">{% endif %}<b>{{ (p.series_name or p.title)[:1] }}</b></span>
+    <span class="ai-body"><span class="ai-title">{{ p.display_title }}</span>
+      <span class="ai-meta">{{ p.started_at|local('%b %-d, %-I:%M %p') }} · {{ p.watched_seconds|duration }} · {{ p.client or '?' }}</span></span>
+    <span class="ai-status">{% if p.completed %}<span class="badge b-ok">✓</span>{% elif p.percent is not none %}<span class="badge">{{ p.percent|round|int }}%</span>{% endif %}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

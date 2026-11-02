@@ -253,5 +253,35 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+
+
+class Setting(Base):
+    """Small encrypted key/value store for app settings (notifications etc.)."""
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+def get_setting(key: str, default=None):
+    with SessionLocal() as db:
+        row = db.get(Setting, key)
+        if not row or not row.value_enc:
+            return default
+        raw = decrypt(row.value_enc)
+        try:
+            return json.loads(raw) if raw else default
+        except ValueError:
+            return default
+
+
+def set_setting(key: str, value) -> None:
+    with SessionLocal() as db:
+        row = db.get(Setting, key) or Setting(key=key)
+        row.value_enc = encrypt(json.dumps(value))
+        db.merge(row)
+        db.commit()
+
+
 def init_db() -> None:
     Base.metadata.create_all(engine)
