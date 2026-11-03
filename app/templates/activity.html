@@ -12,6 +12,12 @@
   {% endfor %}
 </div>
 {% endif %}
+<div class="live-ctl" data-live-ctl>
+  <span class="live-dot"></span><span data-live-label>Live</span>
+  <button type="button" class="live-now" data-live-now aria-label="Refresh now">↻</button>
+  <label class="live-every"><span class="sr-only">Refresh every</span>
+    <select aria-label="Refresh every"><option value="5">5 s</option><option value="10">10 s</option><option value="15">15 s</option><option value="30">30 s</option><option value="60">1 min</option><option value="0">Off</option></select></label>
+</div>
 <div id="live-streams">{% include "_live.html" %}</div>
 
 <div class="grid g4 mb mt">

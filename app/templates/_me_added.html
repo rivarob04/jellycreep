@@ -1,0 +1,12 @@
+{% if items %}
+<div class="spread section-title"><h2 style="margin:0">New on {{ server_name }}</h2><a class="small" href="/me/library">All →</a></div>
+<div class="posters mb">
+  {% for i in items %}
+  {% set pid = i.SeriesId if i.Type == 'Episode' else i.Id %}
+  <a href="/me/library/{{ user.server_id }}/{{ i.Id }}"><figure title="{{ i.SeriesName ~ ' – ' if i.SeriesName }}{{ i.Name }}">
+    <img loading="lazy" src="{{ imgp }}/{{ user.server_id }}/{{ pid }}?h=300" alt="">
+    <figcaption>{{ i.SeriesName or i.Name }}<br><span class="muted">{% if i.Type == 'Episode' %}S{{ '%02d'|format(i.ParentIndexNumber or 0) }}E{{ '%02d'|format(i.IndexNumber or 0) }}{% else %}{{ i.ProductionYear or '' }}{% endif %}</span></figcaption>
+  </figure></a>
+  {% endfor %}
+</div>
+{% endif %}

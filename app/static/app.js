@@ -23,7 +23,11 @@
   if (live) {
     wireHero();
     const refresh = async () => {
-      if (document.hidden || touching || live.querySelector("details[open]")) return;
+      // pause only while someone is using something in here (a menu, the stop form…), not for the
+      // "Why is this converting?" box, which viewers see open by default
+      if (document.hidden || touching || live.querySelector("details[open]:not(.hero-why)") ||
+          (document.activeElement && live.contains(document.activeElement) && document.activeElement.matches("input, textarea, select"))) return;
+      const whyOpen = [...live.querySelectorAll("details.hero-why")].map((d) => d.open);
       try {
         const r = await fetch(live.dataset.src || "/partials/activity", { headers: { "X-Requested-With": "fetch" } });
         if (r.status === 401) { location.reload(); return; }
@@ -31,13 +35,58 @@
         const old = live.querySelector("[data-hero-track]");
         const x = old ? old.scrollLeft : 0;
         live.innerHTML = await r.text();
+        live.querySelectorAll("details.hero-why").forEach((d, i) => { if (i < whyOpen.length) d.open = whyOpen[i]; });
         const track = live.querySelector("[data-hero-track]");
         if (track && x) track.scrollLeft = x;
         wireHero();
       } catch (_) { /* keep last view */ }
     };
-    setInterval(refresh, 5000);
+    // Live refresh: every N seconds (chosen per device), never overlapping, paused while the app is hidden.
+    const ctl = document.querySelector("[data-live-ctl]");
+    const sel = ctl && ctl.querySelector("select");
+    const label = ctl && ctl.querySelector("[data-live-label]");
+    const getEvery = () => { try { const v = localStorage.getItem("jc-live"); return v === null ? 10 : +v; } catch (_) { return 10; } };
+    let every = getEvery(), timer = null, busy = false, lastAt = Date.now();
+    if (sel) sel.value = String(every);
+    const paint = () => {
+      if (!label) return;
+      const s = Math.round((Date.now() - lastAt) / 1000);
+      label.textContent = every ? (s < 3 ? "Live · just updated" : `Live · updated ${s}s ago`) : "Auto-refresh off";
+      ctl.classList.toggle("off", !every);
+    };
+    const tick = async () => {
+      clearTimeout(timer);
+      if (!every) { paint(); return; }
+      if (!document.hidden && !busy) {
+        busy = true; ctl && ctl.classList.add("busy");
+        await refresh();
+        busy = false; lastAt = Date.now(); ctl && ctl.classList.remove("busy");
+      }
+      timer = setTimeout(tick, every * 1000);
+    };
+    sel && sel.addEventListener("change", () => {
+      every = +sel.value; try { localStorage.setItem("jc-live", String(every)); } catch (_) {}
+      tick();
+    });
+    ctl && ctl.querySelector("[data-live-now]")?.addEventListener("click", async () => {
+      busy = true; ctl.classList.add("busy"); await refresh(); busy = false; lastAt = Date.now(); ctl.classList.remove("busy"); paint();
+    });
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
+    setInterval(paint, 1000);
+    timer = setTimeout(tick, every * 1000);
+    paint();
   }
+
+  // Home page rows that need other apps load after the page is on screen.
+  document.querySelectorAll("[data-lazy]").forEach(async (box) => {
+    try {
+      const r = await fetch(box.dataset.lazy, { headers: { "X-Requested-With": "fetch" } });
+      if (r.status === 401) return;
+      const html = r.ok ? (await r.text()).trim() : "";
+      if (html) { const t = document.createElement("template"); t.innerHTML = html; box.replaceWith(t.content); }
+      else box.remove();
+    } catch (_) { box.remove(); }
+  });
 
   document.querySelectorAll("[data-test]").forEach((btn) => {
     btn.addEventListener("click", async () => {

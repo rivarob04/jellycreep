@@ -12,6 +12,12 @@
   </div>
 </div>
 
+<div class="live-ctl" data-live-ctl>
+  <span class="live-dot"></span><span data-live-label>Live</span>
+  <button type="button" class="live-now" data-live-now aria-label="Refresh now">↻</button>
+  <label class="live-every"><span class="sr-only">Refresh every</span>
+    <select aria-label="Refresh every"><option value="5">5 s</option><option value="10">10 s</option><option value="15">15 s</option><option value="30">30 s</option><option value="60">1 min</option><option value="0">Off</option></select></label>
+</div>
 <div id="live-streams" data-src="/partials/me">{% include "_hero.html" %}</div>
 
 {% if u %}
@@ -53,39 +59,14 @@
 </div>
 {% endif %}
 
-{% if upcoming %}
-<div class="spread section-title"><h2 style="margin:0">Coming up</h2><a class="small" href="/me/upcoming">See more →</a></div>
-<div class="card flush mb">
-  {% for i in upcoming[:6] %}
-  <{{ 'a' if i.ref else 'div' }} class="agenda-item k-{{ i.kind }}{{ ' tap' if i.ref }}"{% if i.ref %} href="/me/upcoming/{{ i.sid }}/{{ i.ref }}"{% endif %}>
-    <span class="thumb k-bg-{{ i.kind }}">{% if i.poster %}<img loading="lazy" src="{{ i.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ i.title[:1] }}</b></span>
-    <span class="ai-body"><span class="ai-title">{{ i.title }}</span><span class="ai-sub">{{ i.sub }}</span>
-      <span class="ai-meta">{{ i.day.strftime('%a %b %-d') }}{% if i.time %} · {{ i.time }}{% endif %}{% if i.network %} · {{ i.network }}{% endif %}
-        {% if i.premiere %}<span class="badge b-acc">Premiere</span>{% endif %}{% if i.finale %}<span class="badge b-warn">Finale</span>{% endif %}</span></span>
-    <span class="ai-status">{% if i.has_file %}<span class="badge b-ok">Ready</span>{% endif %}</span>
-  </{{ 'a' if i.ref else 'div' }}>
-  {% endfor %}
-</div>
-{% endif %}
+{% if sections.upcoming is not none %}{% with items=sections.upcoming %}{% include "_me_upcoming.html" %}{% endwith %}
+{% else %}<div class="lazy-sec" data-lazy="/partials/me/upcoming" aria-busy="true"><div class="spread section-title"><h2 style="margin:0">Coming up</h2></div><div class="skel-row"><i></i><i></i><i></i><i></i></div></div>{% endif %}
 
-{% if added %}
-<div class="spread section-title"><h2 style="margin:0">New on {{ server_name }}</h2><a class="small" href="/me/library">All →</a></div>
-<div class="posters mb">
-  {% for i in added %}
-  {% set pid = i.SeriesId if i.Type == 'Episode' else i.Id %}
-  <a href="/me/library/{{ user.server_id }}/{{ i.Id }}"><figure title="{{ i.SeriesName ~ ' – ' if i.SeriesName }}{{ i.Name }}">
-    <img loading="lazy" src="{{ imgp }}/{{ user.server_id }}/{{ pid }}?h=300" alt="">
-    <figcaption>{{ i.SeriesName or i.Name }}<br><span class="muted">{% if i.Type == 'Episode' %}S{{ '%02d'|format(i.ParentIndexNumber or 0) }}E{{ '%02d'|format(i.IndexNumber or 0) }}{% else %}{{ i.ProductionYear or '' }}{% endif %}</span></figcaption>
-  </figure></a>
-  {% endfor %}
-</div>
-{% endif %}
+{% if sections.added is not none %}{% with items=sections.added %}{% include "_me_added.html" %}{% endwith %}
+{% else %}<div class="lazy-sec" data-lazy="/partials/me/added" aria-busy="true"><div class="spread section-title"><h2 style="margin:0">New on {{ server_name }}</h2></div><div class="skel-row"><i></i><i></i><i></i><i></i></div></div>{% endif %}
 
-{% if home_requests %}
-{% from "_seerr.html" import rcard %}
-<div class="spread section-title"><h2 style="margin:0">{{ 'Recently requested' if everyone else 'Your requests' }}</h2><a class="small" href="/me/requests">All →</a></div>
-<div class="prow mb">{% for r in home_requests %}{{ rcard(r) }}{% endfor %}</div>
-{% endif %}
+{% if sections.requests is not none %}{% with items=sections.requests %}{% include "_me_requests.html" %}{% endwith %}
+{% else %}<div class="lazy-sec" data-lazy="/partials/me/requests" aria-busy="true"><div class="spread section-title"><h2 style="margin:0">Requests</h2></div><div class="skel-row"><i></i><i></i><i></i><i></i></div></div>{% endif %}
 
 {% if u %}
 <div class="grid g2 mb">

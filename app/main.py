@@ -76,8 +76,10 @@ async def lifespan(app: FastAPI):
     init_db()
     seed_services_from_env()
     task = asyncio.create_task(tracker.run_forever())
+    warm = asyncio.create_task(_keep_warm())
     yield
     task.cancel()
+    warm.cancel()
     await pool.close()
 
 
@@ -240,7 +242,52 @@ async def safe(coro) -> tuple[Any, str | None]:
 
 
 # --- activity ------------------------------------------------------------------------
+# --- short-lived cache: identical upstream calls from many phones share one request ----
+_TTL: dict[Any, tuple[float, Any]] = {}
+_INFLIGHT: dict[Any, asyncio.Future] = {}
+
+
+async def ttl_cached(key: Any, ttl: float, factory) -> Any:
+    hit = _TTL.get(key)
+    now = time.monotonic()
+    if hit and hit[0] > now:
+        return hit[1]
+    if key in _INFLIGHT:                       # someone is already fetching this: wait for them
+        return await asyncio.shield(_INFLIGHT[key])
+    fut = asyncio.get_running_loop().create_future()
+    _INFLIGHT[key] = fut
+    try:
+        val = await factory()
+        _TTL[key] = (time.monotonic() + ttl, val)
+        if len(_TTL) > 2000:
+            for k in [k for k, (exp, _) in _TTL.items() if exp < now][:1000]:
+                _TTL.pop(k, None)
+        fut.set_result(val)
+        return val
+    except BaseException as e:
+        fut.set_exception(e)
+        fut.exception()                        # mark retrieved
+        raise
+    finally:
+        _INFLIGHT.pop(key, None)
+
+
+def ttl_peek(key: Any) -> Any:
+    """The cached value if it's still fresh, else None (never fetches)."""
+    hit = _TTL.get(key)
+    return hit[1] if hit and hit[0] > time.monotonic() else None
+
+
+def ttl_forget(prefix: str) -> None:
+    for k in [k for k in _TTL if isinstance(k, tuple) and k and k[0] == prefix]:
+        _TTL.pop(k, None)
+
+
 async def current_activity() -> tuple[list[dict], list[str]]:
+    return await ttl_cached(("activity",), 2, _current_activity)
+
+
+async def _current_activity() -> tuple[list[dict], list[str]]:
     streams, errors = [], []
     servers = services(("jellyfin",))
     with SessionLocal() as db:
@@ -774,9 +821,7 @@ def _mine(user: User):
 async def _my_streams(user: User, with_others: bool = False) -> tuple[list[dict], int, list[dict]]:
     streams, _ = await current_activity()
     is_mine = lambda x: _norm(x.get("user_id")) == user.jf_id or x.get("user_name") == user.name  # noqa: E731
-    mine = [x for x in streams if is_mine(x)]
-    for x in mine:   # never send IPs to viewers
-        x["ip"] = None
+    mine = [{**x, "ip": None} for x in streams if is_mine(x)]   # copies (shared cache); never send IPs to viewers
     rest = [x for x in streams if not is_mine(x)]
     others = await _anon_streams(user, rest) if (with_others and rest and login_settings()["others_titles"]) else []
     return mine, len(rest), others
@@ -805,6 +850,24 @@ async def _anon_streams(user: User, rest: list[dict]) -> list[dict]:
 
 
 async def _upcoming(days: int = 14) -> list[dict]:
+    return [dict(i) for i in await ttl_cached(("upcoming", days), 300, lambda: _upcoming_fetch(days))]
+
+
+async def _keep_warm() -> None:
+    """Refresh the shared, slow-to-fetch Home rows in the background so pages never wait on Sonarr/Radarr."""
+    await asyncio.sleep(5)
+    while True:
+        try:
+            if login_settings()["enabled"] and login_settings()["upcoming"]:
+                for days in (14, 30):
+                    val = await asyncio.wait_for(_upcoming_fetch(days), timeout=60)
+                    _TTL[("upcoming", days)] = (time.monotonic() + 330, val)
+        except Exception:  # noqa: BLE001
+            log.debug("Warming Coming up failed", exc_info=True)
+        await asyncio.sleep(240)
+
+
+async def _upcoming_fetch(days: int) -> list[dict]:
     today = datetime.now(TZ).date()
     end = today + timedelta(days=days)
     out: list[dict] = []
@@ -861,22 +924,64 @@ async def page_me(request: Request, user: User = Depends(current_user)):
     with SessionLocal() as db:
         last = db.scalar(select(Play).where(_mine(user)).order_by(Play.stopped_at.desc()))
         recent = list(db.scalars(select(Play).where(_mine(user)).order_by(Play.stopped_at.desc()).limit(10)))
-        prof = stats.user_profile(db, user.name, TZ)
         tips = explain.summary(db.scalars(select(Play).where(_mine(user), Play.started_at >= utcnow() - timedelta(days=30))))
+    prof = await _profile(user)
     svc = next((x for x in services(("jellyfin",)) if x.id == user.server_id), None)
-
-    async def none():
-        return None
-    added_job = safe((await client_for(svc)).recently_added(16, user.jf_id)) if (svc and cfg["recent"]) else none()
-    up_job = _upcoming(14) if cfg["upcoming"] else none()
-    req_job = _home_requests(user) if cfg["requests"] else none()
-    added, upcoming, reqs = await asyncio.gather(added_job, up_job, req_job)
-    if isinstance(added, tuple):
-        added = added[0] or []
+    # The rows that need Sonarr/Radarr/Seerr/Jellyfin library calls load after the page (see /partials/me/…),
+    # unless they're already cached — then they're drawn straight away.
+    sections = {k: (ttl_peek(_section_key(user, k)) if cfg[flag] else []) for k, flag in
+                (("upcoming", "upcoming"), ("added", "recent"), ("requests", "requests"))}
     return render(request, "me.html", user, streams=streams, others=others if cfg["server_activity"] else None, anon=anon,
-                  last=last, recent=recent, u=prof, added=added or [], upcoming=upcoming or [], home_requests=reqs or [], everyone=cfg["seerr_everyone"],
+                  last=last, recent=recent, u=prof, sections=sections, everyone=cfg["seerr_everyone"],
                   server_ok=bool(svc and svc.last_ok is not False), server_name=svc.name if svc else "Jellyfin",
                   tips=tips)
+
+
+async def _profile(user: User):
+    def build():
+        with SessionLocal() as db:
+            return stats.user_profile(db, user.name, TZ)
+    return await ttl_cached(("profile", user.jf_id), 60, lambda: asyncio.to_thread(build))
+
+
+def _section_key(user: User, name: str) -> tuple:
+    return {"upcoming": ("upcoming", 14), "added": ("added", user.server_id, user.jf_id),
+            "requests": ("homereq", user.server_id, user.jf_id)}[name]
+
+
+async def _section_data(user: User, name: str):
+    if name == "upcoming":
+        return await _upcoming(14)
+    if name == "added":
+        svc = next((x for x in services(("jellyfin",)) if x.id == user.server_id), None)
+        if not svc:
+            return []
+
+        async def fetch():
+            items, _ = await safe((await client_for(svc)).recently_added(16, user.jf_id))
+            return items or []
+        return await ttl_cached(_section_key(user, "added"), 120, fetch)
+    return await ttl_cached(_section_key(user, "requests"), 60, lambda: _home_requests(user))
+
+
+SECTION_FLAGS = {"upcoming": "upcoming", "added": "recent", "requests": "requests"}
+
+
+@app.get("/partials/me/{name}", response_class=HTMLResponse)
+async def partial_me_section(request: Request, name: str, user: User = Depends(current_user)):
+    if not user.is_viewer or name not in SECTION_FLAGS:
+        raise HTTPException(404)
+    cfg = login_settings()
+    data = []
+    if cfg[SECTION_FLAGS[name]]:
+        try:   # a slow or unreachable app must never hold up the page
+            data = await asyncio.wait_for(_section_data(user, name), timeout=8)
+        except (asyncio.TimeoutError, Exception):  # noqa: BLE001
+            log.warning("Home section %s timed out or failed", name)
+            data = []
+    svc = next((x for x in services(("jellyfin",)) if x.id == user.server_id), None)
+    return render(request, f"_me_{name}.html", user, items=data or [], everyone=cfg["seerr_everyone"],
+                  server_name=svc.name if svc else "Jellyfin")
 
 
 @app.get("/partials/me", response_class=HTMLResponse)
@@ -1451,6 +1556,7 @@ async def act_request(request: Request, mt: str, tmdb: int, user: User = Depends
         return back
     seerr_portal.forget("row")
     seerr_portal.forget("similar")
+    ttl_forget("homereq")
     log.info("Seerr request by %s: %s %s seasons=%s 4k=%s", user.name, mt, tmdb, seasons, is4k)
     auto = (res or {}).get("status") == 2
     request.session["flash"] = {"ok": True, "msg": "Requested — it was approved automatically and will start downloading."
@@ -1496,6 +1602,7 @@ async def act_my_request(request: Request, req_id: int, action: str, user: User 
         else:
             await seerr_portal.moderate(sc["client"], sc["uid"], req_id, action)
         seerr_portal.forget("row")
+        ttl_forget("homereq")
         request.session["flash"] = {"ok": True, "msg": {"cancel": "Request cancelled.", "approve": "Approved.",
                                                         "decline": "Declined."}[action]}
     except UpstreamError as e:

@@ -138,6 +138,12 @@ They never see other users, IP addresses, devices other than their own, download
 
 When a viewer's stream is being transcoded, JellyCreep explains why in plain English ("These subtitles have to be burned into the picture", "Your device can't play this audio track (TRUEHD)") and adds a tip they can act on. Their history marks each converted play with its reason, and the home page sums up how many recent plays were converted, the most common cause and the device it happened on.
 
+### Faster Home page & live refresh
+
+- Home appears straight away with what's playing and your stats. The rows that need other apps (Coming up, New on Jellyfin, Requests) fill in a moment later, each on its own. They have an 8-second limit, so a slow or offline Sonarr/Radarr/Seerr never holds up the page.
+- Answers are briefly shared and remembered: what's playing for 2 s, Coming up for 5 min (refreshed in the background), recently added for 2 min, requests for 1 min, stats for 1 min. Many phones polling at once cause one Jellyfin request, not one each.
+- Home and Activity show **● Live · updated Xs ago** with a ↻ button and a picker: 5 s, 10 s (default), 15 s, 30 s, 1 min or Off, remembered per device. Refreshing pauses while the app is in the background and catches up when you come back.
+
 ### Cast in Discover & Requests
 
 Every Discover title page (which Requests open too) has a **Cast** row from TMDB with photos and character names. Tap an actor to see their bio and full filmography from TMDB, with each title's status (Available ✓ / Requested / Pending). From there you can open any title to request it, or watch it if it's already in your libraries.

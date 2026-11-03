@@ -1013,3 +1013,20 @@ a.cast-card:active .cast-img, a.cast-card:hover .cast-img { transform: translate
 @media (min-width: 760px) { .person-photo { width: 170px; } .person-info h1 { font-size: 34px; } }
 .pgrid-item { min-width: 0; display: flex; flex-direction: column; }
 .prole { margin-top: 0 !important; font-style: italic; }
+
+/* ===================== v0.17 live refresh + lazy rows ===================== */
+.live-ctl { display: flex; align-items: center; gap: 8px; justify-content: flex-end; font-size: 12.5px; color: var(--muted); margin: -2px 0 8px; }
+.live-ctl .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px rgba(63,185,127,.2); animation: livepulse 2s ease-in-out infinite; }
+.live-ctl.off .live-dot { background: var(--muted); box-shadow: none; animation: none; }
+.live-ctl.busy .live-now { animation: spin .8s linear infinite; }
+.live-now { border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 4px; cursor: pointer; }
+.live-every select { min-height: 0; height: 30px; padding: 2px 8px; font-size: 12.5px; border-radius: 999px; width: auto; }
+@keyframes livepulse { 50% { box-shadow: 0 0 0 6px rgba(63,185,127,0); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skel-row { display: grid; grid-auto-flow: column; grid-auto-columns: 104px; gap: 10px; overflow: hidden; margin-bottom: 18px; }
+.skel-row i { display: block; aspect-ratio: 2/3; border-radius: 10px; background: linear-gradient(90deg, rgba(255,255,255,.05), rgba(255,255,255,.12), rgba(255,255,255,.05));
+  background-size: 200% 100%; animation: shimmer 1.3s ease-in-out infinite; }
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+:root[data-theme="light"] .skel-row i { background: linear-gradient(90deg, rgba(0,0,0,.04), rgba(0,0,0,.09), rgba(0,0,0,.04)); background-size: 200% 100%; }
+@media (prefers-reduced-motion: reduce) { .skel-row i, .live-ctl .live-dot, .live-ctl.busy .live-now { animation: none; } }

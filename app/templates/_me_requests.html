@@ -1,0 +1,5 @@
+{% if items %}
+{% from "_seerr.html" import rcard %}
+<div class="spread section-title"><h2 style="margin:0">{{ 'Recently requested' if everyone else 'Your requests' }}</h2><a class="small" href="/me/requests">All →</a></div>
+<div class="prow mb">{% for r in items %}{{ rcard(r) }}{% endfor %}</div>
+{% endif %}
