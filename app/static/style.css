@@ -1031,3 +1031,16 @@ a.cast-card:active .cast-img, a.cast-card:hover .cast-img { transform: translate
 :root[data-theme="light"] .skel-row i { background: linear-gradient(90deg, rgba(0,0,0,.04), rgba(0,0,0,.09), rgba(0,0,0,.04)); background-size: 200% 100%; }
 @media (prefers-reduced-motion: reduce) { .skel-row i, .live-ctl .live-dot, .live-ctl.busy .live-now { animation: none; } }
 .copy-box code.break { overflow-wrap: anywhere; white-space: normal; }
+
+/* ===================== v0.17.1 thinner Recently added cards (Tautulli Remote size) ===================== */
+.ra-list { gap: 9px; }
+.ra-card { min-height: 0; padding: 5px; gap: 12px; border-radius: 14px; }
+.ra-poster { width: 70px; border-radius: 9px; align-self: stretch; aspect-ratio: auto; min-height: 105px; }
+.ra-poster.sq { aspect-ratio: 1; min-height: 0; }
+.ra-poster b { font-size: 22px; }
+.ra-body { gap: 1px; padding: 3px 24px 3px 0; }
+.ra-title { font-size: 16.5px; line-height: 1.22; }
+.ra-sub { font-size: 13.5px; }
+.ra-added { font-size: 13px; padding-top: 4px; }
+.ra-icon { right: 10px; bottom: 9px; }
+.ra-icon svg { width: 20px; height: 20px; }
