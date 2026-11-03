@@ -603,6 +603,12 @@ def _clean_libraries(libs: list[dict], servers: list[dict]) -> dict[int, list[di
     return {k: v for k, v in out.items() if v}
 
 
+def _is_internal(url: str | None) -> bool:
+    from urllib.parse import urlsplit
+    host = (urlsplit(url or "").hostname or "").lower()
+    return bool(url) and ("." not in host or host == "localhost" or host.startswith(("10.", "192.168.", "127.", "172.")))
+
+
 def _invite_url(svc: Service, url: str | None, code: str | None) -> str | None:
     """Wizarr often answers with just '/j/CODE' (or its internal docker address): make it a full link people can open."""
     from urllib.parse import urlsplit
@@ -613,9 +619,7 @@ def _invite_url(svc: Service, url: str | None, code: str | None) -> str | None:
         return None
     if url.startswith(("http://", "https://")):
         u = urlsplit(url)
-        host = (u.hostname or "").lower()
-        internal = ("." not in host or host.startswith(("10.", "192.168.", "127.", "172.")) or host == "localhost")
-        if svc.public_url and internal:
+        if svc.public_url and _is_internal(url):
             return base + (u.path or "") + (f"?{u.query}" if u.query else "")
         return url
     return base + ("" if url.startswith("/") else "/") + url
@@ -669,7 +673,8 @@ async def create_invite(sid: int, request: Request, user: User = Depends(admin_u
         request.session["flash"] = {"ok": False, "msg": err}
     else:
         request.session["new_invite"] = {"url": _invite_url(svc, inv.get("url"), inv.get("code")), "code": inv.get("code"),
-                                         "server": inv.get("display_name"), "sid": svc.id, "no_public": not svc.public_url}
+                                         "server": inv.get("display_name"), "sid": svc.id,
+                                         "no_public": _is_internal(_invite_url(svc, inv.get("url"), inv.get("code")))}
         log.info("%s created Wizarr invite %s", user.name, inv.get("code"))
     return RedirectResponse("/invites", status_code=303)
 
