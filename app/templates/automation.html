@@ -279,12 +279,12 @@
     <div class="list">
       {% for r in p.requests or [] %}
       {% set st = rstatus.get(r.status, ('?', '')) %}
-      <div class="media-row">
-        {{ poster(None, 'movie' if r.type == 'movie' else 'tv', r._title) }}
+      <div class="media-row tap-row">
+        {{ poster(r._poster, 'movie' if r.type == 'movie' else 'tv', r._title) }}
         <div class="mr-body">
-          <div class="spread"><span class="ellip" style="flex:1;min-width:0"><strong>{{ r._title or ('TMDB ' ~ ((r.media or {}).tmdbId or '?')) }}</strong>{% if r._year %} <span class="muted">({{ r._year }})</span>{% endif %}</span>
+          <div class="spread"><span class="ellip" style="flex:1;min-width:0">{% if r._link %}<a class="row-link" href="{{ r._link }}" target="_blank" rel="noopener" title="Open in Seerr">{% endif %}<strong>{{ r._title or ('TMDB ' ~ ((r.media or {}).tmdbId or '?')) }}</strong>{% if r._year %} <span class="muted">({{ r._year }})</span>{% endif %}{% if r._link %}</a>{% endif %}</span>
             <span class="badge {{ st[1] }}">{{ st[0] }}</span></div>
-          <div class="meta">{{ 'Movie' if r.type == 'movie' else 'Series' }} · {{ (r.requestedBy or {}).displayName or '?' }} · {{ (r.createdAt or '')[:10] }}</div>
+          <div class="meta">{{ 'Movie' if r.type == 'movie' else 'Series' }}{% if r.seasons %} · {{ 'Season' if r.seasons|length == 1 else 'Seasons' }} {{ r.seasons|map(attribute='seasonNumber')|join(', ') }}{% endif %} · {{ (r.requestedBy or {}).displayName or '?' }} · {{ (r.createdAt or '')[:10] }}{% if r._link %} <span class="open-hint">Open in Seerr ↗</span>{% endif %}</div>
           {% if user.is_admin and r.status == 1 %}<div class="row" style="gap:8px;margin-top:8px">
             {{ act('/act/seerr/' ~ p.svc.id ~ '/' ~ r.id ~ '/approve', '✓ Approve', 'primary') }}
             {{ act('/act/seerr/' ~ p.svc.id ~ '/' ~ r.id ~ '/decline', '✕ Decline', 'danger', {}, 'Decline this request?') }}

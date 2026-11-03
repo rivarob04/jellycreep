@@ -287,10 +287,13 @@ class SeerrClient(Upstream):
             kind = "movie" if req.get("type") == "movie" else "tv"
             if not tmdb:
                 return
+            req["_link"] = f"{self.svc.link}/{kind}/{tmdb}"
             try:
                 d = await self.get(f"/api/v1/{kind}/{tmdb}")
                 req["_title"] = d.get("title") or d.get("name")
                 req["_year"] = (d.get("releaseDate") or d.get("firstAirDate") or "")[:4]
+                if d.get("posterPath"):
+                    req["_poster"] = f"https://image.tmdb.org/t/p/w185{d['posterPath']}"
             except UpstreamError:
                 pass
 
