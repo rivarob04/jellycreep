@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_seerr.html" import pcard %}
+{% block title %}{{ p.name }}{% endblock %}
+{% block content %}
+<a class="small back-link" href="javascript:history.back()">← Back</a>
+
+<section class="person-head mb">
+  <span class="person-photo"><b>{{ p.name[:1] }}</b>{% if p.photo %}<img src="{{ p.photo }}" alt="" onerror="this.remove()">{% endif %}</span>
+  <div class="person-info">
+    <h1>{{ p.name }}</h1>
+    {% if p.known_for %}<div class="small muted">{{ p.known_for }}</div>{% endif %}
+    {% if p.born %}<div class="small muted">Born {{ p.born }}{% if p.age is not none and not p.died %} (age {{ p.age }}){% endif %}{% if p.place %} · {{ p.place }}{% endif %}</div>{% endif %}
+    {% if p.died %}<div class="small muted">Died {{ p.died }}{% if p.age is not none %} (aged {{ p.age }}){% endif %}</div>{% endif %}
+    <div class="person-counts">
+      {% if p.movies %}<a class="badge" href="#movies">{{ p.movies|length }} movie{{ 's' if p.movies|length != 1 }}</a>{% endif %}
+      {% if p.shows %}<a class="badge" href="#shows">{{ p.shows|length }} show{{ 's' if p.shows|length != 1 }}</a>{% endif %}
+      {% set have = (p.movies + p.shows)|selectattr('status', 'equalto', 5)|list|length %}
+      {% if have %}<span class="badge b-ok">{{ have }} on Jellyfin</span>{% endif %}
+    </div>
+    {% if p.imdb %}<div class="lib-links" style="margin-top:8px"><a class="btn sm" href="https://www.imdb.com/name/{{ p.imdb }}/" target="_blank" rel="noopener">IMDb ↗</a>
+      <a class="btn sm" href="https://www.themoviedb.org/person/{{ p.id }}" target="_blank" rel="noopener">TMDB ↗</a></div>{% endif %}
+  </div>
+</section>
+
+{% if p.bio %}
+<div class="card mb lib-summary">
+  {% if p.bio|length > 300 %}<input type="checkbox" id="ovm" class="ovm" hidden>{% endif %}
+  <p class="lib-overview{{ ' clamp' if p.bio|length > 300 }}">{{ p.bio }}</p>
+  {% if p.bio|length > 300 %}<label for="ovm" class="ovm-btn small"></label>{% endif %}
+</div>
+{% endif %}
+
+{% if p.movies %}
+<h2 id="movies" class="section-title">Movies</h2>
+<div class="pgrid mb">{% for c in p.movies %}<div class="pgrid-item">{{ pcard(c) }}{% if c.role %}<span class="pcap muted prole">as {{ c.role }}</span>{% endif %}</div>{% endfor %}</div>
+{% endif %}
+{% if p.shows %}
+<h2 id="shows" class="section-title">Shows</h2>
+<div class="pgrid mb">{% for c in p.shows %}<div class="pgrid-item">{{ pcard(c) }}{% if c.role %}<span class="pcap muted prole">as {{ c.role }}</span>{% endif %}</div>{% endfor %}</div>
+{% endif %}
+{% if not (p.movies or p.shows) %}<div class="card empty"><div class="empty-icon">🎭</div>No credits found.</div>{% endif %}
+{% endblock %}

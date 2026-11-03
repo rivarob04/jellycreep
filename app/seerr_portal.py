@@ -302,7 +302,7 @@ async def detail(client, svc_id: int, mt: str, tmdb: int, me: int | None, *, eve
            "runtime": d.get("runtime") or ((d.get("episodeRunTime") or [None])[0]),
            "requests": reqs, "hidden_requests": max(0, hidden), "trailer": trailer,
            "network": ((d.get("networks") or [{}])[0] or {}).get("name") if mt == "tv" else None,
-           "seasons": []}
+           "cast": cast(d), "seasons": []}
     if mt == "tv":
         avail = {s.get("seasonNumber"): s.get("status") for s in mi.get("seasons") or []}
         asked: dict[int, int] = {}
@@ -326,6 +326,52 @@ async def detail(client, svc_id: int, mt: str, tmdb: int, me: int | None, *, eve
                                    "year": (s.get("airDate") or "")[:4], "tag": tag, "free": tag is None})
         out["free_seasons"] = [s["n"] for s in out["seasons"] if s["free"]]
     return out
+
+
+def cast(d: dict, n: int = 24) -> list[dict]:
+    """TMDB cast from Seerr's credits, in billing order."""
+    out, seen = [], set()
+    for c in sorted((d.get("credits") or {}).get("cast") or [], key=lambda c: c.get("order", 999)):
+        if not c.get("id") or c["id"] in seen:
+            continue
+        seen.add(c["id"])
+        out.append({"id": c["id"], "name": c.get("name") or "?", "role": c.get("character") or None,
+                    "photo": img(c.get("profilePath"), "w185")})
+    return out[:n]
+
+
+async def person(client, svc_id: int, pid: int) -> dict:
+    """An actor from TMDB (via Seerr): bio and every movie / show they're in, with request status."""
+    async def load():
+        p, credits = await asyncio.gather(client.get(f"/api/v1/person/{pid}"),
+                                          client.get(f"/api/v1/person/{pid}/combined_credits"))
+        p, credits = p or {}, credits or {}
+        movies, shows, seen = [], [], set()
+        for r in credits.get("cast") or []:
+            c = card(r)
+            if not c or (c["type"], c["id"]) in seen:
+                continue
+            seen.add((c["type"], c["id"]))
+            c["role"] = r.get("character") or None
+            c["date"] = r.get("releaseDate") or r.get("firstAirDate") or ""
+            (movies if c["type"] == "movie" else shows).append(c)
+        for lst in (movies, shows):
+            lst.sort(key=lambda c: c["date"] or "0000", reverse=True)
+        born, died = p.get("birthday"), p.get("deathday")
+        age = None
+        if born:
+            try:
+                b = datetime.fromisoformat(born[:10]).date()
+                e = datetime.fromisoformat(died[:10]).date() if died else datetime.now(timezone.utc).date()
+                age = e.year - b.year - ((e.month, e.day) < (b.month, b.day))
+            except ValueError:
+                pass
+        fmt = lambda s: (lambda d: f"{d:%B} {d.day}, {d.year}")(datetime.fromisoformat(s[:10])) if s else None  # noqa: E731
+        return {"id": pid, "name": p.get("name") or "Unknown", "bio": p.get("biography") or None,
+                "photo": img(p.get("profilePath"), "h632"), "born": fmt(born), "died": fmt(died), "age": age,
+                "place": p.get("placeOfBirth"), "known_for": p.get("knownForDepartment"), "imdb": p.get("imdbId"),
+                "movies": movies[:150], "shows": shows[:150]}
+    return await cached(("person", svc_id, pid), 3600, load)
 
 
 async def similar(client, svc_id: int, mt: str, tmdb: int) -> list[dict]:

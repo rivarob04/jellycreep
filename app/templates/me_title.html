@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_seerr.html" import pcard, req_item, quota_line, not_linked %}
+{% from "_seerr.html" import pcard, req_item, quota_line, not_linked, seerr_cast %}
 {% from "_watch.html" import watch_bar %}
 {% block title %}{{ t.title }}{% endblock %}
 {% block content %}
@@ -90,6 +90,8 @@
   {% if t.hidden_requests %}<p class="muted small">{{ t.hidden_requests }} request{{ 's' if t.hidden_requests != 1 }} by other people.</p>{% endif %}
 </div>
 {% endif %}
+
+{{ seerr_cast(t.cast) }}
 
 {% if similar %}
 <div class="spread section-title"><h2 style="margin:0">More like this</h2></div>

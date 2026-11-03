@@ -138,6 +138,10 @@ They never see other users, IP addresses, devices other than their own, download
 
 When a viewer's stream is being transcoded, JellyCreep explains why in plain English ("These subtitles have to be burned into the picture", "Your device can't play this audio track (TRUEHD)") and adds a tip they can act on. Their history marks each converted play with its reason, and the home page sums up how many recent plays were converted, the most common cause and the device it happened on.
 
+### Cast in Discover & Requests
+
+Every Discover title page (which Requests open too) has a **Cast** row from TMDB with photos and character names. Tap an actor to see their bio and full filmography from TMDB, with each title's status (Available ✓ / Requested / Pending). From there you can open any title to request it, or watch it if it's already in your libraries.
+
 ### Actor pages
 
 Tap any actor in a **Cast** row to see their photo, birth date and place, bio, IMDb/TMDB links, and every **Movie**, **Show** and **Guest appearance** of theirs in your library. Tap a title to open it. Jellyfin users only see titles from libraries their account can access.

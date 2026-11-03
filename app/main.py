@@ -1372,6 +1372,21 @@ async def page_discover(request: Request, q: str = "", row: str = "", page: int 
     return render(request, "me_discover.html", user, **ctx)
 
 
+@app.get("/me/discover/person/{pid}", response_class=HTMLResponse)
+async def page_seerr_person(request: Request, pid: int, user: User = Depends(current_user)):
+    """An actor's page in Discover: bio + every movie and show on TMDB, with request / Jellyfin status."""
+    if (r := _viewer_page(user)):
+        return r
+    sc = await _seerr(user)
+    if not sc:
+        return RedirectResponse("/me", status_code=303)
+    (p, err), jf = await asyncio.gather(safe(seerr_portal.person(sc["client"], sc["svc"].id, pid)), _jf_lookup(user))
+    if err or not p:
+        raise HTTPException(404, "Couldn't find that person.")
+    p = {**p, "movies": _mark_watchable(jf, p["movies"]), "shows": _mark_watchable(jf, p["shows"])}
+    return render(request, "me_person.html", user, p=p, seerr=sc, ambient=None)
+
+
 @app.get("/me/discover/{mt}/{tmdb}", response_class=HTMLResponse)
 async def page_title(request: Request, mt: str, tmdb: int, user: User = Depends(current_user)):
     if (r := _viewer_page(user)):
