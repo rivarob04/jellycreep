@@ -1151,7 +1151,8 @@ async def _item_page(request: Request, user: User, sid: int, item_id: str, tab: 
     keys = [k for k, _ in tabs]
     tab = tab if tab in keys else ("episodes" if d["type"] == "Season" else "details")
     ctx: dict[str, Any] = {"d": d, "tab": tab, "tabs": tabs, "sid": svc.id, "lib": _lib_base(user),
-                           "rows": [], "history": [], "parent": None}
+                           "rows": [], "history": [], "parent": None, "watch": None,
+                           "flash": request.session.pop("flash", None)}
     if tab == "seasons":
         ctx["rows"], ctx["err"] = await safe(library.seasons(client, uid, d["id"]))
     elif tab == "episodes":
@@ -1162,10 +1163,61 @@ async def _item_page(request: Request, user: User, sid: int, item_id: str, tab: 
         ctx["parent"] = (d["season_id"], f"Season {d['season_index']}" if d.get("season_index") is not None else "Season")
     elif d["type"] == "Season" and d.get("series_id"):
         ctx["parent"] = (d["series_id"], d["title"] or "Series")
+    # "Watch on Jellyfin": the title's page in Jellyfin web, and the person's Jellyfin apps it can start playing on
+    resume_ok = user.is_viewer           # staff browse as the admin account, whose resume points aren't theirs
+    target, jf_sid, devs = await asyncio.gather(
+        library.play_target(client, uid, d, resume_ok=resume_ok), library.server_id(client, svc.id),
+        library.devices(client, uid, only_user=user.jf_id if user.is_viewer else None) if (user.is_viewer or user.is_admin) else asyncio.sleep(0, []))
+    if target:
+        ctx["watch"] = {**target, "url": f"{svc.link}/web/#/details?id={target['id']}" + (f"&serverId={jf_sid}" if jf_sid else ""),
+                        "devices": devs, "internal": not svc.public_url}
     imgp = "/me/img" if user.is_viewer else "/img"
     if d.get("backdrop_id"):
         ctx["ambient"] = f"{imgp}/{svc.id}/{d['backdrop_id']}?t=Backdrop&h=720"
     return render(request, "library_item.html", user, **ctx)
+
+
+async def _play_item(request: Request, user: User, sid: int, item_id: str):
+    await verify_csrf(request)
+    if not item_id.isalnum() or not (user.is_viewer or user.is_admin):
+        raise HTTPException(404)
+    svc = _lib_server(user, sid)
+    if not svc or svc.id != sid:
+        raise HTTPException(404)
+    form = await request.form()
+    session_id, back = str(form.get("session") or ""), str(form.get("back") or "")
+    if not back.startswith(_lib_base(user) + "/"):
+        back = f"{_lib_base(user)}/{sid}/{item_id}"
+    client = await client_for(svc)
+    uid, err = await safe(library.browse_as(client, svc.id, user))
+    # the person must be able to see the item, and the device must be one of theirs
+    d, err = (await safe(library.item(client, uid, item_id, show_paths=False))) if uid else (None, err)
+    devs = await library.devices(client, uid, only_user=user.jf_id if user.is_viewer else None) if uid else []
+    dev = next((x for x in devs if x["id"] == session_id), None)
+    if err or not d:
+        request.session["flash"] = {"ok": False, "msg": "That title isn't available to your account."}
+        return RedirectResponse(back, status_code=303)
+    if not dev:
+        request.session["flash"] = {"ok": False, "msg": "That device isn't available any more — open Jellyfin on it and try again."}
+        return RedirectResponse(back, status_code=303)
+    start = int(d.get("resume_ticks") or 0) if (form.get("resume") == "1" and user.is_viewer) else 0
+    _, err = await safe(library.play_on(client, session_id, item_id, start))
+    log.info("%s started %s on %s (%s)", user.name, item_id, dev["name"], dev["client"])
+    request.session["flash"] = ({"ok": False, "msg": f"Couldn't start playback: {err}"} if err else
+                                {"ok": True, "msg": f"▶ Playing on {dev['name']}."})
+    return RedirectResponse(back, status_code=303)
+
+
+@app.post("/library/{sid}/{item_id}/play")
+async def act_play(request: Request, sid: int, item_id: str, user: User = Depends(admin_user)):
+    return await _play_item(request, user, sid, item_id)
+
+
+@app.post("/me/library/{sid}/{item_id}/play")
+async def act_my_play(request: Request, sid: int, item_id: str, user: User = Depends(current_user)):
+    if not user.is_viewer:
+        raise HTTPException(404)
+    return await _play_item(request, user, sid, item_id)
 
 
 @app.get("/library/{sid}/{item_id}", response_class=HTMLResponse)

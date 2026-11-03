@@ -138,6 +138,14 @@ They never see other users, IP addresses, devices other than their own, download
 
 When a viewer's stream is being transcoded, JellyCreep explains why in plain English ("These subtitles have to be burned into the picture", "Your device can't play this audio track (TRUEHD)") and adds a tip they can act on. Their history marks each converted play with its reason, and the home page sums up how many recent plays were converted, the most common cause and the device it happened on.
 
+### Watch on Jellyfin
+
+Every movie, show, season and episode page has a **▶ Watch on Jellyfin** button. It opens that title in Jellyfin (in a new tab, or in your browser if JellyCreep is installed as an app). For a show or season it picks the next episode to watch, and it says **Resume … from 12:34** when you're part-way through.
+
+**Play on…** lists the Jellyfin apps you have open: TV app, phone app, a browser tab. Pick one and it starts playing there straight away, resuming where you left off. Jellyfin users only see their own devices. Admins see everyone's. Members only get the Watch button.
+
+For the Watch button to work away from home, set the Jellyfin connection's **Link URL** (Settings → Jellyfin → Link URL, or `JELLYFIN_PUBLIC_URL`) to the address your phone uses, e.g. `https://jellyfin.example.com`. Otherwise JellyCreep's internal address is used.
+
 ### Phone notifications (everyone)
 
 Tap the **🔔** in the top bar (or **Notifications** in the menu), then tap **Turn on for this device**. JellyCreep then sends real notifications with its own icon to that phone or computer, even while the app is closed, using Web Push. Nothing else is needed: no ntfy, no extra app, and no Firebase account.

@@ -229,6 +229,7 @@ def details(d: dict, *, show_paths: bool) -> dict:
                       (d.get("SeasonId") or d.get("SeriesId") or d.get("Id"))),
         "thumb_id": d.get("Id") if is_ep and (d.get("ImageTags") or {}).get("Primary") else None,
         "backdrop_id": _backdrop_id(d), "played": (d.get("UserData") or {}).get("Played"),
+        "resume_ticks": (d.get("UserData") or {}).get("PlaybackPositionTicks") or 0,
     }
 
 
@@ -257,3 +258,84 @@ async def episodes(client, uid: str, series_id: str, season_id: str) -> list[dic
                     "aired": _fmt_date(e.get("PremiereDate")), "runtime": _mins(e.get("RunTimeTicks")),
                     "played": (e.get("UserData") or {}).get("Played")})
     return out
+
+
+# ----------------------------------------------------------------------------- watching
+_SERVER_IDS: dict[int, tuple[float, str | None]] = {}
+
+
+async def server_id(client, svc_id: int) -> str | None:
+    """Jellyfin's own server id (used in its web links)."""
+    hit = _SERVER_IDS.get(svc_id)
+    if hit and hit[0] > time.time():
+        return hit[1]
+    try:
+        sid = (await client.get("/System/Info/Public") or {}).get("Id")
+    except UpstreamError:
+        sid = None
+    _SERVER_IDS[svc_id] = (time.time() + 3600, sid)
+    return sid
+
+
+def clock(ticks: int) -> str:
+    secs = int(ticks / 10_000_000)
+    h, m, s = secs // 3600, secs // 60 % 60, secs % 60
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def _target(e: dict, resume_ok: bool) -> dict:
+    ud = e.get("UserData") or {}
+    pos = ud.get("PlaybackPositionTicks") or 0 if resume_ok else 0
+    code = ep_code(e).replace(" • ", "") if e.get("Type") == "Episode" else ""
+    return {"id": e.get("Id"), "code": code, "name": e.get("Name"), "resume_ticks": pos,
+            "resume": clock(pos) if pos > 600_000_000 else None}   # ignore the first minute
+
+
+async def play_target(client, uid: str, d: dict, *, resume_ok: bool) -> dict | None:
+    """What 'Watch' should start: the title itself, or for a show/season the next episode to watch."""
+    t = d["type"]
+    if t in ("Movie", "Episode", "Video", "MusicVideo"):
+        return _target({"Id": d["id"], "Type": t, "Name": d["name"], "ParentIndexNumber": d.get("season_index"),
+                        "IndexNumber": d.get("index"), "UserData": {"PlaybackPositionTicks": d.get("resume_ticks")}}, resume_ok)
+    try:
+        if t == "Series":
+            nxt = await client.get("/Shows/NextUp", params={"userId": uid, "seriesId": d["id"], "Limit": "1",
+                                                            "Fields": "UserData", "EnableResumable": "true"}) or {}
+            items = nxt.get("Items") or []
+            if not items:
+                eps = await client.get(f"/Shows/{d['id']}/Episodes", params={"userId": uid, "Limit": "1", "Fields": "UserData"}) or {}
+                items = eps.get("Items") or []
+        elif t == "Season":
+            eps = await client.get(f"/Shows/{d['series_id']}/Episodes", params={"userId": uid, "seasonId": d["id"], "Fields": "UserData"}) or {}
+            all_eps = eps.get("Items") or []
+            items = [e for e in all_eps if not (e.get("UserData") or {}).get("Played")][:1] or all_eps[:1]
+        else:
+            return None
+    except UpstreamError:
+        return None
+    return _target(items[0], resume_ok) if items else None
+
+
+async def devices(client, uid: str, *, only_user: str | None) -> list[dict]:
+    """Jellyfin apps that can be told to start playing (TV apps, phone apps, browsers)."""
+    try:
+        data = await client.get("/Sessions", params={"controllableByUserId": uid, "activeWithinSeconds": "1800"}) or []
+    except UpstreamError:
+        return []
+    out = []
+    for s in data:
+        if not s.get("SupportsRemoteControl") or (s.get("Client") or "").startswith("JellyCreep"):
+            continue
+        if only_user and (s.get("UserId") or "").replace("-", "").lower() != only_user:
+            continue
+        playing = (s.get("NowPlayingItem") or {}).get("Name")
+        out.append({"id": s.get("Id"), "name": s.get("DeviceName") or s.get("Client") or "Jellyfin",
+                    "client": s.get("Client"), "user": s.get("UserName"), "playing": playing})
+    return out
+
+
+async def play_on(client, session_id: str, item_id: str, start_ticks: int = 0) -> None:
+    params = {"playCommand": "PlayNow", "itemIds": item_id}
+    if start_ticks:
+        params["startPositionTicks"] = str(int(start_ticks))
+    await client.post(f"/Sessions/{session_id}/Playing", params=params, expect_json=False)
