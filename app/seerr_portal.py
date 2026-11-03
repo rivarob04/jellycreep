@@ -165,10 +165,18 @@ async def region(client, svc_id: int) -> str:
     """Seerr's configured region (Settings → General → Discover region), for local release dates."""
     async def load():
         try:
-            return ((await client.get("/api/v1/settings/main")) or {}).get("region") or ""
-        except UpstreamError:
+            data = await client.get("/api/v1/settings/main")
+        except Exception:  # noqa: BLE001 – only used to pick local dates; never break the page
             return ""
+        return str(data.get("region") or "") if isinstance(data, dict) else ""
     return await cached(("region", svc_id), 3600, load)
+
+
+def _safe_release(d: dict, mt: str, reg: str) -> dict:
+    try:
+        return release_info(d, mt, reg)
+    except Exception:  # noqa: BLE001 – odd data from Seerr: just leave the dates out
+        return {"rows": [], "status": None}
 
 
 def release_info(d: dict, mt: str, reg: str) -> dict:
@@ -400,7 +408,7 @@ async def detail(client, svc_id: int, mt: str, tmdb: int, me: int | None, *, eve
            "runtime": d.get("runtime") or ((d.get("episodeRunTime") or [None])[0]),
            "requests": reqs, "hidden_requests": max(0, hidden), "trailer": trailer,
            "network": ((d.get("networks") or [{}])[0] or {}).get("name") if mt == "tv" else None,
-           "cast": cast(d), "release": release_info(d, mt, reg), "seasons": []}
+           "cast": cast(d), "release": _safe_release(d, mt, reg), "seasons": []}
     if mt == "tv":
         # each season's own status from Seerr: 2 pending, 3 requested/processing, 4 partly, 5 available
         avail = {s.get("seasonNumber"): s.get("status") for s in mi.get("seasons") or []}
