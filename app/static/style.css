@@ -1030,3 +1030,4 @@ a.cast-card:active .cast-img, a.cast-card:hover .cast-img { transform: translate
 @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
 :root[data-theme="light"] .skel-row i { background: linear-gradient(90deg, rgba(0,0,0,.04), rgba(0,0,0,.09), rgba(0,0,0,.04)); background-size: 200% 100%; }
 @media (prefers-reduced-motion: reduce) { .skel-row i, .live-ctl .live-dot, .live-ctl.busy .live-now { animation: none; } }
+.copy-box code.break { overflow-wrap: anywhere; white-space: normal; }
