@@ -20,7 +20,8 @@
     <label>URL JellyCreep uses
       <input name="url" type="url" inputmode="url" value="{{ svc.url if svc }}" placeholder="{{ {'jellyfin': 'http://jellyfin:8096', 'jellystat': 'http://jellystat:3000', 'wizarr': 'http://wizarr:5690', 'sabnzbd': 'http://sabnzbd:8080'}.get(kind, 'https://' ~ kind ~ '.example.com') }}" required>
       <span class="hint">Internal (http://container:port) or the public URL behind Authentik.</span></label>
-    <label>Link URL (optional)<input name="public_url" type="url" inputmode="url" value="{{ svc.public_url or '' if svc }}" placeholder="URL your phone opens"></label>
+    <label>Link URL (optional)<input name="public_url" type="url" inputmode="url" value="{{ svc.public_url or '' if svc }}" placeholder="{{ 'https://jellyfin.example.com' if kind == 'jellyfin' else 'URL your phone opens' }}">
+      <span class="hint">{% if kind == 'jellyfin' %}The address you open Jellyfin at from your phone. Used by “Watch on Jellyfin”.{% else %}The address your phone opens for this app.{% endif %}</span></label>
 
     {% if kind in ('jellyfin', 'sonarr', 'radarr', 'lidarr', 'prowlarr', 'sabnzbd', 'jellyseerr', 'jellystat', 'wizarr') %}
     <label>API key{% if svc and svc.api_key_enc %} <span class="badge b-ok">saved</span>{% endif %}

@@ -48,7 +48,7 @@
   </details>
   {% endif %}
 </div>
-{% if watch.internal and user.is_admin %}<p class="hint" style="margin:-6px 0 12px">Tip: set Jellyfin's <b>Link URL</b> in Settings to the address your phone uses (e.g. https://jellyfin.example.com) so this button works away from home.</p>{% endif %}
+{% if watch.internal and user.is_admin %}<p class="hint" style="margin:-6px 0 12px">This button uses Jellyfin's internal address, so it only works at home. <a href="/settings?edit={{ sid }}#edit">Set Jellyfin's Link URL →</a> to the address your phone uses (e.g. https://jellyfin.example.com).</p>{% endif %}
 {% if not watch.devices and (user.is_viewer or user.is_admin) %}<p class="hint" style="margin:-6px 0 12px">Have Jellyfin open on your TV or phone? It'll show up here under <b>Play on…</b> so you can start it in one tap.</p>{% endif %}
 {% endif %}
 
