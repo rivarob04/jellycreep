@@ -48,6 +48,11 @@
     {% if user.is_admin %}<a href="/settings" class="{{ 'on' if path.startswith('/settings') }}">Settings</a>{% endif %}
   </nav>
   {% endif %}
+  {% set search_to = ('/me/discover' if portal_seerr else '/me/library') if user.is_viewer else '/library' %}
+  <form class="top-search" method="get" action="{{ search_to }}" role="search">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    <input type="search" name="q" value="{{ request.query_params.get('q', '') }}" placeholder="{{ 'Search movies & series' if search_to == '/me/discover' else 'Search your library' }}" enterkeyhint="search" autocomplete="off" aria-label="Search">
+  </form>
   <div class="spacer"></div>
   <a class="bell-btn{{ ' on' if path.endswith('/notifications') }}" href="{{ '/me' if user.is_viewer else '' }}/notifications" aria-label="Notifications">
     <svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></a>

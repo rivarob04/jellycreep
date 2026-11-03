@@ -80,3 +80,18 @@
 </div>
 {% endif %}
 {% endmacro %}
+
+{# Seerr-style wide request card: backdrop, year, title, who asked, seasons, status, poster #}
+{% macro rwide(r) %}
+<a class="rwide" href="/me/discover/{{ r.type }}/{{ r.tmdb }}"{% if r.backdrop %} style="--bd:url('{{ r.backdrop }}')"{% endif %}>
+  <span class="rw-body">
+    {% if r.year %}<span class="rw-year">{{ r.year }}</span>{% endif %}
+    <span class="rw-title">{{ r.title }}</span>
+    <span class="rw-who"><span class="avatar xs" style="background:{{ r.colour }}">{{ r.initial }}</span>{{ r.by }}</span>
+    {% if r.seasons %}<span class="rw-row"><span class="rw-k">{{ 'Season' if r.seasons|length == 1 else 'Seasons' }}</span>{% for n in r.seasons[:5] %}<i class="rw-n">{{ n }}</i>{% endfor %}{% if r.seasons|length > 5 %}<i class="rw-n">+{{ r.seasons|length - 5 }}</i>{% endif %}</span>{% endif %}
+    <span class="rw-row"><span class="rw-k">Status</span><span class="badge {{ r.badge[1] }}">{{ r.badge[0] }}</span>{% if r.is4k %}<span class="badge">4K</span>{% endif %}</span>
+    {% if r.progress is not none %}<span class="pbar rw-bar"><i style="width:{{ r.progress }}%"></i></span>{% endif %}
+  </span>
+  <span class="rw-poster">{% if r.poster %}<img loading="lazy" src="{{ r.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ r.title[:1] }}</b></span>
+</a>
+{% endmacro %}

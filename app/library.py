@@ -470,3 +470,10 @@ async def person(client, uid: str, person_id: str) -> dict:
         "guest": [{"id": e.get("Id"), "series": e.get("SeriesName"), "series_id": e.get("SeriesId"), "name": e.get("Name"),
                    "code": ep_code(e)} for e in eps if e.get("SeriesId") not in show_ids][:40],
     }
+
+
+async def search(client, uid: str, q: str, limit: int = 60) -> list[dict]:
+    data = await _get(client, "/Items", uid, {"searchTerm": q, "Recursive": "true", "Limit": str(limit),
+                                              "IncludeItemTypes": "Movie,Series,MusicAlbum",
+                                              "Fields": "DateCreated,ProductionYear,ChildCount,ParentId"}) or {}
+    return [card(i) for i in data.get("Items") or []]

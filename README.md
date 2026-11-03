@@ -138,6 +138,15 @@ They never see other users, IP addresses, devices other than their own, download
 
 When a viewer's stream is being transcoded, JellyCreep explains why in plain English ("These subtitles have to be burned into the picture", "Your device can't play this audio track (TRUEHD)") and adds a tip they can act on. Their history marks each converted play with its reason, and the home page sums up how many recent plays were converted, the most common cause and the device it happened on.
 
+### Desktop layout
+
+On wide screens (1000 px and up), JellyCreep uses a Seerr-style layout:
+- A fixed left sidebar with the logo, your name, every page (current one highlighted), theme and glass switches, Sign out and the version.
+- A full-width search bar along the top. Jellyfin users search Discover, or their library if Seerr isn't set up. Admins search the Jellyfin library.
+- Discover opens with **Recently Added** (from the person's own Jellyfin), then **Recent Requests** as wide cards (backdrop, year, title, who asked, seasons, status, poster), then larger poster rows.
+
+Phones and tablets keep the slide-out menu.
+
 ### Faster Home page & live refresh
 
 - Home appears straight away with what's playing and your stats. The rows that need other apps (Coming up, New on Jellyfin, Requests) fill in a moment later, each on its own. They have an 8-second limit, so a slow or offline Sonarr/Radarr/Seerr never holds up the page.

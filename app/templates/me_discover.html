@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% from "_seerr.html" import pcard, rcard, quota_line, not_linked %}
+{% from "_seerr.html" import pcard, rcard, rwide, quota_line, not_linked %}
 {% block title %}Discover{% endblock %}
 {% block content %}
 {% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}
-<form class="disc-search" method="get" action="/me/discover" role="search">
+<form class="disc-search hide-desk" method="get" action="/me/discover" role="search">
   <input type="search" name="q" value="{{ q }}" placeholder="Search movies & series" enterkeyhint="search" autocomplete="off" aria-label="Search">
   <button class="btn primary">Search</button>
 </form>
@@ -24,9 +24,21 @@
 
 {% else %}
 {{ quota_line(quota) }}
+{% if jf_added %}
+<div class="spread section-title"><h2 style="margin:0">Recently Added</h2><a class="small" href="/me/library">See all →</a></div>
+<div class="prow mb">
+  {% for i in jf_added %}{% set pid = i.SeriesId if i.Type == 'Episode' else i.Id %}
+  <div class="pcard"><a class="pcard-in" href="/me/library/{{ jf_sid }}/{{ i.Id }}" title="{{ i.SeriesName ~ ' – ' if i.SeriesName }}{{ i.Name }}">
+    <span class="pimg"><img loading="lazy" src="{{ imgp }}/{{ jf_sid }}/{{ pid }}?h=360" alt="" onerror="this.remove()"><b>{{ (i.SeriesName or i.Name or '?')[:1] }}</b>
+      <i class="pchip b-ok">✓</i><em class="ptype">{{ 'Series' if i.Type == 'Episode' else ('Album' if i.Type == 'MusicAlbum' else 'Movie') }}</em></span>
+    <span class="pcap">{{ i.SeriesName or i.Name }}</span>
+    <span class="pcap muted">{% if i.Type == 'Episode' %}S{{ i.ParentIndexNumber or 0 }} • E{{ i.IndexNumber or 0 }}{% else %}{{ i.ProductionYear or '' }}{% endif %}</span></a></div>
+  {% endfor %}
+</div>
+{% endif %}
 {% if recent %}
-<div class="spread section-title"><h2 style="margin:0">{{ 'Recently requested' if seerr.everyone else 'Your requests' }}</h2><a class="small" href="/me/requests">All →</a></div>
-<div class="prow mb">{% for r in recent %}{{ rcard(r) }}{% endfor %}</div>
+<div class="spread section-title"><h2 style="margin:0">{{ 'Recent Requests' if seerr.everyone else 'Your requests' }}</h2><a class="small" href="/me/requests">All →</a></div>
+<div class="rwide-row mb">{% for r in recent %}{{ rwide(r) }}{% endfor %}</div>
 {% endif %}
 {% if error and not rows %}<div class="notice bad small">Couldn't reach Seerr: {{ error }}</div>{% endif %}
 {% for r in rows %}

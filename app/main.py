@@ -1262,13 +1262,16 @@ def _lib_server(user: User, sid: int | None) -> Service | None:
 async def _recent_page(request: Request, user: User, type: str, server: int | None):
     svc = _lib_server(user, server)
     kind = type if type in library.KINDS else "all"
+    q = (request.query_params.get("q") or "").strip()[:100]
     items, err = [], None
     if svc:
         client = await client_for(svc)
         uid, err = await safe(library.browse_as(client, svc.id, user))
-        if uid:
+        if uid and q:
+            items, err = await safe(library.search(client, uid, q))
+        elif uid:
             items, err = await safe(library.latest(client, uid, kind))
-    return render(request, "library_recent.html", user, items=items or [], err=err, kind=kind, kinds=library.KINDS,
+    return render(request, "library_recent.html", user, items=items or [], err=err, kind=kind, kinds=library.KINDS, q=q,
                   svc=svc, servers=[] if user.is_viewer else services(("jellyfin",)), lib=_lib_base(user))
 
 
@@ -1280,7 +1283,7 @@ async def page_library(request: Request, type: str = "all", server: int | None =
 @app.get("/me/library", response_class=HTMLResponse)
 async def page_my_library(request: Request, type: str = "all", user: User = Depends(current_user)):
     if not user.is_viewer:
-        return RedirectResponse(f"/library?type={type}", status_code=303)
+        return RedirectResponse(f"/library?type={type}&q={request.query_params.get('q') or ''}", status_code=303)
     return await _recent_page(request, user, type, None)
 
 
@@ -1507,6 +1510,12 @@ async def page_discover(request: Request, q: str = "", row: str = "", page: int 
                 safe(seerr_portal.feed(c, sid, sc["uid"], everyone=sc["everyone"], take=16)),
                 seerr_portal.quota(c, sc["uid"]) if sc["uid"] else asyncio.sleep(0))
             ctx.update(rows=rows or [], recent=(recent or ([], 0))[0], error=e1, quota=quota)
+        if not ctx["q"] and not ctx["row"] and login_settings()["recent"]:
+            try:
+                ctx["jf_added"] = await asyncio.wait_for(_section_data(user, "added"), timeout=6)
+            except Exception:  # noqa: BLE001
+                ctx["jf_added"] = []
+            ctx["jf_sid"] = user.server_id
         jf = await _jf_lookup(user)
         ctx["results"] = _mark_watchable(jf, ctx["results"])
         ctx["recent"] = _mark_watchable(jf, ctx["recent"], "tmdb")
