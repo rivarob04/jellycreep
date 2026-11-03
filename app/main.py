@@ -884,7 +884,7 @@ async def _keep_warm() -> None:
     while True:
         try:
             if login_settings()["enabled"] and login_settings()["upcoming"]:
-                for days in (14, 30):
+                for days in (14, 90):
                     val = await asyncio.wait_for(_upcoming_fetch(days), timeout=60)
                     _TTL[("upcoming", days)] = (time.monotonic() + 330, val)
         except Exception:  # noqa: BLE001
@@ -910,7 +910,7 @@ async def _upcoming_fetch(days: int) -> list[dict]:
         i["link"] = None    # don't expose *arr admin URLs to viewers
         if i.get("poster"):
             i["poster"] = "/me" + i["poster"]
-    return out[:30]
+    return out[:600]
 
 
 @app.get("/me/img/{server_id}/{item_id}")
@@ -1041,8 +1041,20 @@ async def page_my_history(request: Request, page: int = 1, q: str | None = None,
 async def page_my_upcoming(request: Request, user: User = Depends(current_user)):
     if not user.is_viewer:
         return RedirectResponse("/automation", status_code=303)
-    up = await _upcoming(30) if login_settings()["upcoming"] else []
-    return render(request, "me_upcoming.html", user, upcoming=up)
+    # how far ahead to look: chosen per person (remembered), from one shared 90-day fetch
+    days = request.query_params.get("days")
+    if days in UPCOMING_RANGES:
+        request.session["up_days"] = days
+    days = request.session.get("up_days") or "14"
+    kind = request.query_params.get("kind") or "all"
+    up = []
+    if login_settings()["upcoming"]:
+        end = datetime.now(TZ).date() + timedelta(days=int(days))
+        up = [i for i in await _upcoming(90) if i["day"] <= end and (kind == "all" or i["kind"] == kind)]
+    return render(request, "me_upcoming.html", user, upcoming=up, days=days, ranges=UPCOMING_RANGES, kind=kind)
+
+
+UPCOMING_RANGES = {"7": "1 week", "14": "2 weeks", "30": "1 month", "90": "3 months"}
 
 
 # --- Phone / browser notifications (Web Push) — everyone -------------------------------
@@ -1640,7 +1652,7 @@ async def _upcoming_page(request: Request, user: User, sid: int, ref: str):
         raise HTTPException(404)
     if user.is_viewer:
         # only things that are actually on this person's Coming up list
-        if not login_settings()["upcoming"] or not any(i.get("sid") == sid and i.get("ref") == ref for i in await _upcoming(30)):
+        if not login_settings()["upcoming"] or not any(i.get("sid") == sid and i.get("ref") == ref for i in await _upcoming(90)):
             raise HTTPException(404)
     with SessionLocal() as db:
         svc = db.get(Service, sid)
