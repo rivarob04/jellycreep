@@ -32,6 +32,15 @@
 <p class="small watch-more"><a href="{{ watch.page }}">{{ 'Seasons, episodes & details' if t.type == 'tv' else 'Details & your history' }} →</a></p>
 {% endif %}
 
+{% if t.release and (t.release.rows or t.release.status) %}
+<div class="card mb up-when release-card">
+  {% for r in t.release.rows %}
+  <div class="spread"><span class="muted">{{ r.label }}</span>
+    <span class="rel-when"><b>{{ r.date }}</b>{% if r.extra %}<small>{{ r.extra }}</small>{% endif %}{% if r.rel %}<small class="{{ 'soon' if r.future }}">{{ r.rel }}</small>{% endif %}</span></div>
+  {% endfor %}
+  {% if t.release.status %}<div class="spread"><span class="muted">Status</span><b>{{ t.release.status }}</b></div>{% endif %}
+</div>
+{% endif %}
 {% if t.tagline %}<p class="tagline">“{{ t.tagline }}”</p>{% endif %}
 {% if t.overview %}<p class="overview">{{ t.overview }}</p>{% endif %}
 {% if t.trailer %}<p><a class="btn sm" href="{{ t.trailer }}" target="_blank" rel="noopener">▶ Watch trailer</a></p>{% endif %}

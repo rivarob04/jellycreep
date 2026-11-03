@@ -116,6 +116,97 @@ def ago(dt: datetime | None) -> str:
     return "just now"
 
 
+# --------------------------------------------------------------------------- release dates
+from datetime import date as _date
+
+
+def _d(s: str | None) -> _date | None:
+    try:
+        return _date.fromisoformat((s or "")[:10]) if s else None
+    except ValueError:
+        return None
+
+
+def nice_date(d: _date | None, weekday: bool = True) -> str:
+    if not d:
+        return ""
+    return (f"{d:%A}, " if weekday else "") + f"{d:%B} {d.day}, {d.year}"
+
+
+def short_date(d: _date | None) -> str:
+    return f"{d:%b} {d.day}, {d.year}" if d else ""
+
+
+def relative(d: _date | None) -> str | None:
+    if not d:
+        return None
+    n = (d - _date.today()).days
+    if n == 0:
+        return "today"
+    if n == 1:
+        return "tomorrow"
+    if n == -1:
+        return "yesterday"
+    if 0 < n < 60:
+        return f"in {n} days"
+    if 60 <= n < 400:
+        return f"in {round(n / 30)} months"
+    if -60 < n < 0:
+        return f"{-n} days ago"
+    return None
+
+
+RELEASE_TYPES = {1: "Premiere", 2: "Limited release", 3: "In cinemas", 4: "Digital", 5: "Blu-ray / DVD", 6: "On TV"}
+TV_STATUS = {"Returning Series": "Returning series", "Ended": "Ended", "Canceled": "Cancelled",
+             "In Production": "In production", "Planned": "Planned", "Pilot": "Pilot"}
+
+
+async def region(client, svc_id: int) -> str:
+    """Seerr's configured region (Settings → General → Discover region), for local release dates."""
+    async def load():
+        try:
+            return ((await client.get("/api/v1/settings/main")) or {}).get("region") or ""
+        except UpstreamError:
+            return ""
+    return await cached(("region", svc_id), 3600, load)
+
+
+def release_info(d: dict, mt: str, reg: str) -> dict:
+    rows: list[dict] = []
+
+    def add(label: str, day: _date | None, extra: str | None = None):
+        if day:
+            rows.append({"label": label, "date": nice_date(day), "rel": relative(day), "extra": extra,
+                         "future": day > _date.today()})
+
+    status = None
+    if mt == "movie":
+        by_country = {r.get("iso_3166_1"): r.get("release_dates") or [] for r in (d.get("releases") or {}).get("results") or []}
+        picks = by_country.get(reg) or by_country.get("CA") or by_country.get("US") or []
+        seen = set()
+        for rd in sorted(picks, key=lambda x: x.get("release_date") or ""):
+            t = rd.get("type")
+            if t in (3, 4, 5) and t not in seen:          # cinemas, digital, physical
+                seen.add(t)
+                add(RELEASE_TYPES[t], _d(rd.get("release_date")))
+        if not rows:
+            add("Release date", _d(d.get("releaseDate")))
+        status = d.get("status") if d.get("status") not in (None, "Released") else None
+    else:
+        first = _d(d.get("firstAirDate"))
+        add("Premieres" if first and first > _date.today() else "First aired", first)
+        nxt = d.get("nextEpisodeToAir") or {}
+        if nxt.get("airDate"):
+            code = f"S{nxt.get('seasonNumber')} • E{nxt.get('episodeNumber')}"
+            name = nxt.get("name")
+            if not (first and _d(nxt["airDate"]) == first):
+                add("Next episode", _d(nxt["airDate"]), code + (f" · {name}" if name and not name.startswith("Episode ") else ""))
+        if d.get("status") in ("Ended", "Canceled"):
+            add("Last aired", _d(d.get("lastAirDate")))
+        status = TV_STATUS.get(d.get("status"), d.get("status"))
+    return {"rows": rows, "status": status}
+
+
 def card(r: dict) -> dict | None:
     mt = r.get("mediaType") or ("tv" if r.get("firstAirDate") or (r.get("name") and not r.get("title")) else "movie")
     if mt not in ("movie", "tv") or not r.get("id"):
@@ -127,7 +218,13 @@ def card(r: dict) -> dict | None:
             "poster": img(r.get("posterPath")), "backdrop": img(r.get("backdropPath"), "w1280"),
             "rating": round(r["voteAverage"], 1) if r.get("voteAverage") else None,
             "overview": r.get("overview") or "", "status": st, "badge": MEDIA_STATUS.get(st),
-            "status4k": mi.get("status4k") or 1, "jf_hint": mi.get("jellyfinMediaId")}
+            "status4k": mi.get("status4k") or 1, "jf_hint": mi.get("jellyfinMediaId"),
+            **_soon(r.get("releaseDate") or r.get("firstAirDate"))}
+
+
+def _soon(raw: str | None) -> dict:
+    d = _d(raw)
+    return {"soon": short_date(d) if d and d > _date.today() else None}
 
 
 def perms(u: dict | None) -> dict:
@@ -291,7 +388,8 @@ async def feed(client, svc_id: int, me: int | None, *, everyone: bool, can_manag
 
 
 async def detail(client, svc_id: int, mt: str, tmdb: int, me: int | None, *, everyone: bool, can_manage: bool) -> dict:
-    d = await client.get(f"/api/v1/{mt}/{tmdb}") or {}
+    d, reg = await asyncio.gather(client.get(f"/api/v1/{mt}/{tmdb}"), region(client, svc_id))
+    d = d or {}
     c = card({**d, "mediaType": mt}) or {}
     mi = d.get("mediaInfo") or {}
     reqs = [x for x in (_req_row({**r, "media": {**mi, **(r.get("media") or {})}}, me, everyone, can_manage)
@@ -302,7 +400,7 @@ async def detail(client, svc_id: int, mt: str, tmdb: int, me: int | None, *, eve
            "runtime": d.get("runtime") or ((d.get("episodeRunTime") or [None])[0]),
            "requests": reqs, "hidden_requests": max(0, hidden), "trailer": trailer,
            "network": ((d.get("networks") or [{}])[0] or {}).get("name") if mt == "tv" else None,
-           "cast": cast(d), "seasons": []}
+           "cast": cast(d), "release": release_info(d, mt, reg), "seasons": []}
     if mt == "tv":
         # each season's own status from Seerr: 2 pending, 3 requested/processing, 4 partly, 5 available
         avail = {s.get("seasonNumber"): s.get("status") for s in mi.get("seasons") or []}

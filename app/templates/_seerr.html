@@ -8,7 +8,7 @@
     {% if c.badge %}<i class="pchip {{ c.badge[1] }}">{{ '✓' if c.status == 5 else c.badge[0] }}</i>{% endif %}
     <em class="ptype">{{ 'Movie' if c.type == 'movie' else 'Series' }}</em></span>
   <span class="pcap">{{ c.title }}</span>
-  <span class="pcap muted">{{ c.year }}{% if c.rating %} · ★ {{ c.rating }}{% endif %}</span>
+  <span class="pcap muted">{% if c.soon %}📅 {{ c.soon }}{% else %}{{ c.year }}{% if c.rating %} · ★ {{ c.rating }}{% endif %}{% endif %}</span>
 </a>{{ jf_play(c) }}</div>
 {% endmacro %}
 
