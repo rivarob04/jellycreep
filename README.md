@@ -188,6 +188,7 @@ Rotten Tomatoes and audience scores come from Jellyfin's metadata. If they're mi
 If Seerr is connected, signed-in Jellyfin users also get **Discover** and **Requests** tabs:
 
 - **Discover**: rows for Trending, Popular movies, Popular series, Upcoming movies and Upcoming series, plus search. Each poster shows whether the title is available, requested or pending.
+- **Watch on Jellyfin**: titles already in the person's own Jellyfin libraries get a ▶ button on their poster, and their title page gets **Watch on Jellyfin** (or **Resume**, or the next episode for a series) plus **Play on…** to start it on one of their Jellyfin apps. Matched by TMDB id, as that person, so it never shows titles from libraries they can't open.
 - **Title page**: backdrop, overview, trailer, a **Request** button (and **Request in 4K** when the person is allowed and you have a 4K Radarr/Sonarr), a season picker for series, "Who requested it", and "More like this".
 - **Requests**: everyone's requests with the requester's name, status, seasons, 4K and download progress. Filters: All, Waiting, Approved, Available. People can cancel their own pending requests. Seerr managers can approve or decline.
 - The home page and Discover start with a **Recently requested** row.

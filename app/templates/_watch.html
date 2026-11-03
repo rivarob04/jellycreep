@@ -1,0 +1,25 @@
+{# "Watch on Jellyfin" / "Resume" and "Play on…" for one library title #}
+{% macro watch_bar(watch, lib, sid, back, csrf, show_user=False) %}
+{% set what = (watch.code ~ (' · ' ~ watch.name if watch.name else '')) if watch.code else '' %}
+<div class="watch-bar mb">
+  <a class="btn primary watch-btn" href="{{ watch.url }}" target="_blank" rel="noopener">
+    <svg viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></svg>
+    <span><b>{{ 'Resume' if watch.resume else 'Watch' }} on Jellyfin</b>{% if what or watch.resume %}<small>{{ what }}{{ ' · ' if what and watch.resume }}{{ ('from ' ~ watch.resume) if watch.resume }}</small>{% endif %}</span></a>
+  {% if watch.devices %}
+  <details class="play-on">
+    <summary class="btn"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg> Play on…</summary>
+    <div class="play-sheet card">
+      <p class="small muted" style="margin:0 0 8px">Starts {{ what or 'it' }} right away on:</p>
+      {% for dev in watch.devices %}
+      <form method="post" action="{{ lib }}/{{ sid }}/{{ watch.id }}/play">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="session" value="{{ dev.id }}">
+        <input type="hidden" name="back" value="{{ back }}">{% if watch.resume %}<input type="hidden" name="resume" value="1">{% endif %}
+        <button class="dev-btn"><b>{{ dev.name }}</b><small>{{ dev.client }}{% if show_user and dev.user %} · {{ dev.user }}{% endif %}{% if dev.playing %} · now: {{ dev.playing }}{% endif %}</small></button>
+      </form>
+      {% endfor %}
+      {% if watch.resume %}<p class="hint" style="margin:6px 0 0">Resumes from {{ watch.resume }}.</p>{% endif %}
+    </div>
+  </details>
+  {% endif %}
+</div>
+{% endmacro %}

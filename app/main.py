@@ -1212,7 +1212,7 @@ async def _play_item(request: Request, user: User, sid: int, item_id: str):
         raise HTTPException(404)
     form = await request.form()
     session_id, back = str(form.get("session") or ""), str(form.get("back") or "")
-    if not back.startswith(_lib_base(user) + "/"):
+    if not (back.startswith(_lib_base(user) + "/") or (user.is_viewer and back.startswith("/me/discover/"))):
         back = f"{_lib_base(user)}/{sid}/{item_id}"
     client = await client_for(svc)
     uid, err = await safe(library.browse_as(client, svc.id, user))
@@ -1281,6 +1281,34 @@ async def _home_requests(user: User) -> list[dict]:
     return rows
 
 
+async def _jf_lookup(user: User) -> dict | None:
+    """What the viewer's own Jellyfin libraries hold, for the "Watch on Jellyfin" buttons in Discover."""
+    svc = _lib_server(user, None)
+    if not svc or not user.jf_id:
+        return None
+    client = await client_for(svc)
+    (idx, err), jf_sid = await asyncio.gather(safe(library.tmdb_index(client, svc.id, user.jf_id)),
+                                              library.server_id(client, svc.id))
+    if err or not idx:
+        return None
+    return {"svc": svc, "client": client, "idx": idx, "jf_sid": jf_sid}
+
+
+def _jf_url(jf: dict, item_id: str) -> str:
+    return f"{jf['svc'].link}/web/#/details?id={item_id}" + (f"&serverId={jf['jf_sid']}" if jf["jf_sid"] else "")
+
+
+def _mark_watchable(jf: dict | None, cards: list[dict] | None, tmdb_key: str = "id") -> list[dict]:
+    """Copies of the Discover cards, each one that's in the viewer's libraries carrying a ``jf`` link.
+
+    Copies, because Seerr rows are cached and shared between viewers with different libraries."""
+    out = []
+    for c in cards or []:
+        iid = library.in_library(jf["idx"], c.get("type"), c.get(tmdb_key), c.get("jf_hint")) if jf else None
+        out.append({**c, "jf": {"id": iid, "url": _jf_url(jf, iid), "page": f"/me/library/{jf['svc'].id}/{iid}"}} if iid else c)
+    return out
+
+
 def _viewer_page(user: User, fallback: str = "/automation?tab=requests"):
     return None if user.is_viewer else RedirectResponse(fallback, status_code=303)
 
@@ -1305,6 +1333,10 @@ async def page_discover(request: Request, q: str = "", row: str = "", page: int 
                 safe(seerr_portal.feed(c, sid, sc["uid"], everyone=sc["everyone"], take=16)),
                 seerr_portal.quota(c, sc["uid"]) if sc["uid"] else asyncio.sleep(0))
             ctx.update(rows=rows or [], recent=(recent or ([], 0))[0], error=e1, quota=quota)
+        jf = await _jf_lookup(user)
+        ctx["results"] = _mark_watchable(jf, ctx["results"])
+        ctx["recent"] = _mark_watchable(jf, ctx["recent"], "tmdb")
+        ctx["rows"] = [{**r, "items": _mark_watchable(jf, r["items"])} for r in ctx["rows"]]
     return render(request, "me_discover.html", user, **ctx)
 
 
@@ -1318,14 +1350,35 @@ async def page_title(request: Request, mt: str, tmdb: int, user: User = Depends(
     if not sc:
         return RedirectResponse("/me", status_code=303)
     c, sid = sc["client"], sc["svc"].id
-    (t, err), similar, has4k, quota = await asyncio.gather(
+    (t, err), similar, has4k, quota, jf = await asyncio.gather(
         safe(seerr_portal.detail(c, sid, mt, tmdb, sc["uid"], everyone=sc["everyone"], can_manage=sc["manage"])),
         seerr_portal.similar(c, sid, mt, tmdb), seerr_portal.has_4k(c, sid),
-        seerr_portal.quota(c, sc["uid"]) if sc["uid"] else asyncio.sleep(0))
+        seerr_portal.quota(c, sc["uid"]) if sc["uid"] else asyncio.sleep(0), _jf_lookup(user))
     if err or not t:
         raise HTTPException(404, "Couldn't load that title from Seerr")
+    similar = _mark_watchable(jf, similar)
+    watch = await _title_watch(user, jf, t)
     return render(request, "me_title.html", user, seerr=sc, t=t, similar=similar, has4k=has4k, quota=quota,
-                  ambient=t.get("backdrop"))
+                  watch=watch, sid=jf["svc"].id if jf else None, lib=_lib_base(user), ambient=t.get("backdrop"))
+
+
+async def _title_watch(user: User, jf: dict | None, t: dict) -> dict | None:
+    """The full "Watch on Jellyfin" bar for a Discover title that's in the viewer's libraries."""
+    if not jf:
+        return None
+    iid = library.in_library(jf["idx"], t.get("type"), t.get("id"), t.get("jf_hint"))
+    if not iid:
+        return None
+    client, uid = jf["client"], user.jf_id
+    d, err = await safe(library.item(client, uid, iid, show_paths=False))
+    if err or not d or not d.get("id"):
+        return None
+    target, devs = await asyncio.gather(library.play_target(client, uid, d, resume_ok=True),
+                                        library.devices(client, uid, only_user=user.jf_id))
+    if not target:
+        return None
+    return {**target, "url": _jf_url(jf, target["id"]), "devices": devs, "internal": not jf["svc"].public_url,
+            "page": f"/me/library/{jf['svc'].id}/{d['id']}"}
 
 
 @app.post("/me/discover/{mt}/{tmdb}/request")

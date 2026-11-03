@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_seerr.html" import pcard, req_item, quota_line, not_linked %}
+{% from "_watch.html" import watch_bar %}
 {% block title %}{{ t.title }}{% endblock %}
 {% block content %}
 {% set p = seerr.perms %}
@@ -26,6 +27,11 @@
   </div>
 </section>
 
+{% if watch %}
+{{ watch_bar(watch, lib, sid, here, csrf) }}
+<p class="small watch-more"><a href="{{ watch.page }}">{{ 'Seasons, episodes & details' if t.type == 'tv' else 'Details & your history' }} →</a></p>
+{% endif %}
+
 {% if t.tagline %}<p class="tagline">“{{ t.tagline }}”</p>{% endif %}
 {% if t.overview %}<p class="overview">{{ t.overview }}</p>{% endif %}
 {% if t.trailer %}<p><a class="btn sm" href="{{ t.trailer }}" target="_blank" rel="noopener">▶ Watch trailer</a></p>{% endif %}
@@ -37,9 +43,10 @@
     {% if not can %}
       <p class="muted small">Your Seerr account isn't allowed to request {{ 'movies' if t.type == 'movie' else 'series' }}. Ask the admin.</p>
     {% elif t.type == 'movie' %}
-      {% if t.status in (1, 7) or (can4k and t.status4k in (1, 7)) %}
+      {% set hd_ok = t.status in (1, 7) and not watch %}
+      {% if hd_ok or (can4k and t.status4k in (1, 7)) %}
       <div class="req-buttons">
-        {% if t.status in (1, 7) %}
+        {% if hd_ok %}
         <form method="post" action="{{ here }}/request"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary">＋ Request</button></form>
         {% endif %}
         {% if can4k and t.status4k in (1, 7) %}
@@ -47,7 +54,8 @@
         {% endif %}
       </div>
       {% endif %}
-      {% if t.status == 5 %}<p class="small">✅ It's already on the server — open Jellyfin to watch it.</p>
+      {% if watch %}<p class="small">✅ It's already in your library — use <b>Watch on Jellyfin</b> above.</p>
+      {% elif t.status == 5 %}<p class="small">✅ It's already on the server — open Jellyfin to watch it.</p>
       {% elif t.status in (2,3,4) %}<p class="small muted">Already requested — see who asked for it below.</p>{% endif %}
     {% else %}
       {% if t.free_seasons %}

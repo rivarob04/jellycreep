@@ -1,24 +1,26 @@
 {# Shared bits for the Seerr pages in the Jellyfin-user portal #}
 
+{% macro jf_play(c) %}{% if c.jf %}<span class="pover"><a class="pplay" href="{{ c.jf.url }}" target="_blank" rel="noopener" aria-label="Watch {{ c.title }} on Jellyfin" title="Watch on Jellyfin"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg></a></span>{% endif %}{% endmacro %}
+
 {% macro pcard(c) %}
-<a class="pcard" href="/me/discover/{{ c.type }}/{{ c.id }}" title="{{ c.title }}{{ ' (' ~ c.year ~ ')' if c.year }}">
+<div class="pcard{{ ' on-jf' if c.jf }}"><a class="pcard-in" href="/me/discover/{{ c.type }}/{{ c.id }}" title="{{ c.title }}{{ ' (' ~ c.year ~ ')' if c.year }}">
   <span class="pimg">{% if c.poster %}<img loading="lazy" src="{{ c.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ c.title[:1] }}</b>
     {% if c.badge %}<i class="pchip {{ c.badge[1] }}">{{ '✓' if c.status == 5 else c.badge[0] }}</i>{% endif %}
     <em class="ptype">{{ 'Movie' if c.type == 'movie' else 'Series' }}</em></span>
   <span class="pcap">{{ c.title }}</span>
   <span class="pcap muted">{{ c.year }}{% if c.rating %} · ★ {{ c.rating }}{% endif %}</span>
-</a>
+</a>{{ jf_play(c) }}</div>
 {% endmacro %}
 
 {# a request shown as a poster, with who asked for it #}
 {% macro rcard(r) %}
-<a class="pcard" href="/me/discover/{{ r.type }}/{{ r.tmdb }}" title="{{ r.title }} — requested by {{ r.by }}">
+<div class="pcard{{ ' on-jf' if r.jf }}"><a class="pcard-in" href="/me/discover/{{ r.type }}/{{ r.tmdb }}" title="{{ r.title }} — requested by {{ r.by }}">
   <span class="pimg">{% if r.poster %}<img loading="lazy" src="{{ r.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ r.title[:1] }}</b>
     <i class="pchip {{ r.badge[1] }}">{{ r.badge[0] if r.badge[0] != 'Waiting for approval' else 'Waiting' }}</i>
     {% if r.progress is not none %}<span class="pbar"><i style="width:{{ r.progress }}%"></i></span>{% endif %}</span>
   <span class="pcap">{{ r.title }}</span>
   <span class="pby"><span class="avatar xs" style="background:{{ r.colour }}">{{ r.initial }}</span>{{ r.by }}</span>
-</a>
+</a>{{ jf_play(r) }}</div>
 {% endmacro %}
 
 {# a request as a list row #}

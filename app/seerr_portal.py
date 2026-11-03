@@ -127,7 +127,7 @@ def card(r: dict) -> dict | None:
             "poster": img(r.get("posterPath")), "backdrop": img(r.get("backdropPath"), "w1280"),
             "rating": round(r["voteAverage"], 1) if r.get("voteAverage") else None,
             "overview": r.get("overview") or "", "status": st, "badge": MEDIA_STATUS.get(st),
-            "status4k": mi.get("status4k") or 1}
+            "status4k": mi.get("status4k") or 1, "jf_hint": mi.get("jellyfinMediaId")}
 
 
 def perms(u: dict | None) -> dict:
@@ -264,6 +264,7 @@ def _req_row(r: dict, me: int | None, everyone: bool, can_manage: bool) -> dict 
     name = who(rb)
     created = _when(r.get("createdAt"))
     return {"id": r.get("id"), "type": "movie" if r.get("type") == "movie" else "tv", "tmdb": media.get("tmdbId"),
+            "jf_hint": media.get("jellyfinMediaId"),
             "by": "You" if mine else name, "by_name": name, "initial": name[:1].upper(), "colour": colour(name),
             "mine": mine, "is4k": bool(r.get("is4k")), "badge": badge, "pending": st == 1,
             "seasons": sorted(s.get("seasonNumber") for s in r.get("seasons") or [] if s.get("seasonNumber") is not None),

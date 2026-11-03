@@ -966,3 +966,16 @@ html.drawer-open, html.drawer-open body { overflow: hidden; }
 .anon-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
 .anon-more { padding: 2px 4px; }
 :root[data-theme="light"] .anon-bar { background: rgba(0,0,0,.08); }
+
+/* ===================== v0.10 Watch on Jellyfin from Discover ===================== */
+.pcard { position: relative; }
+.pcard-in { display: flex; flex-direction: column; min-width: 0; color: inherit; text-decoration: none; }
+/* a box the size of the poster, so the play button sits on its bottom-right corner */
+.pover { position: absolute; left: 0; right: 0; top: 0; aspect-ratio: 2/3; pointer-events: none; }
+.pplay { pointer-events: auto; position: absolute; right: 6px; bottom: 6px; width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center; background: #00a4dc; color: #fff; box-shadow: 0 3px 10px rgba(0,0,0,.45);
+  border: 2px solid rgba(255,255,255,.85); transition: transform .12s ease; }
+.pplay svg { width: 16px; height: 16px; fill: currentColor; margin-left: 2px; }
+.pplay:hover, .pplay:active { transform: scale(1.1); }
+.pcard.on-jf .pbar { right: 46px; }
+.watch-more { margin: -4px 0 14px; }

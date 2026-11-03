@@ -339,3 +339,52 @@ async def play_on(client, session_id: str, item_id: str, start_ticks: int = 0) -
     if start_ticks:
         params["startPositionTicks"] = str(int(start_ticks))
     await client.post(f"/Sessions/{session_id}/Playing", params=params, expect_json=False)
+
+
+# ----------------------------------------------------------------------------- TMDB -> library
+_TMDB_IDX: dict[tuple[int, str], tuple[float, dict]] = {}
+
+
+def _norm_id(s: str | None) -> str:
+    return (s or "").replace("-", "").lower()
+
+
+async def tmdb_index(client, svc_id: int, uid: str, ttl: float = 300) -> dict:
+    """Which movies and series this Jellyfin user can see, keyed by TMDB id.
+
+    Returns ``{"movie": {tmdb: item_id}, "tv": {tmdb: item_id}, "ids": {item_id, …}}``.
+    Fetched as the user, so it only holds titles from libraries their account can open.
+    """
+    key = (svc_id, uid)
+    hit = _TMDB_IDX.get(key)
+    if hit and hit[0] > time.time():
+        return hit[1]
+    data = await _get(client, "/Items", uid, {"Recursive": "true", "IncludeItemTypes": "Movie,Series",
+                                              "Fields": "ProviderIds", "EnableImages": "false",
+                                              "EnableUserData": "false", "IsMissing": "false"}) or {}
+    idx: dict = {"movie": {}, "tv": {}, "ids": set()}
+    for i in data.get("Items") or []:
+        iid = _norm_id(i.get("Id"))
+        if not iid:
+            continue
+        idx["ids"].add(iid)
+        pid = {k.lower(): v for k, v in (i.get("ProviderIds") or {}).items()}
+        tmdb = str(pid.get("tmdb") or "").strip()
+        if tmdb.isdigit():
+            idx["movie" if i.get("Type") == "Movie" else "tv"].setdefault(int(tmdb), iid)
+    _TMDB_IDX[key] = (time.time() + ttl, idx)
+    return idx
+
+
+def in_library(idx: dict | None, mt: str, tmdb: Any, jf_hint: str | None = None) -> str | None:
+    """The Jellyfin item id for a TMDB title, or None. ``jf_hint`` is Seerr's own jellyfinMediaId."""
+    if not idx:
+        return None
+    try:
+        hit = idx.get(mt, {}).get(int(tmdb))
+    except (TypeError, ValueError):
+        hit = None
+    if hit:
+        return hit
+    h = _norm_id(jf_hint)
+    return h if h and h in idx["ids"] else None
