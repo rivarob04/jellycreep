@@ -304,13 +304,20 @@ async def detail(client, svc_id: int, mt: str, tmdb: int, me: int | None, *, eve
            "network": ((d.get("networks") or [{}])[0] or {}).get("name") if mt == "tv" else None,
            "cast": cast(d), "seasons": []}
     if mt == "tv":
+        # each season's own status from Seerr: 2 pending, 3 requested/processing, 4 partly, 5 available
         avail = {s.get("seasonNumber"): s.get("status") for s in mi.get("seasons") or []}
         asked: dict[int, int] = {}
+        whole_show = False       # a request Seerr didn't list seasons for = the whole show
         for r in mi.get("requests") or []:
-            if r.get("is4k") or r.get("status") == 3:
+            if r.get("is4k") or r.get("status") == 3:      # ignore 4K and declined requests
                 continue
-            for s in r.get("seasons") or []:
+            seasons = r.get("seasons") or []
+            if not seasons:
+                whole_show = True
+            for s in seasons:
                 asked[s.get("seasonNumber")] = r.get("status") or 1
+        if (mi.get("status") or 1) in (2, 3) and not avail and not asked:
+            whole_show = True    # Seerr says the show is requested but gives no season detail
         for s in d.get("seasons") or []:
             n = s.get("seasonNumber")
             if not n:
@@ -318,8 +325,14 @@ async def detail(client, svc_id: int, mt: str, tmdb: int, me: int | None, *, eve
             st = avail.get(n) or 1
             if st in (4, 5):
                 tag = MEDIA_STATUS[st]
+            elif st == 3:
+                tag = ("Requested", "b-acc")
+            elif st == 2:
+                tag = ("Waiting", "b-warn")
             elif n in asked:
                 tag = ("Waiting", "b-warn") if asked[n] == 1 else ("Requested", "b-acc")
+            elif whole_show:
+                tag = ("Requested", "b-acc")
             else:
                 tag = None
             out["seasons"].append({"n": n, "name": s.get("name") or f"Season {n}", "eps": s.get("episodeCount"),
