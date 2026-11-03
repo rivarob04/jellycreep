@@ -7,6 +7,7 @@ first Jellyfin administrator.
 """
 from __future__ import annotations
 
+import asyncio
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -430,3 +431,42 @@ async def find_episode(client, uid: str, series_id: str, season: int, number: in
         return None
     return next((e.get("Id") for e in data.get("Items") or [] if e.get("IndexNumber") == number
                  and (e.get("ParentIndexNumber") in (None, season))), None)
+
+
+# ----------------------------------------------------------------------------- people
+async def person(client, uid: str, person_id: str) -> dict:
+    """An actor's details and everything they're in that this Jellyfin user can see."""
+    p = await _get(client, f"/Items/{person_id}", uid) or {}
+    if p.get("Type") != "Person":
+        raise UpstreamError("404 not a person")
+    base = {"Recursive": "true", "PersonIds": person_id, "Fields": "ProductionYear,PremiereDate,ChildCount",
+            "SortBy": "PremiereDate,ProductionYear,SortName", "SortOrder": "Descending", "IsMissing": "false"}
+
+    async def kind(t: str, limit: int):
+        try:
+            data = await client.get("/Items", params={**base, "userId": uid, "IncludeItemTypes": t, "Limit": str(limit)}) or {}
+        except UpstreamError:
+            return []
+        return data.get("Items") or []
+
+    movies, shows, eps = await asyncio.gather(kind("Movie", 200), kind("Series", 200), kind("Episode", 60))
+    show_ids = {s.get("Id") for s in shows}
+    born, died = _when(p.get("PremiereDate")), _when(p.get("EndDate"))
+    age = None
+    if born:
+        end = died or datetime.now(timezone.utc)
+        age = end.year - born.year - ((end.month, end.day) < (born.month, born.day))
+    return {
+        "id": p.get("Id"), "name": p.get("Name"), "overview": p.get("Overview"),
+        "has_img": bool((p.get("ImageTags") or {}).get("Primary")),
+        "born": _fmt_date(p.get("PremiereDate")), "died": _fmt_date(p.get("EndDate")), "age": age,
+        "place": ", ".join(p.get("ProductionLocations") or []) or None,
+        "imdb": (p.get("ProviderIds") or {}).get("Imdb"), "tmdb": (p.get("ProviderIds") or {}).get("Tmdb"),
+        "movies": [{"id": m.get("Id"), "name": m.get("Name"), "year": m.get("ProductionYear"),
+                    "played": (m.get("UserData") or {}).get("Played")} for m in movies],
+        "shows": [{"id": s.get("Id"), "name": s.get("Name"), "year": s.get("ProductionYear"),
+                   "played": (s.get("UserData") or {}).get("Played")} for s in shows],
+        # guest spots on shows they aren't main cast of
+        "guest": [{"id": e.get("Id"), "series": e.get("SeriesName"), "series_id": e.get("SeriesId"), "name": e.get("Name"),
+                   "code": ep_code(e)} for e in eps if e.get("SeriesId") not in show_ids][:40],
+    }

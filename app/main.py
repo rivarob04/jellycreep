@@ -1252,6 +1252,32 @@ async def act_my_play(request: Request, sid: int, item_id: str, user: User = Dep
     return await _play_item(request, user, sid, item_id)
 
 
+async def _person_page(request: Request, user: User, sid: int, person_id: str):
+    if not person_id.isalnum():
+        raise HTTPException(404)
+    svc = _lib_server(user, sid)
+    if not svc or svc.id != sid:
+        raise HTTPException(404)
+    client = await client_for(svc)
+    uid, err = await safe(library.browse_as(client, svc.id, user))
+    p, err = (await safe(library.person(client, uid, person_id))) if uid else (None, err)
+    if err or not p:
+        raise HTTPException(404, "Couldn't find that person.")
+    return render(request, "person.html", user, p=p, sid=svc.id, lib=_lib_base(user))
+
+
+@app.get("/library/{sid}/person/{person_id}", response_class=HTMLResponse)
+async def page_person(request: Request, sid: int, person_id: str, user: User = Depends(staff_user)):
+    return await _person_page(request, user, sid, person_id)
+
+
+@app.get("/me/library/{sid}/person/{person_id}", response_class=HTMLResponse)
+async def page_my_person(request: Request, sid: int, person_id: str, user: User = Depends(current_user)):
+    if not user.is_viewer:
+        return RedirectResponse(f"/library/{sid}/person/{person_id}", status_code=303)
+    return await _person_page(request, user, sid, person_id)
+
+
 @app.get("/library/{sid}/{item_id}", response_class=HTMLResponse)
 async def page_library_item(request: Request, sid: int, item_id: str, tab: str | None = None,
                             user: User = Depends(staff_user)):

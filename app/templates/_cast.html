@@ -1,12 +1,12 @@
-{# Actor cards (needs: d.cast, cast_sid, imgp) #}
+{# Actor cards (needs: d.cast, cast_sid, lib, imgp) — each opens the actor's page #}
 <div class="spread section-title"><h2 style="margin:0">Cast</h2>{% if d.cast|length > 4 %}<span class="small muted">{{ d.cast|length }} people</span>{% endif %}</div>
 <div class="cast-row mb">
   {% for c in d.cast %}
-  <div class="cast-card" title="{{ c.name }}{{ ' as ' ~ c.role if c.role }}">
+  <a class="cast-card" href="{{ lib }}/{{ cast_sid }}/person/{{ c.id }}" title="{{ c.name }}{{ ' as ' ~ c.role if c.role }} — see everything they're in">
     <span class="cast-img"><b>{{ c.name[:1] }}</b>{% if c.has_img %}<img loading="lazy" src="{{ imgp }}/{{ cast_sid }}/{{ c.id }}?h=240" alt="" onerror="this.remove()">{% endif %}</span>
     <span class="cast-name">{{ c.name }}</span>
     {% if c.role %}<span class="cast-role">{{ c.role }}</span>{% endif %}
     {% if c.guest %}<span class="cast-role">Guest star</span>{% endif %}
-  </div>
+  </a>
   {% endfor %}
 </div>
