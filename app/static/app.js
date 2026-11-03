@@ -410,3 +410,9 @@ document.querySelectorAll("[data-seasons]").forEach((form) => {
   }));
   refresh();
 })();
+
+
+// Tap outside an open filter / "Play on…" menu to close it.
+document.addEventListener("click", (e) => {
+  document.querySelectorAll("details.ra-filter[open], details.play-on[open]").forEach((d) => { if (!d.contains(e.target)) d.open = false; });
+});

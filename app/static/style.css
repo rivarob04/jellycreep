@@ -1044,3 +1044,24 @@ a.cast-card:active .cast-img, a.cast-card:hover .cast-img { transform: translate
 .ra-added { font-size: 13px; padding-top: 4px; }
 .ra-icon { right: 10px; bottom: 9px; }
 .ra-icon svg { width: 20px; height: 20px; }
+
+/* ===================== v0.17.2 Recently added filter button ===================== */
+.ra-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.ra-head h1 { margin: 0; }
+.ra-head .spacer { flex: 1; }
+.ra-active { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  background: var(--accent); color: #fff; white-space: nowrap; }
+.ra-filter { position: relative; }
+.ra-filter > summary { list-style: none; } .ra-filter > summary::-webkit-details-marker { display: none; }
+.ra-filter-btn { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; cursor: pointer; color: var(--text); }
+.ra-filter-btn svg { width: 26px; height: 26px; fill: currentColor; }
+.ra-filter-btn.on { color: var(--accent-2); }
+.ra-filter-btn:active, .ra-filter[open] .ra-filter-btn { background: var(--panel); }
+.ra-filter-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; width: 200px; padding: 6px !important; background: #171822 !important;
+  box-shadow: 0 12px 40px rgba(0,0,0,.5); display: flex; flex-direction: column; }
+.ra-filter-menu a { display: flex; align-items: center; gap: 12px; padding: 11px 10px; border-radius: 10px; color: var(--text); font-weight: 500; }
+.ra-filter-menu a:active, .ra-filter-menu a:hover { background: rgba(255,255,255,.06); }
+.ra-filter-menu a.on { color: var(--accent-2); }
+.ra-filter-menu svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.ra-filter-menu .ck { margin-left: auto; font-weight: 800; }
+:root[data-theme="light"] .ra-filter-menu { background: #fff !important; }
