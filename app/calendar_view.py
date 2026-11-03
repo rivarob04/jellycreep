@@ -57,6 +57,7 @@ def items_for(svc, raw: list[dict], tz, start: date, end: date) -> list[dict[str
                 "poster": f"/arrimg/{svc.id}/{c.get('seriesId') or series.get('id')}",
                 "finale": c.get("finaleType"), "premiere": c.get("episodeNumber") == 1,
                 "source": svc.name, "link": f"{svc.link}/series/{series.get('titleSlug', '')}",
+                "sid": svc.id, "ref": f"e{c.get('id')}" if c.get("id") else None,
             })
         elif svc.kind == "radarr":
             for field, label in (("inCinemas", "In cinemas"), ("digitalRelease", "Digital"), ("physicalRelease", "Physical")):
@@ -72,6 +73,7 @@ def items_for(svc, raw: list[dict], tz, start: date, end: date) -> list[dict[str
                     "badge": label, "network": c.get("studio"), "has_file": bool(c.get("hasFile")),
                     "poster": f"/arrimg/{svc.id}/{c.get('id')}", "finale": None, "premiere": False,
                     "source": svc.name, "link": f"{svc.link}/movie/{c.get('tmdbId', '')}",
+                    "sid": svc.id, "ref": f"m{c.get('id')}" if c.get("id") else None,
                 })
         elif svc.kind == "lidarr":
             raw_ts = c.get("releaseDate")

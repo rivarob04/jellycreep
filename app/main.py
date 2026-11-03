@@ -1157,6 +1157,18 @@ def _item_history(d: dict, user: User, limit: int = 60) -> list[Play]:
         return list(db.scalars(q.order_by(Play.started_at.desc()).limit(limit)))
 
 
+async def _watch_ctx(client, svc: Service, uid: str, user: User, d: dict) -> dict | None:
+    """'Watch on Jellyfin' link (title page in Jellyfin web) and the person's Jellyfin apps it can start on."""
+    resume_ok = user.is_viewer           # staff browse as the admin account, whose resume points aren't theirs
+    target, jf_sid, devs = await asyncio.gather(
+        library.play_target(client, uid, d, resume_ok=resume_ok), library.server_id(client, svc.id),
+        library.devices(client, uid, only_user=user.jf_id if user.is_viewer else None) if (user.is_viewer or user.is_admin) else asyncio.sleep(0, []))
+    if not target:
+        return None
+    return {**target, "sid": svc.id, "devices": devs, "internal": not svc.public_url,
+            "url": f"{svc.link}/web/#/details?id={target['id']}" + (f"&serverId={jf_sid}" if jf_sid else "")}
+
+
 async def _item_page(request: Request, user: User, sid: int, item_id: str, tab: str | None):
     if not item_id.isalnum():
         raise HTTPException(404)
@@ -1189,14 +1201,7 @@ async def _item_page(request: Request, user: User, sid: int, item_id: str, tab: 
         ctx["parent"] = (d["season_id"], f"Season {d['season_index']}" if d.get("season_index") is not None else "Season")
     elif d["type"] == "Season" and d.get("series_id"):
         ctx["parent"] = (d["series_id"], d["title"] or "Series")
-    # "Watch on Jellyfin": the title's page in Jellyfin web, and the person's Jellyfin apps it can start playing on
-    resume_ok = user.is_viewer           # staff browse as the admin account, whose resume points aren't theirs
-    target, jf_sid, devs = await asyncio.gather(
-        library.play_target(client, uid, d, resume_ok=resume_ok), library.server_id(client, svc.id),
-        library.devices(client, uid, only_user=user.jf_id if user.is_viewer else None) if (user.is_viewer or user.is_admin) else asyncio.sleep(0, []))
-    if target:
-        ctx["watch"] = {**target, "url": f"{svc.link}/web/#/details?id={target['id']}" + (f"&serverId={jf_sid}" if jf_sid else ""),
-                        "devices": devs, "internal": not svc.public_url}
+    ctx["watch"] = await _watch_ctx(client, svc, uid, user, d)
     imgp = "/me/img" if user.is_viewer else "/img"
     if d.get("backdrop_id"):
         ctx["ambient"] = f"{imgp}/{svc.id}/{d['backdrop_id']}?t=Backdrop&h=720"
@@ -1212,7 +1217,8 @@ async def _play_item(request: Request, user: User, sid: int, item_id: str):
         raise HTTPException(404)
     form = await request.form()
     session_id, back = str(form.get("session") or ""), str(form.get("back") or "")
-    if not (back.startswith(_lib_base(user) + "/") or (user.is_viewer and back.startswith("/me/discover/"))):
+    ok_back = ("/me/library/", "/me/upcoming/", "/me/discover/") if user.is_viewer else ("/library/", "/upcoming/")
+    if not back.startswith(ok_back) or "//" in back:
         back = f"{_lib_base(user)}/{sid}/{item_id}"
     client = await client_for(svc)
     uid, err = await safe(library.browse_as(client, svc.id, user))
@@ -1454,6 +1460,114 @@ async def act_my_request(request: Request, req_id: int, action: str, user: User 
     except UpstreamError as e:
         request.session["flash"] = {"ok": False, "msg": seerr_portal.err_text(e)}
     return RedirectResponse(nxt, status_code=303)
+
+
+async def _upcoming_page(request: Request, user: User, sid: int, ref: str):
+    if not (len(ref) > 1 and ref[0] in "em" and ref[1:].isdigit()):
+        raise HTTPException(404)
+    if user.is_viewer:
+        # only things that are actually on this person's Coming up list
+        if not login_settings()["upcoming"] or not any(i.get("sid") == sid and i.get("ref") == ref for i in await _upcoming(30)):
+            raise HTTPException(404)
+    with SessionLocal() as db:
+        svc = db.get(Service, sid)
+    if not svc or svc.kind not in ("sonarr", "radarr") or (svc.kind == "sonarr") != (ref[0] == "e"):
+        raise HTTPException(404)
+    arr = await client_for(svc)
+    rid = int(ref[1:])
+    arrimg = "/me/arrimg" if user.is_viewer else "/arrimg"
+    u: dict[str, Any] = {"kind": "tv" if ref[0] == "e" else "movie", "dates": [], "links": [], "facts": []}
+    try:
+        if ref[0] == "e":
+            ep = await arr.get(arr.p(f"episode/{rid}")) or {}
+            show = ep.get("series") or await arr.get(arr.p(f"series/{ep.get('seriesId')}")) or {}
+            se, en = int(ep.get("seasonNumber") or 0), int(ep.get("episodeNumber") or 0)
+            when = calendar_view._parse(ep.get("airDateUtc"), TZ)
+            u.update(title=show.get("title") or "Unknown series", year=show.get("year"),
+                     code=f"S{se} • E{en}", name=ep.get("title") or "TBA", season=se, number=en,
+                     overview=ep.get("overview"), about=show.get("overview"), has_file=bool(ep.get("hasFile")),
+                     poster=f"{arrimg}/{sid}/{show.get('id')}", fanart=f"{arrimg}/{sid}/{show.get('id')}?t=fanart",
+                     rating=(show.get("ratings") or {}).get("value") or None, critic=None,
+                     premiere=en == 1, finale=ep.get("finaleType"))
+            if when:
+                u["dates"].append(("Airs", f"{when:%A, %B} {when.day} · {when:%-I:%M %p}"))
+            runtime = ep.get("runtime") or show.get("runtime")
+            u["facts"] = [("Network", show.get("network")), ("Status", (show.get("status") or "").capitalize() or None),
+                          ("Genres", ", ".join((show.get("genres") or [])[:4]) or None),
+                          ("Runtime", f"{runtime} minutes" if runtime else None), ("Rated", show.get("certification"))]
+            ids = {"Tvdb": show.get("tvdbId"), "Tmdb": show.get("tmdbId"), "Imdb": show.get("imdbId")}
+            if show.get("imdbId"):
+                u["links"].append(("IMDb", f"https://www.imdb.com/title/{show['imdbId']}/"))
+            if show.get("tvdbId"):
+                u["links"].append(("TheTVDB", f"https://thetvdb.com/?tab=series&id={show['tvdbId']}"))
+            jf_kind = "Series"
+        else:
+            mv = await arr.get(arr.p(f"movie/{rid}")) or {}
+            r = mv.get("ratings") or {}
+            u.update(title=mv.get("title") or "Unknown movie", year=mv.get("year"), code=None, name=None,
+                     overview=mv.get("overview"), about=None, has_file=bool(mv.get("hasFile")),
+                     poster=f"{arrimg}/{sid}/{rid}", fanart=f"{arrimg}/{sid}/{rid}?t=fanart",
+                     rating=((r.get("imdb") or {}).get("value") or (r.get("tmdb") or {}).get("value")) or None,
+                     critic=(r.get("rottenTomatoes") or {}).get("value"), premiere=False, finale=None)
+            for field, label in (("inCinemas", "In cinemas"), ("digitalRelease", "Digital release"), ("physicalRelease", "Blu-ray / DVD")):
+                if mv.get(field):
+                    d0 = datetime.fromisoformat(mv[field][:10])
+                    u["dates"].append((label, f"{d0:%A, %B} {d0.day}, {d0.year}"))
+            u["facts"] = [("Studio", mv.get("studio")), ("Genres", ", ".join((mv.get("genres") or [])[:4]) or None),
+                          ("Runtime", f"{mv['runtime']} minutes" if mv.get("runtime") else None), ("Rated", mv.get("certification"))]
+            ids = {"Tmdb": mv.get("tmdbId"), "Imdb": mv.get("imdbId")}
+            if mv.get("imdbId"):
+                u["links"].append(("IMDb", f"https://www.imdb.com/title/{mv['imdbId']}/"))
+            if mv.get("tmdbId"):
+                u["links"].append(("TMDB", f"https://www.themoviedb.org/movie/{mv['tmdbId']}"))
+            if mv.get("youTubeTrailerId"):
+                u["links"].insert(0, ("▶ Trailer", f"https://www.youtube.com/watch?v={mv['youTubeTrailerId']}"))
+            jf_kind = "Movie"
+    except UpstreamError as e:
+        raise HTTPException(404, f"Couldn't load that from {svc.name}: {e}")
+    u["facts"] = [(k, v) for k, v in u["facts"] if v]
+    if u["rating"]:
+        u["rating"] = round(float(u["rating"]), 1)
+    u["fresh"] = u.get("critic") is not None and u["critic"] >= 60
+
+    # Is it (or the show) in Jellyfin? Then offer Watch / Play on, the cast and a link to its library page.
+    ctx: dict[str, Any] = {"u": u, "lib": _lib_base(user), "watch": None, "jf": None, "d": None, "on_jellyfin": False,
+                           "flash": request.session.pop("flash", None)}
+    jsvc = _lib_server(user, None)
+    if jsvc:
+        jc = await client_for(jsvc)
+        uid, _ = await safe(library.browse_as(jc, jsvc.id, user))
+        hit = await library.find(jc, uid, jf_kind, u["title"], u.get("year"), ids) if uid else None
+        if hit:
+            target_id = hit["Id"]
+            if ref[0] == "e":
+                ep_id = await library.find_episode(jc, uid, hit["Id"], u["season"], u["number"])
+                ctx["on_jellyfin"] = bool(ep_id)
+                target_id = ep_id or hit["Id"]
+            else:
+                ctx["on_jellyfin"] = True
+            d, _ = await safe(library.item(jc, uid, target_id, show_paths=False))
+            if d and d.get("id"):
+                show_d = d
+                if ref[0] == "e" and d["type"] == "Episode":   # cast of the show, not just this episode's guests
+                    sd, _ = await safe(library.item(jc, uid, hit["Id"], show_paths=False))
+                    show_d = {**(sd or {}), "cast": (d.get("cast") or []) if not (sd or {}).get("cast") else
+                              (sd["cast"] + [c for c in d.get("cast") or [] if c["id"] not in {x["id"] for x in sd["cast"]}])}
+                ctx.update(d=show_d, jf={"sid": jsvc.id, "id": hit["Id"]},
+                           watch=await _watch_ctx(jc, jsvc, uid, user, d))
+    return render(request, "upcoming_item.html", user, ambient=u["fanart"], **ctx)
+
+
+@app.get("/me/upcoming/{sid}/{ref}", response_class=HTMLResponse)
+async def page_my_upcoming_item(request: Request, sid: int, ref: str, user: User = Depends(current_user)):
+    if not user.is_viewer:
+        return RedirectResponse(f"/upcoming/{sid}/{ref}", status_code=303)
+    return await _upcoming_page(request, user, sid, ref)
+
+
+@app.get("/upcoming/{sid}/{ref}", response_class=HTMLResponse)
+async def page_upcoming_item(request: Request, sid: int, ref: str, user: User = Depends(staff_user)):
+    return await _upcoming_page(request, user, sid, ref)
 
 
 @app.post("/settings/signin")

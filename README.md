@@ -138,6 +138,20 @@ They never see other users, IP addresses, devices other than their own, download
 
 When a viewer's stream is being transcoded, JellyCreep explains why in plain English ("These subtitles have to be burned into the picture", "Your device can't play this audio track (TRUEHD)") and adds a tip they can act on. Their history marks each converted play with its reason, and the home page sums up how many recent plays were converted, the most common cause and the device it happened on.
 
+### Cast & Coming up details
+
+- Movie, show and episode pages have a **Cast** row of actor cards with photo, name and character (an episode's guest stars too).
+- Every card on **Coming up** opens its own page:
+  - air or release dates
+  - whether it's on Jellyfin yet
+  - the episode summary and an "About the show" section
+  - network or studio, genres, runtime and rating
+  - the Rotten Tomatoes and audience scores (movies, from Radarr)
+  - the cast
+  - links to the trailer, IMDb and TMDB/TheTVDB
+
+  If the title is already in Jellyfin, the same **Watch on Jellyfin** and **Play on…** buttons appear. For an episode that hasn't aired yet they play the next episode you haven't watched, so you can catch up. Jellyfin users can only open items on their own Coming up list, and no Sonarr/Radarr addresses are shown to them.
+
 ### "Also playing on the server" (anonymous)
 
 Jellyfin users' home page shows what else is being watched: poster, title, episode, progress, paused, and when it ends. It never shows **who** is watching, on what device or app, or from where (no usernames, IPs or locations). People only see titles their own Jellyfin account could watch; anything else just counts as "N more streams from libraries you don't have". Tapping a title opens its page. It refreshes live with the rest of the page. Turn it off under Settings → Sign-in → *What others are watching*.

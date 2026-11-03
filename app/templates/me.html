@@ -57,13 +57,13 @@
 <div class="spread section-title"><h2 style="margin:0">Coming up</h2><a class="small" href="/me/upcoming">See more →</a></div>
 <div class="card flush mb">
   {% for i in upcoming[:6] %}
-  <div class="agenda-item k-{{ i.kind }}">
+  <{{ 'a' if i.ref else 'div' }} class="agenda-item k-{{ i.kind }}{{ ' tap' if i.ref }}"{% if i.ref %} href="/me/upcoming/{{ i.sid }}/{{ i.ref }}"{% endif %}>
     <span class="thumb k-bg-{{ i.kind }}">{% if i.poster %}<img loading="lazy" src="{{ i.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ i.title[:1] }}</b></span>
     <span class="ai-body"><span class="ai-title">{{ i.title }}</span><span class="ai-sub">{{ i.sub }}</span>
       <span class="ai-meta">{{ i.day.strftime('%a %b %-d') }}{% if i.time %} · {{ i.time }}{% endif %}{% if i.network %} · {{ i.network }}{% endif %}
         {% if i.premiere %}<span class="badge b-acc">Premiere</span>{% endif %}{% if i.finale %}<span class="badge b-warn">Finale</span>{% endif %}</span></span>
     <span class="ai-status">{% if i.has_file %}<span class="badge b-ok">Ready</span>{% endif %}</span>
-  </div>
+  </{{ 'a' if i.ref else 'div' }}>
   {% endfor %}
 </div>
 {% endif %}

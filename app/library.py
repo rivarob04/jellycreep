@@ -180,6 +180,18 @@ def _people(d: dict, kind: str, n: int) -> str | None:
     return ", ".join(list(dict.fromkeys(names))[:n]) or None
 
 
+def cast(d: dict, n: int = 24) -> list[dict]:
+    """Actors (and an episode's guest stars) with their photos, in billing order."""
+    out, seen = [], set()
+    for p in d.get("People") or []:
+        if p.get("Type") not in ("Actor", "GuestStar") or not p.get("Id") or p["Id"] in seen:
+            continue
+        seen.add(p["Id"])
+        out.append({"id": p["Id"], "name": p.get("Name") or "?", "role": p.get("Role"),
+                    "has_img": bool(p.get("PrimaryImageTag")), "guest": p.get("Type") == "GuestStar" and not p.get("Role")})
+    return out[:n]
+
+
 def details(d: dict, *, show_paths: bool) -> dict:
     t = d.get("Type")
     pid = d.get("ProviderIds") or {}
@@ -198,7 +210,7 @@ def details(d: dict, *, show_paths: bool) -> dict:
         ("Genres", ", ".join((d.get("Genres") or [])[:5]) or None),
         ("Directed by", _people(d, "Director", 3)),
         ("Written by", _people(d, "Writer", 3)),
-        ("Starring", _people(d, "Actor", 8)),
+        ("Starring", _people(d, "Actor", 4)),
         ("Seasons", str(d.get("ChildCount")) if t == "Series" and d.get("ChildCount") else None),
         ("Episodes", str(d.get("RecursiveItemCount") or d.get("ChildCount")) if t in ("Series", "Season") and (d.get("RecursiveItemCount") or d.get("ChildCount")) else None),
         ("Added", _fmt_date(d.get("DateCreated"))),
@@ -230,6 +242,7 @@ def details(d: dict, *, show_paths: bool) -> dict:
         "thumb_id": d.get("Id") if is_ep and (d.get("ImageTags") or {}).get("Primary") else None,
         "backdrop_id": _backdrop_id(d), "played": (d.get("UserData") or {}).get("Played"),
         "resume_ticks": (d.get("UserData") or {}).get("PlaybackPositionTicks") or 0,
+        "cast": cast(d),
     }
 
 
@@ -388,3 +401,32 @@ def in_library(idx: dict | None, mt: str, tmdb: Any, jf_hint: str | None = None)
         return hit
     h = _norm_id(jf_hint)
     return h if h and h in idx["ids"] else None
+
+
+# ----------------------------------------------------------------------------- matching *arr titles to Jellyfin
+async def find(client, uid: str, kind: str, title: str, year: int | None, ids: dict) -> dict | None:
+    """Find a Series/Movie in Jellyfin (as this user) by TVDB/TMDB/IMDb id, falling back to title + year."""
+    try:
+        data = await client.get("/Items", params={"userId": uid, "Recursive": "true", "IncludeItemTypes": kind,
+                                                  "searchTerm": title, "Fields": "ProviderIds,ProductionYear", "Limit": "25"}) or {}
+    except UpstreamError:
+        return None
+    items = data.get("Items") or []
+    want = {k.lower(): str(v).lower() for k, v in ids.items() if v}
+    for i in items:
+        have = {k.lower(): str(v).lower() for k, v in (i.get("ProviderIds") or {}).items()}
+        if any(have.get(k) == v for k, v in want.items()):
+            return i
+    for i in items:
+        if (i.get("Name") or "").lower() == title.lower() and (not year or not i.get("ProductionYear") or abs(i["ProductionYear"] - year) <= 1):
+            return i
+    return None
+
+
+async def find_episode(client, uid: str, series_id: str, season: int, number: int) -> str | None:
+    try:
+        data = await client.get(f"/Shows/{series_id}/Episodes", params={"userId": uid, "season": str(season)}) or {}
+    except UpstreamError:
+        return None
+    return next((e.get("Id") for e in data.get("Items") or [] if e.get("IndexNumber") == number
+                 and (e.get("ParentIndexNumber") in (None, season))), None)

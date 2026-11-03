@@ -54,6 +54,8 @@
   </dl>
   {% endif %}
 
+  {% if d.cast %}{% set cast_sid = sid %}{% include "_cast.html" %}{% endif %}
+
   {% if d.critic is not none or d.community %}
   <div class="card mb">
     <h2>Ratings</h2>

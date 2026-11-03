@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% from "_watch.html" import watch_bar %}
+{% block title %}{{ u.title }}{% endblock %}
+{% block content %}
+<a class="small back-link" href="{{ '/me/upcoming' if user.is_viewer else '/automation' }}">← Coming up</a>
+
+<section class="title-hero lib-hero" style="--bd:url('{{ u.fanart }}')">
+  <div class="th-inner">
+    <span class="th-poster"><img src="{{ u.poster }}" alt="" onerror="this.remove()"></span>
+    <div class="th-info">
+      <span class="badge">{{ 'Episode' if u.kind == 'tv' else 'Movie' }}</span>
+      <h1>{{ u.title }}</h1>
+      <div class="th-meta">{% if u.code %}{{ u.code }} · {{ u.name }}{% else %}{{ u.year or '' }}{% endif %}</div>
+      <div class="th-badges">
+        {% if u.critic is not none %}<span class="rating rt {{ 'fresh' if u.fresh else 'rotten' }}" title="Rotten Tomatoes critics score">{{ '🍅' if u.fresh else '🤢' }} {{ u.critic }}%</span>{% endif %}
+        {% if u.rating %}<span class="rating star" title="Audience rating">★ {{ u.rating }}</span>{% endif %}
+        {% if u.premiere %}<span class="badge b-acc">Premiere</span>{% endif %}
+        {% if u.finale %}<span class="badge b-warn">{{ u.finale|capitalize }} finale</span>{% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+{% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}
+
+<div class="card mb up-when">
+  {% for label, when in u.dates %}<div class="spread"><span class="muted">{{ label }}</span><b>{{ when }}</b></div>{% endfor %}
+  <div class="spread"><span class="muted">On Jellyfin</span>
+    {% if on_jellyfin %}<span class="badge b-ok">✓ Ready to watch</span>
+    {% elif u.has_file %}<span class="badge b-acc">Downloaded — appearing soon</span>
+    {% else %}<span class="badge">Not yet{{ ' — the show is' if jf and u.kind == 'tv' }}{{ ' in your library' if jf and u.kind == 'tv' }}</span>{% endif %}</div>
+</div>
+
+{% if watch %}
+  {% if u.kind == 'tv' and not on_jellyfin %}<p class="small muted" style="margin:0 0 8px">This episode isn't out yet. Catch up on the show meanwhile:</p>{% endif %}
+  {{ watch_bar(watch, lib, watch.sid, request.url.path, csrf, show_user=not user.is_viewer) }}
+  {% if watch.internal and user.is_admin %}<p class="hint" style="margin:-6px 0 12px">This button uses Jellyfin's internal address, so it only works at home. <a href="/settings?edit={{ watch.sid }}#edit">Set Jellyfin's Link URL →</a></p>{% endif %}
+{% endif %}
+
+{% if u.overview %}
+<div class="card mb lib-summary">
+  {% if u.kind == 'tv' %}<h2 class="lib-tagline">{{ u.name }}</h2>{% endif %}
+  <p class="lib-overview">{{ u.overview }}</p>
+</div>
+{% endif %}
+{% if u.about %}
+<div class="card mb lib-summary">
+  <h2 class="lib-tagline">About {{ u.title }}</h2>
+  {% if u.about|length > 300 %}<input type="checkbox" id="ovm" class="ovm" hidden>{% endif %}
+  <p class="lib-overview{{ ' clamp' if u.about|length > 300 }}">{{ u.about }}</p>
+  {% if u.about|length > 300 %}<label for="ovm" class="ovm-btn small"></label>{% endif %}
+</div>
+{% endif %}
+
+{% if u.facts %}
+<dl class="facts mb">{% for k, v in u.facts %}<dt>{{ k }}</dt><dd>{{ v }}</dd>{% endfor %}</dl>
+{% endif %}
+
+{% if d and d.cast %}{% set cast_sid = jf.sid %}{% include "_cast.html" %}{% endif %}
+
+<div class="lib-links mb">
+  {% if jf %}<a class="btn sm" href="{{ lib }}/{{ jf.sid }}/{{ jf.id }}">Open in library</a>{% endif %}
+  {% for name, url in u.links %}<a class="btn sm" href="{{ url }}" target="_blank" rel="noopener">{{ name }} ↗</a>{% endfor %}
+</div>
+{% endblock %}
