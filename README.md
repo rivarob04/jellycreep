@@ -138,6 +138,10 @@ They never see other users, IP addresses, devices other than their own, download
 
 When a viewer's stream is being transcoded, JellyCreep explains why in plain English ("These subtitles have to be burned into the picture", "Your device can't play this audio track (TRUEHD)") and adds a tip they can act on. Their history marks each converted play with its reason, and the home page sums up how many recent plays were converted, the most common cause and the device it happened on.
 
+### "Also playing on the server" (anonymous)
+
+Jellyfin users' home page shows what else is being watched: poster, title, episode, progress, paused, and when it ends. It never shows **who** is watching, on what device or app, or from where (no usernames, IPs or locations). People only see titles their own Jellyfin account could watch; anything else just counts as "N more streams from libraries you don't have". Tapping a title opens its page. It refreshes live with the rest of the page. Turn it off under Settings → Sign-in → *What others are watching*.
+
 ### Watch on Jellyfin
 
 Every movie, show, season and episode page has a **▶ Watch on Jellyfin** button. It opens that title in Jellyfin (in a new tab, or in your browser if JellyCreep is installed as an app). For a show or season it picks the next episode to watch, and it says **Resume … from 12:34** when you're part-way through.

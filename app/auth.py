@@ -96,6 +96,7 @@ def login_settings() -> dict:
     out = {"enabled": bool(val.get("enabled", env)), "server_id": val.get("server_id"),
            "upcoming": bool(val.get("upcoming", True)), "recent": bool(val.get("recent", True)),
            "requests": bool(val.get("requests", True)), "server_activity": bool(val.get("server_activity", True)),
+           "others_titles": bool(val.get("others_titles", True)),
            "seerr_discover": bool(val.get("seerr_discover", True)), "seerr_everyone": bool(val.get("seerr_everyone", True)),
            "seerr_autolink": bool(val.get("seerr_autolink", False))}
     _CACHE.update(at=time.time(), val=out)

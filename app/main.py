@@ -771,12 +771,37 @@ def _mine(user: User):
     return or_(*conds)
 
 
-async def _my_streams(user: User) -> tuple[list[dict], int]:
+async def _my_streams(user: User, with_others: bool = False) -> tuple[list[dict], int, list[dict]]:
     streams, _ = await current_activity()
-    mine = [x for x in streams if _norm(x.get("user_id")) == user.jf_id or x.get("user_name") == user.name]
+    is_mine = lambda x: _norm(x.get("user_id")) == user.jf_id or x.get("user_name") == user.name  # noqa: E731
+    mine = [x for x in streams if is_mine(x)]
     for x in mine:   # never send IPs to viewers
         x["ip"] = None
-    return mine, len(streams) - len(mine)
+    rest = [x for x in streams if not is_mine(x)]
+    others = await _anon_streams(user, rest) if (with_others and rest and login_settings()["others_titles"]) else []
+    return mine, len(rest), others
+
+
+ANON_FIELDS = ("server_id", "item_id", "poster_id", "item_type", "title", "series_name", "season", "episode", "year",
+               "display", "progress", "is_paused", "ends_at", "resolution")
+
+
+async def _anon_streams(user: User, rest: list[dict]) -> list[dict]:
+    """What other people are watching, with nothing about *who*: no name, device, app, IP or location.
+    Only titles this person's own Jellyfin account could open are shown; the rest are just counted."""
+    rest = [x for x in rest if x.get("server_id") == user.server_id and x.get("item_id")]
+    if not rest:
+        return []
+    svc = next((x for x in services(("jellyfin",)) if x.id == user.server_id), None)
+    if not svc:
+        return []
+    client = await client_for(svc)
+    ids = list(dict.fromkeys(x["item_id"] for x in rest))[:30]
+    data, err = await safe(client.get("/Items", params={"userId": user.jf_id, "Ids": ",".join(ids)}))
+    visible = {i.get("Id") for i in ((data or {}).get("Items") or [])} if not err else set()
+    out = [{k: x.get(k) for k in ANON_FIELDS} for x in rest if x["item_id"] in visible]
+    out.sort(key=lambda x: (x["is_paused"] is True, -(x["progress"] or 0)))
+    return out[:12]
 
 
 async def _upcoming(days: int = 14) -> list[dict]:
@@ -832,7 +857,7 @@ async def page_me(request: Request, user: User = Depends(current_user)):
     if not user.is_viewer:
         return RedirectResponse("/", status_code=303)
     cfg = login_settings()
-    streams, others = await _my_streams(user)
+    streams, others, anon = await _my_streams(user, with_others=True)
     with SessionLocal() as db:
         last = db.scalar(select(Play).where(_mine(user)).order_by(Play.stopped_at.desc()))
         recent = list(db.scalars(select(Play).where(_mine(user)).order_by(Play.stopped_at.desc()).limit(10)))
@@ -848,7 +873,7 @@ async def page_me(request: Request, user: User = Depends(current_user)):
     added, upcoming, reqs = await asyncio.gather(added_job, up_job, req_job)
     if isinstance(added, tuple):
         added = added[0] or []
-    return render(request, "me.html", user, streams=streams, others=others if cfg["server_activity"] else None,
+    return render(request, "me.html", user, streams=streams, others=others if cfg["server_activity"] else None, anon=anon,
                   last=last, recent=recent, u=prof, added=added or [], upcoming=upcoming or [], home_requests=reqs or [], everyone=cfg["seerr_everyone"],
                   server_ok=bool(svc and svc.last_ok is not False), server_name=svc.name if svc else "Jellyfin",
                   tips=tips)
@@ -858,10 +883,11 @@ async def page_me(request: Request, user: User = Depends(current_user)):
 async def partial_me(request: Request, user: User = Depends(current_user)):
     if not user.is_viewer:
         raise HTTPException(404)
-    streams, _ = await _my_streams(user)
+    streams, others, anon = await _my_streams(user, with_others=True)
     with SessionLocal() as db:
         last = db.scalar(select(Play).where(_mine(user)).order_by(Play.stopped_at.desc()))
-    return render(request, "_hero.html", user, streams=streams, last=last)
+    return render(request, "_hero.html", user, streams=streams, last=last, anon=anon,
+                  others=others if login_settings()["server_activity"] else None)
 
 
 @app.get("/me/history", response_class=HTMLResponse)
@@ -1386,6 +1412,7 @@ async def save_signin(request: Request, user: User = Depends(admin_user)):
         "enabled": form.get("enabled") == "on", "server_id": int(sid) if sid.isdigit() else None,
         "upcoming": form.get("upcoming") == "on", "recent": form.get("recent") == "on",
         "requests": form.get("requests") == "on", "server_activity": form.get("server_activity") == "on",
+        "others_titles": form.get("others_titles") == "on",
         "seerr_discover": form.get("seerr_discover") == "on", "seerr_everyone": form.get("seerr_everyone") == "on",
         "seerr_autolink": form.get("seerr_autolink") == "on",
     })

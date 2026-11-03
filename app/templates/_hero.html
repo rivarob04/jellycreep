@@ -69,3 +69,25 @@
   </article>
 </section>
 {% endif %}
+
+{% if user.is_viewer and anon is defined %}
+{% set hidden_n = (others or 0) - (anon|length) %}
+{% if anon or hidden_n > 0 %}
+<div class="spread section-title"><h2 style="margin:0">Also playing on the server</h2>
+  <span class="small muted">{{ others or anon|length }} stream{{ 's' if (others or anon|length) != 1 }}</span></div>
+<div class="anon-list mb">
+  {% for a in anon %}
+  <a class="anon-card" href="/me/library/{{ a.server_id }}/{{ a.item_id }}">
+    <span class="anon-poster"><b>{{ (a.series_name or a.title or '?')[:1] }}</b>{% if a.poster_id %}<img loading="lazy" src="{{ imgp }}/{{ a.server_id }}/{{ a.poster_id }}?h=180" alt="" onerror="this.remove()">{% endif %}</span>
+    <span class="anon-body">
+      <span class="anon-title">{{ a.series_name if a.item_type == 'Episode' and a.series_name else a.title }}</span>
+      <span class="anon-sub">{% if a.item_type == 'Episode' %}{% if a.season is not none %}S{{ a.season }} • E{{ a.episode or '?' }} · {% endif %}{{ a.title }}{% else %}{{ a.year or '' }}{% endif %}</span>
+      <span class="anon-meta">{% if a.is_paused %}⏸ Paused{% else %}<i class="live-dot"></i> Watching now{% endif %}{% if a.resolution %} · {{ a.resolution }}{% endif %}{% if a.ends_at and not a.is_paused %} · ends {{ a.ends_at }}{% endif %}</span>
+      <span class="anon-bar"><i style="width:{{ a.progress or 0 }}%"></i></span>
+    </span>
+  </a>
+  {% endfor %}
+  {% if hidden_n > 0 %}<div class="anon-more small muted">{{ '+ ' if anon }}{{ hidden_n }} {{ 'more ' if anon }}stream{{ 's' if hidden_n != 1 }} from libraries you don't have.</div>{% endif %}
+</div>
+{% endif %}
+{% endif %}

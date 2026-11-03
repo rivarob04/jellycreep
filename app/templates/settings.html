@@ -105,6 +105,7 @@
       <label class="check"><input type="checkbox" name="upcoming" {{ 'checked' if signin.upcoming }}> Upcoming episodes &amp; movies (Sonarr/Radarr calendar)</label>
       <label class="check"><input type="checkbox" name="requests" {{ 'checked' if signin.requests }}> Seerr requests (home page row and Requests page)</label>
       <label class="check"><input type="checkbox" name="server_activity" {{ 'checked' if signin.server_activity }}> How many other people are watching (count only, no names)</label>
+      <label class="check"><input type="checkbox" name="others_titles" {{ 'checked' if signin.others_titles }}> What others are watching — title, episode and progress only (never who, on what device, or from where; only titles they could watch themselves)</label>
     </fieldset>
     <fieldset class="full"><legend>Seerr</legend>
       <label class="check"><input type="checkbox" name="seerr_discover" {{ 'checked' if signin.seerr_discover }}> Discover &amp; request — browse trending/popular/upcoming, search, and request movies and series</label>
