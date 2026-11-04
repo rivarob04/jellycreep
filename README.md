@@ -58,7 +58,7 @@
 | Sonarr / Radarr / Lidarr / Prowlarr | `http://sonarr:8989` or `https://sonarr.example.com` | Settings → General → API Key |
 | SABnzbd | `http://sabnzbd:8080` | Config → General → **API Key** (not the NZB key) |
 | qBittorrent | `http://qbittorrent:8080` | Web UI username + password |
-| Jellyseerr / Seerr | `http://jellyseerr:5055` | Settings → General → API Key |
+| Seerr | `http://jellyseerr:5055` | Settings → General → API Key |
 
 Any of these can also sit behind Authentik; see below.
 

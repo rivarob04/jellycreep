@@ -62,7 +62,7 @@ SERVICE_KINDS = {
     "prowlarr": "Prowlarr",
     "sabnzbd": "SABnzbd",
     "qbittorrent": "qBittorrent",
-    "jellyseerr": "Jellyseerr / Seerr",
+    "jellyseerr": "Seerr",
     "jellystat": "Jellystat",
     "wizarr": "Wizarr",
 }

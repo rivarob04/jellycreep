@@ -120,7 +120,11 @@
     <a class="btn sm" href="{{ p.svc.link }}" target="_blank" rel="noopener">Open ↗</a>
   </div>
   {% if p.error %}<div class="notice bad">{{ p.error }}</div>{% endif %}
-  {% for h in p.health or [] %}<div class="notice {{ 'bad' if h.type == 'error' else 'warn' }} small">⚠ {{ h.message }}</div>{% endfor %}
+  {% for h in p.health or [] %}
+  {% if (h.message or '')|length > 160 %}
+  <details class="notice {{ 'bad' if h.type == 'error' else 'warn' }} small health-long"><summary>⚠ {{ h.message[:150] }}… <span class="show-all">Show all</span></summary>{{ h.message }}</details>
+  {% else %}<div class="notice {{ 'bad' if h.type == 'error' else 'warn' }} small">⚠ {{ h.message }}</div>{% endif %}
+  {% endfor %}
 
   {% if p.svc.kind in ('sonarr', 'radarr', 'lidarr') %}
     {{ sec('Queue', (p.queue or [])|length) }}
@@ -151,35 +155,6 @@
       {% endfor %}
     </div>
     {% else %}<p class="muted small">Queue is empty. 🎉</p>{% endif %}
-
-    {% if p.history %}
-    <details>
-      <summary class="sum">Recent activity ({{ p.history|length }})</summary>
-      <div class="list">
-        {% for h in p.history %}
-        {% set ev = h.eventType or '' %}
-        <div class="spread">
-          <span style="min-width:0;flex:1"><span class="ellip" style="display:block">{% if h.series %}{{ h.series.title }}{% if h.episode %} S{{ '%02d'|format(h.episode.seasonNumber) }}E{{ '%02d'|format(h.episode.episodeNumber) }}{% endif %}{% elif h.movie %}{{ h.movie.title }}{% else %}{{ h.sourceTitle }}{% endif %}</span>
-            <span class="meta">{{ (h.date or '')[:16]|replace('T', ' ') }}{% if h.quality and h.quality.quality %} · {{ h.quality.quality.name }}{% endif %}</span></span>
-          <span class="badge {{ 'b-ok' if 'Imported' in ev or 'downloadFolder' in ev else ('b-bad' if 'Fail' in ev else ('b-acc' if ev == 'grabbed' else '')) }}">{{ {'grabbed': 'Grabbed', 'downloadFolderImported': 'Imported', 'downloadFailed': 'Failed', 'episodeFileDeleted': 'Deleted', 'movieFileDeleted': 'Deleted', 'episodeFileRenamed': 'Renamed', 'movieFileRenamed': 'Renamed'}.get(ev, ev) }}</span>
-        </div>
-        {% endfor %}
-      </div>
-    </details>
-    {% endif %}
-
-    {% if p.disk %}
-    <details>
-      <summary class="sum">Disk space</summary>
-      {% for d in p.disk %}
-      {% set used = ((1 - d.freeSpace / d.totalSpace) * 100) if d.totalSpace else 0 %}
-      <div style="margin:8px 0">
-        <div class="spread small"><span class="mono ellip" style="max-width:55%">{{ d.path }}</span><span class="muted">{{ d.freeSpace|bytes }} free of {{ d.totalSpace|bytes }}</span></div>
-        <div class="bar"><i style="width: {{ used }}%; {{ 'background: var(--bad)' if used > 90 else ('background: var(--warn)' if used > 80) }}"></i></div>
-      </div>
-      {% endfor %}
-    </details>
-    {% endif %}
 
   {% elif p.svc.kind == 'prowlarr' %}
     {% set total = (p.indexers or [])|length %}

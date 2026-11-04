@@ -1145,3 +1145,14 @@ a.cast-card:active .cast-img, a.cast-card:hover .cast-img { transform: translate
 a.rank.tap { color: inherit; text-decoration: none; border-radius: 10px; }
 a.rank.tap:active, a.rank.tap:hover { background: rgba(255,255,255,.05); }
 .rank-go { font-size: 18px; margin-left: 4px; color: var(--muted); }
+
+/* ===================== v0.18.14 nothing may push the page wider than the screen ===================== */
+/* Long unbroken text (release names, file paths, comma lists from Sonarr/Radarr) wraps instead of
+   stretching the card and making the whole page slide sideways on phones. */
+.notice, .meta, .mr-body, .card, .list, .media-row, .bad-text { min-width: 0; overflow-wrap: anywhere; }
+.media-row .mr-body { max-width: 100%; }
+main { min-width: 0; max-width: 100%; }
+@media (max-width: 999px) { body { overflow-x: clip; } }   /* clip (not hidden): keeps the sticky header and pull-to-refresh working */
+.health-long > summary { list-style: none; cursor: pointer; } .health-long > summary::-webkit-details-marker { display: none; }
+.health-long .show-all { color: var(--accent-2); font-weight: 600; white-space: nowrap; }
+.health-long[open] > summary { display: none; }

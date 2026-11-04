@@ -71,10 +71,20 @@ def seed_services_from_env() -> None:
         db.commit()
 
 
+def _rename_seerr() -> None:
+    """One-time: services still named 'Jellyseerr / Seerr' (the old default) become just 'Seerr'."""
+    with SessionLocal() as db:
+        for svc in db.scalars(select(Service).where(Service.kind == "jellyseerr",
+                                                    Service.name.in_(("Jellyseerr / Seerr", "Jellyseerr")))):
+            svc.name = "Seerr"
+        db.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     seed_services_from_env()
+    _rename_seerr()
     task = asyncio.create_task(tracker.run_forever())
     warm = asyncio.create_task(_keep_warm())
     yield
@@ -516,14 +526,20 @@ AUTOMATION_TABS = {
 }
 
 
+async def _cached_panel(svc: Service, tab: str) -> dict:
+    """Sonarr/Radarr/SAB/qBit/Seerr panels go through Authentik and can be slow: show the last answer
+    straight away (refreshed every 15 s in the background), and fetch fresh right after an action."""
+    data = await ttl_cached(("arrpanel", svc.id, tab), 15, lambda: _arr_panel(svc, tab), stale=600)
+    return {**data, "svc": svc}
+
+
 async def _arr_panel(svc: Service, tab: str) -> dict:
     client = await client_for(svc)
     panel: dict[str, Any] = {"svc": svc}
     if tab == "queue" and svc.kind in ("sonarr", "radarr", "lidarr"):
-        (panel["queue"], e1), (panel["history"], e2), (panel["health"], e3), (panel["disk"], e4) = \
-            await asyncio.gather(safe(client.queue()), safe(client.history(15)), safe(client.health()),
-                                 safe(client.diskspace()))
-        panel["error"] = e1 or e2 or e3 or e4
+        # (recent activity and disk space live on Events and Libraries now)
+        (panel["queue"], e1), (panel["health"], e2) = await asyncio.gather(safe(client.queue()), safe(client.health()))
+        panel["error"] = e1 or e2
     elif svc.kind == "prowlarr":
         (panel["indexers"], e1), (panel["status"], e2), (panel["health"], e3) = await asyncio.gather(
             safe(client.indexers()), safe(client.indexer_status()), safe(client.health()))
@@ -571,7 +587,9 @@ async def page_automation(request: Request, tab: str = "calendar", m: str | None
     if tab == "calendar" and available:
         ctx["cal"], ctx["errors"] = await _calendar(m)
     elif available:
-        ctx["panels"] = await asyncio.gather(*(_arr_panel(s, tab) for s in services(available[tab][1])))
+        if ctx["flash"]:                       # just approved / removed / paused something: show it fresh
+            ttl_forget("arrpanel")
+        ctx["panels"] = await asyncio.gather(*(_cached_panel(s, tab) for s in services(available[tab][1])))
     return render(request, "automation.html", user, **ctx)
 
 
@@ -931,6 +949,7 @@ async def _keep_warm() -> None:
     while True:
         await step("libraries", ttl_cached(("media",), 120, _media_servers, stale=6 * 3600), 60)
         await step("storage", ttl_cached(("storage",), 600, _storage_report, stale=6 * 3600), 120)
+        await step("queue", asyncio.gather(*(_cached_panel(x, "queue") for x in services(("sonarr", "radarr", "lidarr")))), 60)
         if login_settings()["enabled"] and login_settings()["seerr_discover"]:
             await step("discover", discover_rows(), 60)
         if login_settings()["enabled"] and login_settings()["upcoming"]:
