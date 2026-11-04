@@ -106,7 +106,12 @@ async def browse_genre(client, svc_id: int, kind: str, gid: int, page: int) -> l
 COMPANIES = {"network": {i: (n, LOGO + p) for i, n, p in NETWORKS},
              "studio": {i: (n, LOGO + p) for i, n, p in STUDIOS}}
 TILES = {k: [{"id": i, "name": n, "logo": l} for i, (n, l) in v.items()] for k, v in COMPANIES.items()}
-FILTERS = {"all": "All", "pending": "Waiting", "processing": "Approved", "available": "Available"}
+# Seerr's own request filters / sorts (GET /api/v1/request)
+FILTERS = {"all": "All", "pending": "Pending", "approved": "Approved", "processing": "Processing",
+           "available": "Available", "unavailable": "Unavailable", "failed": "Failed", "deleted": "Deleted",
+           "completed": "Completed"}
+MEDIA_TYPES = {"all": "All", "movie": "Movies", "tv": "Series"}
+SORTS = {"added": "Most Recent", "modified": "Last Modified"}
 
 # --------------------------------------------------------------------------- cache
 _C: dict[Any, tuple[float, Any]] = {}
@@ -187,6 +192,25 @@ def _when(s: str | None) -> datetime | None:
         return datetime.fromisoformat(s.replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def ago_long(dt: datetime | None) -> str:
+    """Seerr-style: 'just now', '34 minutes ago', 'yesterday', '3 days ago', 'Mar 4, 2025'."""
+    if not dt:
+        return ""
+    secs = (datetime.now(timezone.utc) - dt).total_seconds()
+    if secs < 60:
+        return "just now"
+    for unit, n, lim in (("minute", 60, 3600), ("hour", 3600, 86400)):
+        if secs < lim:
+            k = int(secs // n)
+            return f"{k} {unit}{'s' if k != 1 else ''} ago"
+    days = int(secs // 86400)
+    if days == 1:
+        return "yesterday"
+    if days < 30:
+        return f"{days} days ago"
+    return f"{dt:%b} {dt.day}, {dt.year}"
 
 
 def ago(dt: datetime | None) -> str:
@@ -468,12 +492,20 @@ def _req_row(r: dict, me: int | None, everyone: bool, can_manage: bool) -> dict 
             "seasons": sorted(s.get("seasonNumber") for s in r.get("seasons") or [] if s.get("seasonNumber") is not None),
             "created": created, "ago": ago(created), "progress": progress(media, r.get("is4k")) if st == 2 else None,
             "can_cancel": mine and st == 1, "can_manage": can_manage and st == 1,
-            "modified_by": who(r.get("modifiedBy")) if r.get("modifiedBy") and st in (2, 3) else None}
+            "modified_by": who(r.get("modifiedBy")) if r.get("modifiedBy") and st in (2, 3) else None,
+            "req_when": ago_long(created), "mod_when": ago_long(_when(r.get("updatedAt"))),
+            "mod_name": who(r.get("modifiedBy")) if r.get("modifiedBy") else None,
+            "mod_initial": who(r.get("modifiedBy"))[:1].upper() if r.get("modifiedBy") else None,
+            "mod_colour": colour(who(r.get("modifiedBy"))) if r.get("modifiedBy") else None}
 
 
 async def feed(client, svc_id: int, me: int | None, *, everyone: bool, can_manage: bool = False,
-               flt: str = "all", page: int = 1, take: int = 20) -> tuple[list[dict], int]:
-    params = {"take": str(take), "skip": str((page - 1) * take), "sort": "added", "filter": flt if flt in FILTERS else "all"}
+               flt: str = "all", page: int = 1, take: int = 20, mtype: str = "all", sort: str = "added",
+               desc: bool = True) -> tuple[list[dict], int]:
+    params = {"take": str(take), "skip": str((page - 1) * take), "sort": sort if sort in SORTS else "added",
+              "filter": flt if flt in FILTERS else "all", "sortDirection": "desc" if desc else "asc"}
+    if mtype in ("movie", "tv"):
+        params["mediaType"] = mtype
     if not everyone:
         if me is None:
             return [], 0

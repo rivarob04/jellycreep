@@ -1,33 +1,97 @@
 {% extends "base.html" %}
-{% from "_seerr.html" import req_item, quota_line, not_linked %}
+{% from "_seerr.html" import quota_line, not_linked %}
 {% block title %}Requests{% endblock %}
 {% block content %}
 {% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}
-<div class="spread"><h1>Requests</h1>{% if portal_seerr %}<a class="btn sm primary" href="/me/discover">＋ Request something</a>{% endif %}</div>
+{% set here = '/me/requests?' ~ qs ~ '&page=' ~ page %}
+
+<div class="rq-head">
+  <h1>Requests</h1>
+  <form class="rq-tools" method="get" action="/me/requests" data-autosubmit>
+    {% if seerr.everyone %}
+    <label class="rq-sel" title="Whose requests">
+      <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14.6c2.6.2 4.4 1.9 5 5"/></svg>
+      <select name="view" aria-label="Whose requests">
+        <option value="everyone" {{ 'selected' if view == 'everyone' }}>Everyone</option>
+        <option value="mine" {{ 'selected' if view == 'mine' }}>Mine</option>
+      </select>
+    </label>
+    {% else %}<input type="hidden" name="view" value="{{ view }}">{% endif %}
+    <label class="rq-sel" title="Movies or series">
+      <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/><path d="M4 11.5v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+      <select name="mt" aria-label="Movies or series">
+        {% for k, label in media_types.items() %}<option value="{{ k }}" {{ 'selected' if mt == k }}>{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="rq-sel" title="Status">
+      <svg viewBox="0 0 24 24"><path d="M3 4.5h18l-7 8.2v5.8l-4 2v-7.8z"/></svg>
+      <select name="f" aria-label="Status">
+        {% for k, label in filters.items() %}<option value="{{ k }}" {{ 'selected' if f == k }}>{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <div class="rq-sel rq-sort" title="Sort">
+      <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h11M4 17h6"/></svg>
+      <select name="sort" aria-label="Sort by">
+        {% for k, label in sorts.items() %}<option value="{{ k }}" {{ 'selected' if sort == k }}>{{ label }}</option>{% endfor %}
+      </select>
+      <input type="hidden" name="dir" value="{{ 'desc' if desc else 'asc' }}">
+      <a class="rq-dir" href="?view={{ view }}&mt={{ mt }}&f={{ f }}&sort={{ sort }}&dir={{ 'asc' if desc else 'desc' }}"
+         aria-label="{{ 'Oldest first' if desc else 'Newest first' }}" title="{{ 'Newest first — tap for oldest first' if desc else 'Oldest first — tap for newest first' }}">
+        <svg viewBox="0 0 24 24">{% if desc %}<path d="M12 4v16M6 14l6 6 6-6"/>{% else %}<path d="M12 20V4M6 10l6-6 6 6"/>{% endif %}</svg></a>
+    </div>
+    <noscript><button class="btn sm">Apply</button></noscript>
+  </form>
+</div>
+
 {{ not_linked(seerr) }}
 {{ quota_line(quota) }}
-
-{% if seerr.everyone %}
-<div class="seg mb">
-  <a href="?view=everyone&f={{ f }}" class="{{ 'on' if view == 'everyone' }}">Everyone</a>
-  <a href="?view=mine&f={{ f }}" class="{{ 'on' if view == 'mine' }}">Mine</a>
-</div>
-{% endif %}
-<div class="fchips mb">
-  {% for k, label in filters.items() %}<a class="fchip{{ ' on' if f == k }}" href="?view={{ view }}&f={{ k }}">{{ label }}</a>{% endfor %}
-</div>
-
 {% if error %}<div class="notice bad small">Couldn't reach Seerr: {{ error }}</div>{% endif %}
-<div class="card flush">
-  {% for r in rows %}{{ req_item(r, csrf, '/me/requests?view=' ~ view ~ '&f=' ~ f ~ '&page=' ~ page) }}
-  {% else %}<div class="empty"><div class="empty-icon">📭</div>No requests here yet.</div>{% endfor %}
+
+<div class="rq-list">
+{% for r in rows %}
+  <article class="rq-card"{% if r.backdrop %} style="--bd:url('{{ r.backdrop }}')"{% endif %}>
+    <div class="rq-main">
+      <span class="rq-poster">{% if r.poster %}<img loading="lazy" src="{{ r.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ r.title[:1] }}</b></span>
+      <div class="rq-titles">
+        {% if r.year %}<span class="rq-year">{{ r.year }}</span>{% endif %}
+        <a class="rq-title" href="/me/discover/{{ r.type }}/{{ r.tmdb }}">{{ r.title }}</a>
+        {% if r.seasons %}<span class="rq-row"><span class="rq-k">{{ 'Season' if r.seasons|length == 1 else 'Seasons' }}</span>{% for n in r.seasons[:8] %}<i class="rw-n">{{ n }}</i>{% endfor %}{% if r.seasons|length > 8 %}<i class="rw-n">+{{ r.seasons|length - 8 }}</i>{% endif %}</span>{% endif %}
+      </div>
+    </div>
+    <div class="rq-meta">
+      <div class="rq-row"><span class="rq-k">Status</span><span class="badge {{ r.badge[1] }}">{{ r.badge[0] }}</span>{% if r.is4k %}<span class="badge">4K</span>{% endif %}
+        <span class="badge rq-type {{ r.type }}">{{ 'Movie' if r.type == 'movie' else 'Series' }}</span></div>
+      {% if r.progress is not none %}<div class="mini-bar rq-bar"><i style="width:{{ r.progress }}%"></i></div>{% endif %}
+      <div class="rq-row"><span class="rq-k">Requested</span><span>{{ r.req_when }} by</span>
+        <span class="rq-who"><span class="avatar xs" style="background:{{ r.colour }}">{{ r.initial }}</span>{{ 'You' if r.mine else r.by_name }}</span></div>
+      {% if r.mod_name %}
+      <div class="rq-row"><span class="rq-k">Modified</span><span>{% if r.mod_when %}{{ r.mod_when }} {% endif %}by</span>
+        <span class="rq-who"><span class="avatar xs" style="background:{{ r.mod_colour }}">{{ r.mod_initial }}</span>{{ r.mod_name }}</span></div>
+      {% endif %}
+    </div>
+    {% if r.can_cancel or r.can_manage %}
+    <div class="rq-actions">
+      {% if r.can_manage %}
+      <form method="post" action="/me/requests/{{ r.id }}/approve"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ here }}"><button class="rq-btn ok"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Approve</button></form>
+      <form method="post" action="/me/requests/{{ r.id }}/decline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ here }}"><button class="rq-btn bad"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>Decline</button></form>
+      {% endif %}
+      {% if r.can_cancel %}
+      <form method="post" action="/me/requests/{{ r.id }}/cancel" onsubmit="return confirm('Cancel this request?')"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ here }}"><button class="rq-btn bad"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>Cancel request</button></form>
+      {% endif %}
+    </div>
+    {% endif %}
+  </article>
+{% else %}
+  <div class="card empty"><div class="empty-icon">📭</div>No requests match these filters.</div>
+{% endfor %}
 </div>
 
 {% if pages > 1 %}
 <div class="pager">
-  {% if page > 1 %}<a class="btn sm" href="?view={{ view }}&f={{ f }}&page={{ page - 1 }}">← Newer</a>{% endif %}
+  {% if page > 1 %}<a class="btn sm" href="?{{ qs }}&page={{ page - 1 }}">← Previous</a>{% endif %}
   <span class="muted small">Page {{ page }} of {{ pages }}</span>
-  {% if page < pages %}<a class="btn sm" href="?view={{ view }}&f={{ f }}&page={{ page + 1 }}">Older →</a>{% endif %}
+  {% if page < pages %}<a class="btn sm" href="?{{ qs }}&page={{ page + 1 }}">Next →</a>{% endif %}
 </div>
 {% endif %}
+{% if portal_seerr %}<p class="small"><a class="small" href="/me/discover">＋ Request something</a></p>{% endif %}
 {% endblock %}

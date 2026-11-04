@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from urllib.parse import urlencode
 import copy
 import json
 import logging
@@ -1827,16 +1828,17 @@ async def act_request(request: Request, mt: str, tmdb: int, user: User = Depends
     return back
 
 
-async def _req_feed(sc: dict, everyone: bool, f: str = "all", page: int = 1):
+async def _req_feed(sc: dict, everyone: bool, f: str = "all", page: int = 1, mt: str = "all", sort: str = "added",
+                    desc: bool = True):
     c, sid = sc["client"], sc["svc"].id
-    return await ttl_cached(("reqfeed", sid, sc["uid"], everyone, sc["manage"], f, page), 20,
+    return await ttl_cached(("reqfeed", sid, sc["uid"], everyone, sc["manage"], f, page, mt, sort, desc), 20,
                             lambda: seerr_portal.feed(c, sid, sc["uid"], everyone=everyone, can_manage=sc["manage"],
-                                                      flt=f, page=page), stale=600)
+                                                      flt=f, page=page, mtype=mt, sort=sort, desc=desc), stale=600)
 
 
 @app.get("/me/requests", response_class=HTMLResponse)
-async def page_requests(request: Request, view: str = "everyone", f: str = "all", page: int = 1,
-                        user: User = Depends(current_user)):
+async def page_requests(request: Request, view: str = "everyone", f: str = "all", page: int = 1, mt: str = "all",
+                        sort: str = "added", dir: str = "desc", user: User = Depends(current_user)):
     if (r := _viewer_page(user)):
         return r
     sc = await _seerr(user, need_discover=False)
@@ -1845,14 +1847,20 @@ async def page_requests(request: Request, view: str = "everyone", f: str = "all"
     everyone = sc["everyone"] and view != "mine"
     page = max(1, min(page, 200))
     f = f if f in seerr_portal.FILTERS else "all"
+    mt = mt if mt in seerr_portal.MEDIA_TYPES else "all"
+    sort = sort if sort in seerr_portal.SORTS else "added"
+    desc = dir != "asc"
     c, sid = sc["client"], sc["svc"].id
     (res, err), quota = await asyncio.gather(
-        safe(_req_feed(sc, everyone, f, page)),
+        safe(_req_feed(sc, everyone, f, page, mt, sort, desc)),
         ttl_cached(("quota", sid, sc["uid"]), 60, lambda: seerr_portal.quota(c, sc["uid"]), stale=3600)
         if sc["uid"] else asyncio.sleep(0))
     rows, pages = res or ([], 1)
-    return render(request, "me_requests.html", user, seerr=sc, rows=rows, pages=pages, page=page, f=f,
-                  view="everyone" if everyone else "mine", error=err, quota=quota, filters=seerr_portal.FILTERS)
+    view = "everyone" if everyone else "mine"
+    qs = urlencode({"view": view, "f": f, "mt": mt, "sort": sort, "dir": "desc" if desc else "asc"})
+    return render(request, "me_requests.html", user, seerr=sc, rows=rows, pages=pages, page=page, f=f, mt=mt,
+                  sort=sort, desc=desc, view=view, error=err, quota=quota, qs=qs, filters=seerr_portal.FILTERS,
+                  media_types=seerr_portal.MEDIA_TYPES, sorts=seerr_portal.SORTS)
 
 
 @app.post("/me/requests/{req_id}/{action}")

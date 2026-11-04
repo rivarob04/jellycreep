@@ -401,3 +401,8 @@ document.addEventListener("click", (e) => {
     }
   });
 })();
+
+// v0.18.28 — filter bars that apply as soon as you change a dropdown
+document.querySelectorAll('form[data-autosubmit] select').forEach((s) => {
+  s.addEventListener('change', () => s.form.requestSubmit ? s.form.requestSubmit() : s.form.submit());
+});
