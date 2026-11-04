@@ -515,7 +515,8 @@ async def recent_window(client, uid: str, kind: str = "all", days: int = RECENT_
             "StartIndex": str(start), "Limit": str(page), "IsMissing": "false", "EnableImageTypes": "Primary,Backdrop,Thumb",
             "ImageTypeLimit": "1", "Fields": "DateCreated,ProductionYear,ParentId,SeriesId,ParentBackdropItemId"}) or {}
         items = data.get("Items") or []
-        fresh = [i for i in items if (_when(i.get("DateCreated")) or cutoff) >= cutoff]
+        fresh = [i for i in items if (_when(i.get("DateCreated")) or cutoff) >= cutoff
+                 and i.get("Type") in types.split(",")]          # belt and braces for the type filter
         raw.extend(fresh)
         if len(items) < page or len(fresh) < len(items):
             break                       # reached the end, or items older than the window
