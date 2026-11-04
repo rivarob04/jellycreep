@@ -2310,6 +2310,12 @@ async def do_login(request: Request):
                                "jf_id": str(ju.get("Id") or "").replace("-", "").lower(),
                                "server_id": svc.id, "checked": time.time()}
     log.info("Jellyfin user %s signed in from %s", ju.get("Name"), ip)
+    su = request.session["user"]
+    try:                                   # get their Discover / Requests ready while Home loads
+        warm_discover(User(name=su["name"], is_admin=False, via="jellyfin", role="viewer",
+                           jf_id=su["jf_id"], server_id=su["server_id"]))
+    except Exception:  # noqa: BLE001
+        pass
     return RedirectResponse(nxt, status_code=303)
 
 
