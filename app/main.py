@@ -247,10 +247,28 @@ _TTL: dict[Any, tuple[float, Any]] = {}
 _INFLIGHT: dict[Any, asyncio.Future] = {}
 
 
-async def ttl_cached(key: Any, ttl: float, factory) -> Any:
+_BG: set = set()
+
+
+async def ttl_cached(key: Any, ttl: float, factory, stale: float = 0) -> Any:
+    """Short shared cache. With ``stale``, an expired answer is still returned at once (for up to
+    ``stale`` seconds) while a fresh one is fetched in the background."""
     hit = _TTL.get(key)
     now = time.monotonic()
     if hit and hit[0] > now:
+        return hit[1]
+    if stale and hit and hit[0] + stale > now:
+        if key not in _BG and key not in _INFLIGHT:
+            _BG.add(key)
+
+            async def refresh():
+                try:
+                    _TTL[key] = (time.monotonic() + ttl, await factory())
+                except Exception:  # noqa: BLE001
+                    pass
+                finally:
+                    _BG.discard(key)
+            asyncio.get_running_loop().create_task(refresh())
         return hit[1]
     if key in _INFLIGHT:                       # someone is already fetching this: wait for them
         return await asyncio.shield(_INFLIGHT[key])
@@ -260,7 +278,7 @@ async def ttl_cached(key: Any, ttl: float, factory) -> Any:
         val = await factory()
         _TTL[key] = (time.monotonic() + ttl, val)
         if len(_TTL) > 2000:
-            for k in [k for k, (exp, _) in _TTL.items() if exp < now][:1000]:
+            for k in [k for k, (exp, _) in _TTL.items() if exp + 3600 < now][:1000]:
                 _TTL.pop(k, None)
         fut.set_result(val)
         return val
@@ -883,6 +901,9 @@ async def _keep_warm() -> None:
     await asyncio.sleep(5)
     while True:
         try:
+            if login_settings()["enabled"] and login_settings()["seerr_discover"]:
+                for svc in services(("jellyseerr",))[:1]:
+                    await asyncio.wait_for(seerr_portal.discover(await client_for(svc), svc.id), timeout=60)
             if login_settings()["enabled"] and login_settings()["upcoming"]:
                 for days in (14, 90):
                     val = await asyncio.wait_for(_upcoming_fetch(days), timeout=60)
@@ -951,6 +972,7 @@ async def page_me(request: Request, user: User = Depends(current_user)):
         recent = list(db.scalars(select(Play).where(_mine(user)).order_by(Play.stopped_at.desc()).limit(10)))
         tips = explain.summary(db.scalars(select(Play).where(_mine(user), Play.started_at >= utcnow() - timedelta(days=30))))
     prof = await _profile(user)
+    warm_discover(user)          # get Discover ready in the background while they look at Home
     svc = next((x for x in services(("jellyfin",)) if x.id == user.server_id), None)
     # The rows that need Sonarr/Radarr/Seerr/Jellyfin library calls load after the page (see /partials/me/…),
     # unless they're already cached — then they're drawn straight away.
@@ -985,8 +1007,8 @@ async def _section_data(user: User, name: str):
         async def fetch():
             items, _ = await safe((await client_for(svc)).recently_added(16, user.jf_id))
             return items or []
-        return await ttl_cached(_section_key(user, "added"), 120, fetch)
-    return await ttl_cached(_section_key(user, "requests"), 60, lambda: _home_requests(user))
+        return await ttl_cached(_section_key(user, "added"), 120, fetch, stale=1800)
+    return await ttl_cached(_section_key(user, "requests"), 60, lambda: _home_requests(user), stale=1800)
 
 
 SECTION_FLAGS = {"upcoming": "upcoming", "added": "recent", "requests": "requests"}
@@ -1464,8 +1486,10 @@ async def _jf_lookup(user: User) -> dict | None:
     if not svc or not user.jf_id:
         return None
     client = await client_for(svc)
-    (idx, err), jf_sid = await asyncio.gather(safe(library.tmdb_index(client, svc.id, user.jf_id)),
-                                              library.server_id(client, svc.id))
+    (idx, err), jf_sid = await asyncio.gather(
+        safe(ttl_cached(("jfidx", svc.id, user.jf_id), 300,
+                        lambda: library.tmdb_index(client, svc.id, user.jf_id, ttl=0), stale=6 * 3600)),
+        library.server_id(client, svc.id))
     if err or not idx:
         return None
     return {"svc": svc, "client": client, "idx": idx, "jf_sid": jf_sid}
@@ -1490,6 +1514,46 @@ def _viewer_page(user: User, fallback: str = "/automation?tab=requests"):
     return None if user.is_viewer else RedirectResponse(fallback, status_code=303)
 
 
+async def _discover_data(user: User, sc: dict):
+    """Everything the Discover front page needs, fetched at the same time (and mostly cached)."""
+    c, sid = sc["client"], sc["svc"].id
+    want_added = login_settings()["recent"]
+
+    async def added():
+        try:
+            return await asyncio.wait_for(_section_data(user, "added"), timeout=6) if want_added else []
+        except Exception:  # noqa: BLE001
+            return []
+    return await asyncio.gather(
+        safe(seerr_portal.discover(c, sid)),
+        safe(ttl_cached(("discfeed", sid, sc["uid"], sc["everyone"]), 30,
+                        lambda: seerr_portal.feed(c, sid, sc["uid"], everyone=sc["everyone"], take=16), stale=1800)),
+        ttl_cached(("quota", sid, sc["uid"]), 60, lambda: seerr_portal.quota(c, sc["uid"]), stale=3600)
+        if sc["uid"] else asyncio.sleep(0),
+        added(), _jf_lookup(user))
+
+
+_WARMING: set = set()
+
+
+def warm_discover(user: User) -> None:
+    """Prepare someone's Discover page in the background (called from Home), so opening it is instant."""
+    if not user.is_viewer or user.jf_id in _WARMING or not login_settings()["seerr_discover"]:
+        return
+    _WARMING.add(user.jf_id)
+
+    async def go():
+        try:
+            sc = await _seerr(user)
+            if sc:
+                await asyncio.wait_for(_discover_data(user, sc), timeout=60)
+        except Exception:  # noqa: BLE001
+            pass
+        finally:
+            _WARMING.discard(user.jf_id)
+    asyncio.get_running_loop().create_task(go())
+
+
 @app.get("/me/discover", response_class=HTMLResponse)
 async def page_discover(request: Request, q: str = "", row: str = "", page: int = 1, user: User = Depends(current_user)):
     if (r := _viewer_page(user)):
@@ -1505,18 +1569,11 @@ async def page_discover(request: Request, q: str = "", row: str = "", page: int 
             ctx["results"], ctx["error"] = await safe(seerr_portal.browse(c, sid, ctx["row"], ctx["page"]))
             ctx["row_title"] = seerr_portal.ROW_BY_KEY[ctx["row"]][0]
         else:
-            (rows, e1), (recent, _), quota = await asyncio.gather(
-                safe(seerr_portal.discover(c, sid)),
-                safe(seerr_portal.feed(c, sid, sc["uid"], everyone=sc["everyone"], take=16)),
-                seerr_portal.quota(c, sc["uid"]) if sc["uid"] else asyncio.sleep(0))
-            ctx.update(rows=rows or [], recent=(recent or ([], 0))[0], error=e1, quota=quota)
-        if not ctx["q"] and not ctx["row"] and login_settings()["recent"]:
-            try:
-                ctx["jf_added"] = await asyncio.wait_for(_section_data(user, "added"), timeout=6)
-            except Exception:  # noqa: BLE001
-                ctx["jf_added"] = []
-            ctx["jf_sid"] = user.server_id
-        jf = await _jf_lookup(user)
+            (rows, e1), (recent, _), quota, jf_added, jf = await _discover_data(user, sc)
+            ctx.update(rows=rows or [], recent=(recent or ([], 0))[0], error=e1, quota=quota,
+                       jf_added=jf_added, jf_sid=user.server_id)
+        if ctx["q"] or ctx["row"]:
+            jf = await _jf_lookup(user)
         ctx["results"] = _mark_watchable(jf, ctx["results"])
         ctx["recent"] = _mark_watchable(jf, ctx["recent"], "tmdb")
         ctx["rows"] = [{**r, "items": _mark_watchable(jf, r["items"])} for r in ctx["rows"]]
@@ -1602,7 +1659,7 @@ async def act_request(request: Request, mt: str, tmdb: int, user: User = Depends
         return back
     seerr_portal.forget("row")
     seerr_portal.forget("similar")
-    ttl_forget("homereq")
+    ttl_forget("homereq"); ttl_forget("discfeed"); ttl_forget("quota")
     log.info("Seerr request by %s: %s %s seasons=%s 4k=%s", user.name, mt, tmdb, seasons, is4k)
     auto = (res or {}).get("status") == 2
     request.session["flash"] = {"ok": True, "msg": "Requested — it was approved automatically and will start downloading."
@@ -1648,7 +1705,7 @@ async def act_my_request(request: Request, req_id: int, action: str, user: User 
         else:
             await seerr_portal.moderate(sc["client"], sc["uid"], req_id, action)
         seerr_portal.forget("row")
-        ttl_forget("homereq")
+        ttl_forget("homereq"); ttl_forget("discfeed"); ttl_forget("quota")
         request.session["flash"] = {"ok": True, "msg": {"cancel": "Request cancelled.", "approve": "Approved.",
                                                         "decline": "Declined."}[action]}
     except UpstreamError as e:

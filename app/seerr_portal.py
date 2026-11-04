@@ -47,15 +47,33 @@ FILTERS = {"all": "All", "pending": "Waiting", "processing": "Approved", "availa
 _C: dict[Any, tuple[float, Any]] = {}
 
 
-async def cached(key: Any, ttl: float, fn: Callable[[], Awaitable[Any]]) -> Any:
+_REFRESHING: set = set()
+
+
+async def cached(key: Any, ttl: float, fn: Callable[[], Awaitable[Any]], stale: float = 6 * 3600) -> Any:
+    """Cache with stale-while-revalidate: once something has been fetched, later visits get the last
+    answer instantly (for up to ``stale`` seconds past expiry) while a fresh copy loads in the background."""
     hit = _C.get(key)
     now = time.time()
     if hit and hit[0] > now:
         return hit[1]
+    if hit and hit[0] + stale > now:
+        if key not in _REFRESHING:
+            _REFRESHING.add(key)
+
+            async def refresh():
+                try:
+                    _C[key] = (time.time() + ttl, await fn())
+                except Exception:  # noqa: BLE001 – keep serving the old copy
+                    pass
+                finally:
+                    _REFRESHING.discard(key)
+            asyncio.get_running_loop().create_task(refresh())
+        return hit[1]
     val = await fn()
     _C[key] = (now + ttl, val)
     if len(_C) > 800:
-        for k in [k for k, (exp, _) in _C.items() if exp < now][:400]:
+        for k in [k for k, (exp, _) in _C.items() if exp + stale < now][:400]:
             _C.pop(k, None)
     return val
 
