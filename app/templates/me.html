@@ -49,7 +49,7 @@
 
 {% if recent %}
 <div class="spread section-title"><h2 style="margin:0">Your recently watched</h2><a class="small" href="/me/history">All →</a></div>
-<div class="posters mb">
+<div class="posters one-row mb">
   {% for p in recent %}
   <a href="{{ '/me/library/' ~ p.server_id ~ '/' ~ p.item_id if p.item_id else '#' }}"><figure title="{{ p.display_title }}">
     <img loading="lazy" src="{{ imgp }}/{{ p.server_id }}/{{ p.poster_id }}?h=300" alt="">
@@ -69,10 +69,21 @@
 {% else %}<div class="lazy-sec" data-lazy="/partials/me/requests" aria-busy="true"><div class="spread section-title"><h2 style="margin:0">Requests</h2></div><div class="skel-row"><i></i><i></i><i></i><i></i></div></div>{% endif %}
 
 {% if u %}
-<div class="card mb"><h2>Your favourite shows</h2>
+<div class="spread section-title"><h2 style="margin:0">Your favourite shows</h2>{% if u.top_shows %}<span class="small muted">by time watched</span>{% endif %}</div>
+{% set top = (u.top_shows[:6]|map(attribute='seconds')|max) if u.top_shows else 0 %}
+<div class="fav-grid mb">
   {% for s in u.top_shows[:6] %}
-  <{{ 'a' if s.poster[1] else 'div' }} class="rank{{ ' tap' if s.poster[1] }}"{% if s.poster[1] %} href="/me/library/{{ s.poster[0] }}/{{ s.poster[1] }}"{% endif %}><img class="mini-poster" loading="lazy" src="{{ imgp }}/{{ s.poster[0] }}/{{ s.poster[1] }}?h=100" alt="" onerror="this.style.visibility='hidden'"><span>{{ s.title }}</span><span class="muted small">{{ s.plays }} eps · {{ s.seconds|duration }}{% if s.poster[1] %} <span class="rank-go">›</span>{% endif %}</span></{{ 'a' if s.poster[1] else 'div' }}>
-  {% else %}<div class="muted small">Watch some shows and they'll show up here.</div>{% endfor %}
+  {% set has = s.poster[1] %}
+  <{{ 'a' if has else 'div' }} class="fav-card{{ ' first' if loop.first }}"{% if has %} href="/me/library/{{ s.poster[0] }}/{{ s.poster[1] }}" style="--bd:url('{{ imgp }}/{{ s.poster[0] }}/{{ s.poster[1] }}?h=300')"{% endif %}>
+    <span class="fav-rank">{{ loop.index }}</span>
+    <span class="fav-poster"><b>{{ s.title[:1] }}</b>{% if has %}<img loading="lazy" src="{{ imgp }}/{{ s.poster[0] }}/{{ s.poster[1] }}?h=300" alt="" onerror="this.remove()">{% endif %}</span>
+    <span class="fav-body">
+      <span class="fav-title">{{ s.title }}</span>
+      <span class="fav-stats"><b>{{ s.plays }}</b> episode{{ 's' if s.plays != 1 }} · <b>{{ s.seconds|duration }}</b></span>
+      <span class="fav-bar"><i style="width:{{ ((s.seconds / top * 100) if top else 0)|round(0, 'ceil')|int }}%"></i></span>
+    </span>
+  </{{ 'a' if has else 'div' }}>
+  {% else %}<div class="card muted small">Watch some shows and they'll show up here.</div>{% endfor %}
 </div>
 {% elif not streams and not last %}
 <div class="card empty"><div class="empty-icon">🍿</div>Nothing watched yet — your stats will appear here once you start watching.</div>
