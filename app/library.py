@@ -99,7 +99,8 @@ def card(i: dict) -> dict:
         title, sub = i.get("Name"), [i.get("AlbumArtist")]
     else:
         title, sub = i.get("Name"), [str(i.get("ProductionYear") or "")]
-    added = _when(i.get("DateCreated"))
+    # a grouped show/season/album: when its newest episode/track arrived, not when the show was first added
+    added = (_when(i.get("DateLastMediaAdded")) if t in ("Series", "Season", "MusicAlbum") else None) or _when(i.get("DateCreated"))
     return {"id": i.get("Id"), "type": t, "title": title or "Untitled", "sub": [s for s in sub if s],
             "added": added, "ago": ago(added), "poster_id": _poster_id(i), "backdrop_id": _backdrop_id(i),
             "icon": "tv" if t in ("Episode", "Series", "Season") else ("music" if t in ("MusicAlbum", "Audio") else "movie")}
@@ -107,7 +108,7 @@ def card(i: dict) -> dict:
 
 async def latest(client, uid: str, kind: str = "all", limit: int = 80) -> list[dict]:
     params = {"Limit": str(limit), "GroupItems": "true", "ImageTypeLimit": "1",
-              "Fields": "DateCreated,ProductionYear,ChildCount,ParentId,PremiereDate",
+              "Fields": "DateCreated,DateLastMediaAdded,ProductionYear,ChildCount,ParentId,PremiereDate",
               "EnableImageTypes": "Primary,Backdrop,Thumb"}
     t = KINDS.get(kind, KINDS["all"])[1]
     if t:
@@ -115,7 +116,23 @@ async def latest(client, uid: str, kind: str = "all", limit: int = 80) -> list[d
     data = await _get(client, "/Items/Latest", uid, params)
     if isinstance(data, dict):           # some versions wrap it
         data = data.get("Items")
-    return [card(i) for i in data or []]
+    items = list(data or [])
+
+    # Grouped shows without DateLastMediaAdded: ask for their newest episode's date
+    async def newest(i: dict) -> None:
+        try:
+            got = await client.get("/Items", params={"userId": uid, "ParentId": i["Id"], "Recursive": "true",
+                                                     "IncludeItemTypes": "Episode,Audio", "SortBy": "DateCreated",
+                                                     "SortOrder": "Descending", "Limit": "1", "Fields": "DateCreated"}) or {}
+            ep = (got.get("Items") or [None])[0]
+            if ep and ep.get("DateCreated"):
+                i["DateLastMediaAdded"] = ep["DateCreated"]
+        except UpstreamError:
+            pass
+    missing = [i for i in items if i.get("Type") in ("Series", "Season", "MusicAlbum") and not i.get("DateLastMediaAdded") and i.get("Id")]
+    if missing:
+        await asyncio.gather(*(newest(i) for i in missing[:30]))
+    return [card(i) for i in items]
 
 
 # ----------------------------------------------------------------------------- details
