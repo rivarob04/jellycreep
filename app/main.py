@@ -454,19 +454,33 @@ async def page_media(request: Request, tab: str = "overview", server: int | None
                      user: User = Depends(staff_user)):
     if tab == "quality":
         return await _media_quality(request, user, server)
-    servers = []
-    for svc in services(("jellyfin",)):
+    # Jellyfin's library details and the storage report are slow to gather (Jellyfin checks every drive,
+    # Sonarr/Radarr go through Authentik), so they're fetched together, remembered, and kept warm.
+    servers, (drives, notes) = await asyncio.gather(
+        ttl_cached(("media",), 120, _media_servers, stale=6 * 3600),
+        ttl_cached(("storage",), 600, _storage_report, stale=6 * 3600))
+    svcs = {x.id: x for x in services(("jellyfin",))}
+    servers = [{**x, "svc": svcs.get(x["sid"])} for x in servers if svcs.get(x["sid"])]
+    return render(request, "media.html", user, servers=servers, drives=drives, storage_notes=notes,
+                  storage_sum=storage.summary(drives))
+
+
+async def _media_servers() -> list[dict]:
+    async def one(svc: Service) -> dict:
         client = await client_for(svc)
         (recent, e1), (libs, e2), (counts, e3), (info, e4) = await asyncio.gather(
             safe(client.recently_added()), safe(client.libraries()), safe(client.counts()), safe(client.system_info()))
-        servers.append({"svc": svc, "recent": recent or [], "libs": libs or [], "counts": counts or {}, "info": info or {},
-                        "error": e1 or e2 or e3 or e4})
+        return {"sid": svc.id, "recent": recent or [], "libs": libs or [], "counts": counts or {}, "info": info or {},
+                "error": e1 or e2 or e3 or e4}
+    return list(await asyncio.gather(*(one(x) for x in services(("jellyfin",)))))
+
+
+async def _storage_report() -> tuple[list[dict], list[str]]:
     drives, notes = await storage.collect()
     if drives:
         await asyncio.to_thread(storage.record, drives)
         await asyncio.to_thread(storage.forecast, drives)
-    return render(request, "media.html", user, servers=servers, drives=drives, storage_notes=notes,
-                  storage_sum=storage.summary(drives))
+    return drives, notes
 
 
 async def _media_quality(request: Request, user: User, server: int | None):
@@ -897,19 +911,30 @@ async def _upcoming(days: int = 14) -> list[dict]:
 
 
 async def _keep_warm() -> None:
-    """Refresh the shared, slow-to-fetch Home rows in the background so pages never wait on Sonarr/Radarr."""
+    """Keep the slow, shared pages (Libraries, Discover rows, Coming up) ready in the background,
+    so nobody waits on Jellyfin's drive scan, Sonarr/Radarr or Seerr. Each step stands on its own."""
+    async def step(name, coro, timeout):
+        try:
+            await asyncio.wait_for(coro, timeout=timeout)
+        except Exception:  # noqa: BLE001
+            log.debug("Warming %s failed", name, exc_info=True)
+
+    async def upcoming():
+        for days in (14, 90):
+            _TTL[("upcoming", days)] = (time.monotonic() + 330, await _upcoming_fetch(days))
+
+    async def discover_rows():
+        for svc in services(("jellyseerr",))[:1]:
+            await seerr_portal.discover(await client_for(svc), svc.id)
+
     await asyncio.sleep(5)
     while True:
-        try:
-            if login_settings()["enabled"] and login_settings()["seerr_discover"]:
-                for svc in services(("jellyseerr",))[:1]:
-                    await asyncio.wait_for(seerr_portal.discover(await client_for(svc), svc.id), timeout=60)
-            if login_settings()["enabled"] and login_settings()["upcoming"]:
-                for days in (14, 90):
-                    val = await asyncio.wait_for(_upcoming_fetch(days), timeout=60)
-                    _TTL[("upcoming", days)] = (time.monotonic() + 330, val)
-        except Exception:  # noqa: BLE001
-            log.debug("Warming Coming up failed", exc_info=True)
+        await step("libraries", ttl_cached(("media",), 120, _media_servers, stale=6 * 3600), 60)
+        await step("storage", ttl_cached(("storage",), 600, _storage_report, stale=6 * 3600), 120)
+        if login_settings()["enabled"] and login_settings()["seerr_discover"]:
+            await step("discover", discover_rows(), 60)
+        if login_settings()["enabled"] and login_settings()["upcoming"]:
+            await step("coming up", upcoming(), 60)
         await asyncio.sleep(240)
 
 
