@@ -65,6 +65,44 @@ STUDIOS = [
     (420, "Marvel Studios", "/hUzeosd33nzE5MCNsZxCGEKTXaQ.png"), (9993, "DC", "/2Tc1P3Ac8M479naPp1kYT3izLS5.png"),
     (41077, "A24", "/1ZXsGaFPgrgS6ZZGS37AqD5uU12.png"),
 ]
+# Movie / Series genre tiles, coloured like Seerr's (TMDB duotone backdrops)
+_TONES = {"red": "991B1B,FCA5A5", "darkred": "1F2937,F87171", "blue": "032541,01b4e4", "lightblue": "1F2937,60A5FA",
+          "darkblue": "1F2937,2864d2", "orange": "92400E,FCD34D", "lightgreen": "065F46,6EE7B7", "purple": "5B21B6,C4B5FD",
+          "yellow": "777e0d,e4ed55", "darkorange": "552c01,d47c1d", "black": "1F2937,D1D5DB", "pink": "9D174D,F9A8D4",
+          "darkpurple": "480c8b,a96bef"}
+GENRE_TONE = {28: "red", 12: "darkpurple", 16: "blue", 35: "orange", 80: "darkblue", 99: "lightgreen", 18: "pink",
+              10751: "yellow", 14: "lightblue", 36: "orange", 27: "black", 10402: "blue", 9648: "purple", 10749: "pink",
+              878: "lightblue", 10770: "red", 53: "black", 10752: "darkred", 37: "orange", 10759: "darkpurple",
+              10762: "blue", 10763: "black", 10764: "darkorange", 10765: "lightblue", 10766: "pink", 10767: "lightgreen",
+              10768: "darkred"}
+
+
+async def genres(client, svc_id: int, kind: str) -> list[dict]:
+    """Seerr's genre slider for movies or series: [{id, name, img, tone}]."""
+    async def load():
+        data = await client.get(f"/api/v1/discover/genreslider/{'movie' if kind == 'movie' else 'tv'}") or []
+        out = []
+        for g in data if isinstance(data, list) else []:
+            if not isinstance(g, dict) or not g.get("id") or not g.get("name"):
+                continue
+            tone = _TONES[GENRE_TONE.get(g["id"], "black")]
+            bds = [b for b in g.get("backdrops") or [] if isinstance(b, str)]
+            bd = bds[4] if len(bds) > 4 else (bds[0] if bds else None)
+            out.append({"id": int(g["id"]), "name": g["name"], "tone": "#" + tone.split(",")[0],
+                        "img": f"{TMDB}w780_filter(duotone,{tone}){bd}" if bd else None})
+        return out
+    return await cached(("genres", svc_id, kind), 86400, load, stale=7 * 86400)
+
+
+async def browse_genre(client, svc_id: int, kind: str, gid: int, page: int) -> list[dict]:
+    path = "/api/v1/discover/movies" if kind == "movie" else "/api/v1/discover/tv"
+
+    async def load():
+        data = await client.get(path, params={"page": str(page), "genre": str(gid)}) or {}
+        return [c for c in (card({**r, "mediaType": r.get("mediaType") or kind}) for r in data.get("results") or []) if c]
+    return await cached(("genre", svc_id, kind, gid, page), 1800, load)
+
+
 COMPANIES = {"network": {i: (n, LOGO + p) for i, n, p in NETWORKS},
              "studio": {i: (n, LOGO + p) for i, n, p in STUDIOS}}
 TILES = {k: [{"id": i, "name": n, "logo": l} for i, (n, l) in v.items()] for k, v in COMPANIES.items()}

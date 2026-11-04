@@ -996,6 +996,11 @@ async def _keep_warm() -> None:
         for svc in services(("jellyseerr",))[:1]:
             c = await client_for(svc)
             rows = await seerr_portal.discover(c, svc.id)
+            for gk in ("movie", "tv"):
+                try:
+                    await seerr_portal.genres(c, svc.id, gk)
+                except Exception:  # noqa: BLE001
+                    pass
             # the title pages people are most likely to tap next
             sem = asyncio.Semaphore(4)
 
@@ -1015,6 +1020,15 @@ async def _keep_warm() -> None:
                     except Exception:  # noqa: BLE001
                         pass
             await asyncio.gather(*(company(k, t["id"]) for k, ts in seerr_portal.TILES.items() for t in ts))
+
+            async def genre_page(gk, gid):
+                async with sem:
+                    try:
+                        await seerr_portal.browse_genre(c, svc.id, gk, gid, 1)
+                    except Exception:  # noqa: BLE001
+                        pass
+            gls = {gk: await seerr_portal.genres(c, svc.id, gk) for gk in ("movie", "tv")}
+            await asyncio.gather(*(genre_page(gk, g["id"]) for gk, gl in gls.items() for g in gl))
 
     await asyncio.sleep(5)
     while True:
@@ -1681,7 +1695,7 @@ def warm_discover(user: User) -> None:
 
 @app.get("/me/discover", response_class=HTMLResponse)
 async def page_discover(request: Request, q: str = "", row: str = "", page: int = 1, network: int = 0, studio: int = 0,
-                        user: User = Depends(current_user)):
+                        genre: int = 0, kind: str = "movie", user: User = Depends(current_user)):
     if (r := _viewer_page(user)):
         return r
     sc = await _seerr(user)
@@ -1697,13 +1711,23 @@ async def page_discover(request: Request, q: str = "", row: str = "", page: int 
         elif ctx["row"]:
             ctx["results"], ctx["error"] = await safe(seerr_portal.browse(c, sid, ctx["row"], ctx["page"]))
             ctx["row_title"] = seerr_portal.ROW_BY_KEY[ctx["row"]][0]
+        elif genre > 0:
+            gk = "tv" if kind == "tv" else "movie"
+            gl, _ = await safe(seerr_portal.genres(c, sid, gk))
+            name = next((g["name"] for g in gl or [] if g["id"] == genre), None)
+            if gl and not name:
+                return RedirectResponse("/me/discover", status_code=303)
+            ctx["results"], ctx["error"] = await safe(seerr_portal.browse_genre(c, sid, gk, genre, ctx["page"]))
+            ctx.update(row_title=f"{name or 'Genre'} {'movies' if gk == 'movie' else 'series'}", row=f"kind={gk}&genre={genre}")
         elif co:
             kind, cid = co
             ctx["results"], ctx["error"] = await safe(seerr_portal.browse_company(c, sid, kind, cid, ctx["page"]))
             name, logo = seerr_portal.COMPANIES[kind][cid]
             ctx.update(row_title=name, co_logo=logo, row=f"{kind}={cid}")
         else:
-            (rows, e1), (recent, _), quota, jf_added, jf = await _discover_data(user, sc)
+            ((rows, e1), (recent, _), quota, jf_added, jf), (mg, _), (tg, _) = await asyncio.gather(
+                _discover_data(user, sc), safe(seerr_portal.genres(c, sid, "movie")), safe(seerr_portal.genres(c, sid, "tv")))
+            ctx["genres"] = {"movie": mg or [], "tv": tg or []}
             ctx.update(rows=rows or [], recent=(recent or ([], 0))[0], error=e1, quota=quota,
                        jf_added=jf_added, jf_sid=user.server_id)
         if ctx["q"] or ctx["row"]:
