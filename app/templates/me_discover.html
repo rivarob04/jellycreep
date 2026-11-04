@@ -42,16 +42,20 @@
 <div class="rwide-row mb">{% for r in recent %}{{ rwide(r) }}{% endfor %}</div>
 {% endif %}
 {% if error and not rows %}<div class="notice bad small">Couldn't reach Seerr: {{ error }}</div>{% endif %}
-{% for r in rows %}
-<div class="spread section-title"><h2 style="margin:0">{{ r.title }}</h2><a class="small" href="/me/discover?row={{ r.key }}">See all →</a></div>
-<div class="prow mb">{% for c in r['items'] %}{{ pcard(c) }}{% endfor %}</div>
-{% endfor %}
-{% for kind, title in (('network', 'Networks'), ('studio', 'Studios')) %}
+{% macro co_tiles(kind, title) %}
 <div class="spread section-title"><h2 style="margin:0">{{ title }}</h2></div>
 <div class="co-row mb">{% for t in tiles[kind] %}
   <a class="co-tile" href="/me/discover?{{ kind }}={{ t.id }}" title="{{ t.name }}"><b>{{ t.name }}</b><img loading="lazy" src="{{ t.logo }}" alt="" onload="this.parentNode.classList.add('ok')" onerror="this.remove()"></a>
 {% endfor %}</div>
+{% endmacro %}
+{% set ns = namespace(studios=False) %}
+{% for r in rows %}
+<div class="spread section-title"><h2 style="margin:0">{{ r.title }}</h2><a class="small" href="/me/discover?row={{ r.key }}">See all →</a></div>
+<div class="prow mb">{% for c in r['items'] %}{{ pcard(c) }}{% endfor %}</div>
+{% if r.key == 'movies' %}{{ co_tiles('studio', 'Studios') }}{% set ns.studios = True %}{% endif %}
 {% endfor %}
+{% if not ns.studios %}{{ co_tiles('studio', 'Studios') }}{% endif %}
+{{ co_tiles('network', 'Networks') }}
 {% endif %}
 {% endif %}
 {% endblock %}
