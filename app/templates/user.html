@@ -45,22 +45,12 @@
   </div>
 </div>
 
-<div class="grid g2 mb">
+<div class="mb">
   <div class="card"><h2>Devices</h2>
     <div class="list">
     {% for d in u.devices[:8] %}
       <div class="spread"><span style="min-width:0;flex:1"><span class="ellip" style="display:block"><strong>{{ d.client }}</strong> · {{ d.device }}</span><span class="meta">{{ d.plays }} plays · last {{ d.last|ago }}{% if d.ip %} · {{ d.ip }}{% endif %}</span></span></div>
     {% endfor %}
-    </div>
-  </div>
-  <div class="card"><h2>When they watch</h2>
-    <div class="heat">
-      <span></span>{% for h in range(24) %}<span class="hr">{{ h if h % 6 == 0 else '' }}</span>{% endfor %}
-      {% for row in u.heat %}
-      {% set wd = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][loop.index0] %}
-      <span class="lbl">{{ wd }}</span>
-      {% for n in row %}<span class="c" title="{{ wd }} {{ '%02d'|format(loop.index0) }}:00 – {{ n }}"{% if n and u.heat_peak %} style="background: rgba(0,164,220,{{ (0.2 + 0.8 * n / u.heat_peak)|round(2) }})"{% endif %}></span>{% endfor %}
-      {% endfor %}
     </div>
     <div class="mt">{% for m in u.methods %}<span class="badge {{ 'b-warn' if m.label == 'Transcode' else 'b-ok' }}" style="margin:0 4px 4px 0">{{ m.label }} · {{ m.plays }}</span>{% endfor %}</div>
   </div>

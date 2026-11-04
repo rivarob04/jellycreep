@@ -69,21 +69,10 @@
 {% else %}<div class="lazy-sec" data-lazy="/partials/me/requests" aria-busy="true"><div class="spread section-title"><h2 style="margin:0">Requests</h2></div><div class="skel-row"><i></i><i></i><i></i><i></i></div></div>{% endif %}
 
 {% if u %}
-<div class="grid g2 mb">
-  <div class="card"><h2>Your favourite shows</h2>
-    {% for s in u.top_shows[:6] %}
-    <{{ 'a' if s.poster[1] else 'div' }} class="rank{{ ' tap' if s.poster[1] }}"{% if s.poster[1] %} href="/me/library/{{ s.poster[0] }}/{{ s.poster[1] }}"{% endif %}><img class="mini-poster" loading="lazy" src="{{ imgp }}/{{ s.poster[0] }}/{{ s.poster[1] }}?h=100" alt="" onerror="this.style.visibility='hidden'"><span>{{ s.title }}</span><span class="muted small">{{ s.plays }} eps · {{ s.seconds|duration }}{% if s.poster[1] %} <span class="rank-go">›</span>{% endif %}</span></{{ 'a' if s.poster[1] else 'div' }}>
-    {% else %}<div class="muted small">Watch some shows and they'll show up here.</div>{% endfor %}
-  </div>
-  <div class="card"><h2>When you watch</h2>
-    <div class="heat">
-      <span></span>{% for h in range(24) %}<span class="hr">{{ h if h % 6 == 0 else '' }}</span>{% endfor %}
-      {% for row in u.heat %}{% set wd = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][loop.index0] %}
-      <span class="lbl">{{ wd }}</span>
-      {% for n in row %}<span class="c" title="{{ wd }} {{ '%02d'|format(loop.index0) }}:00 – {{ n }}"{% if n and u.heat_peak %} style="background: rgba(0,164,220,{{ (0.2 + 0.8 * n / u.heat_peak)|round(2) }})"{% endif %}></span>{% endfor %}
-      {% endfor %}
-    </div>
-  </div>
+<div class="card mb"><h2>Your favourite shows</h2>
+  {% for s in u.top_shows[:6] %}
+  <{{ 'a' if s.poster[1] else 'div' }} class="rank{{ ' tap' if s.poster[1] }}"{% if s.poster[1] %} href="/me/library/{{ s.poster[0] }}/{{ s.poster[1] }}"{% endif %}><img class="mini-poster" loading="lazy" src="{{ imgp }}/{{ s.poster[0] }}/{{ s.poster[1] }}?h=100" alt="" onerror="this.style.visibility='hidden'"><span>{{ s.title }}</span><span class="muted small">{{ s.plays }} eps · {{ s.seconds|duration }}{% if s.poster[1] %} <span class="rank-go">›</span>{% endif %}</span></{{ 'a' if s.poster[1] else 'div' }}>
+  {% else %}<div class="muted small">Watch some shows and they'll show up here.</div>{% endfor %}
 </div>
 {% elif not streams and not last %}
 <div class="card empty"><div class="empty-icon">🍿</div>Nothing watched yet — your stats will appear here once you start watching.</div>
