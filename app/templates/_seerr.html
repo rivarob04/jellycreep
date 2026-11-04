@@ -2,11 +2,15 @@
 
 {% macro jf_play(c) %}{% if c.jf %}<span class="pover"><a class="pplay" href="{{ c.jf.url }}" target="_blank" rel="noopener" aria-label="Watch {{ c.title }} on Jellyfin" title="Watch on Jellyfin"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg></a></span>{% endif %}{% endmacro %}
 
+{# Seerr-style hover card: date, title and the start of the overview #}
+{% macro phover(when, title, overview) %}<span class="phover" aria-hidden="true">{% if when %}<small>{{ when }}</small>{% endif %}<strong>{{ title }}</strong>{% if overview %}<span class="ph-ov">{{ overview }}</span>{% endif %}</span>{% endmacro %}
+
 {% macro pcard(c) %}
 <div class="pcard{{ ' on-jf' if c.jf }}"><a class="pcard-in" href="/me/discover/{{ c.type }}/{{ c.id }}" title="{{ c.title }}{{ ' (' ~ c.year ~ ')' if c.year }}">
   <span class="pimg">{% if c.poster %}<img loading="lazy" src="{{ c.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ c.title[:1] }}</b>
     {% if c.badge %}<i class="pchip {{ c.badge[1] }}">{{ '✓' if c.status == 5 else c.badge[0] }}</i>{% endif %}
-    <em class="ptype">{{ 'Movie' if c.type == 'movie' else 'Series' }}</em></span>
+    <em class="ptype {{ c.type }}">{{ 'Movie' if c.type == 'movie' else 'Series' }}</em>
+    {{ phover(c.soon or c.year, c.title, c.overview) }}</span>
   <span class="pcap">{{ c.title }}</span>
   <span class="pcap muted">{% if c.soon %}📅 {{ c.soon }}{% else %}{{ c.year }}{% if c.rating %} · ★ {{ c.rating }}{% endif %}{% endif %}</span>
 </a>{{ jf_play(c) }}</div>

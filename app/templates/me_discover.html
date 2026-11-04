@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_seerr.html" import pcard, rcard, rwide, quota_line, not_linked %}
+{% from "_seerr.html" import pcard, rcard, rwide, quota_line, not_linked, phover %}
 {% block title %}Discover{% endblock %}
 {% block content %}
 {% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}
@@ -31,7 +31,8 @@
   {% for i in jf_added %}{% set pid = i.SeriesId if i.Type == 'Episode' else i.Id %}
   <div class="pcard"><a class="pcard-in" href="/me/library/{{ jf_sid }}/{{ i.Id }}" title="{{ i.SeriesName ~ ' – ' if i.SeriesName }}{{ i.Name }}">
     <span class="pimg"><img loading="lazy" src="{{ imgp }}/{{ jf_sid }}/{{ pid }}?h=360" alt="" onerror="this.remove()"><b>{{ (i.SeriesName or i.Name or '?')[:1] }}</b>
-      <i class="pchip b-ok">✓</i><em class="ptype">{{ 'Series' if i.Type == 'Episode' else ('Album' if i.Type == 'MusicAlbum' else 'Movie') }}</em></span>
+      <i class="pchip b-ok">✓</i><em class="ptype {{ 'tv' if i.Type == 'Episode' else 'movie' }}">{{ 'Series' if i.Type == 'Episode' else ('Album' if i.Type == 'MusicAlbum' else 'Movie') }}</em>
+      {{ phover(('S' ~ (i.ParentIndexNumber or 0) ~ ' • E' ~ (i.IndexNumber or 0)) if i.Type == 'Episode' else i.ProductionYear, i.SeriesName or i.Name, i.Overview) }}</span>
     <span class="pcap">{{ i.SeriesName or i.Name }}</span>
     <span class="pcap muted">{% if i.Type == 'Episode' %}S{{ i.ParentIndexNumber or 0 }} • E{{ i.IndexNumber or 0 }}{% else %}{{ i.ProductionYear or '' }}{% endif %}</span></a></div>
   {% endfor %}

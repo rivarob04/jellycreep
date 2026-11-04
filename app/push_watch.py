@@ -84,7 +84,7 @@ async def seerr_once() -> None:
         url = f"/me/discover/{mt}/{media.get('tmdbId')}" if media.get("tmdbId") else "/me/requests"
         msg = None
         if now[1] == 5 and old[1] != 5:
-            msg = ("🍿 Ready to watch", f"{title} is now on Jellyfin.")
+            msg = ("🍿 Now available", f"{title} is now on Jellyfin.")
         elif now[1] == 4 and old[1] not in (4, 5):
             msg = ("🍿 Partly available", f"Some of {title} is now on Jellyfin.")
         elif now[0] == 2 and old[0] == 1:

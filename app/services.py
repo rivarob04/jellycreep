@@ -92,7 +92,7 @@ class JellyfinClient(Upstream):
         data = await self.get("/Items", params={**extra,
             "SortBy": "DateCreated", "SortOrder": "Descending", "Recursive": "true",
             "IncludeItemTypes": "Movie,Episode,MusicAlbum", "Limit": str(limit),
-            "Fields": "DateCreated,ProductionYear", "IsMissing": "false",
+            "Fields": "DateCreated,ProductionYear,Overview", "IsMissing": "false",
         })
         return (data or {}).get("Items", [])
 

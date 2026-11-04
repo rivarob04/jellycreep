@@ -1184,3 +1184,33 @@ main { min-width: 0; max-width: 100%; }
 .genre-tile b{position:relative;z-index:1;color:#fff;font-size:1.35rem;font-weight:800;text-align:center;padding:0 12px;line-height:1.15;
   text-shadow:0 2px 10px rgba(0,0,0,.55)}
 @media (min-width:1000px){.genre-tile{width:280px;height:150px}.genre-tile b{font-size:1.6rem}}
+
+/* v0.18.26 — Seerr-sized posters + hover card (date, title, overview) */
+.prow { grid-auto-columns: 144px; gap: 14px; }
+.pgrid { grid-template-columns: repeat(auto-fill, minmax(144px, 1fr)); gap: 16px 14px; }
+@media (max-width: 420px) { .pgrid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 14px 10px; } }
+.pimg { border-radius: 12px; border: 1px solid rgba(255,255,255,.08); }
+.ptype { top: 7px; bottom: auto; left: 7px; z-index: 2; font-size: 10px; letter-spacing: .05em; padding: 3px 8px; border-radius: 999px;
+  background: rgba(37,99,235,.88); color: #fff; border: 1px solid rgba(147,197,253,.35); }
+.ptype.tv { background: rgba(147,51,234,.88); border-color: rgba(216,180,254,.35); }
+.pchip { z-index: 2; }
+.phover { display: none; }
+@media (hover: hover) {
+  .phover { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 3px;
+    padding: 10px 10px 12px; text-align: left; opacity: 0; transition: opacity .18s ease;
+    background: linear-gradient(180deg, rgba(17,24,39,.35) 0%, rgba(17,24,39,.82) 45%, rgba(17,24,39,.97) 100%); }
+  .phover small { font-size: 12px; font-weight: 600; color: rgba(255,255,255,.85); }
+  .phover strong { font-size: 15px; font-weight: 800; line-height: 1.2; color: #fff; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .phover .ph-ov { font-size: 11.5px; line-height: 1.35; color: rgba(255,255,255,.82); display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+  .pcard:hover .phover, .pcard-in:focus-visible .phover { opacity: 1; }
+  .pcard:hover .pimg { border-color: rgba(255,255,255,.3); box-shadow: 0 10px 26px rgba(0,0,0,.5); }
+  .pcard.on-jf:hover .phover { padding-bottom: 48px; }
+}
+@media (min-width: 1000px) {
+  .prow { grid-auto-columns: 176px; gap: 16px; }
+  .pgrid { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 20px 16px; }
+}
+@media (hover: hover) and (min-width: 1000px) {
+  /* like Seerr: the hover card carries the title, so the captions under the poster go */
+  .pcard:has(.phover) .pcap { display: none; }
+}

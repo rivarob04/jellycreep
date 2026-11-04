@@ -26,7 +26,7 @@
 <div class="card mb up-when">
   {% for label, when in u.dates %}<div class="spread"><span class="muted">{{ label }}</span><b>{{ when }}</b></div>{% endfor %}
   <div class="spread"><span class="muted">On Jellyfin</span>
-    {% if on_jellyfin %}<span class="badge b-ok">✓ Ready to watch</span>
+    {% if on_jellyfin %}<span class="badge b-ok">✓ Available</span>
     {% elif u.has_file %}<span class="badge b-acc">Downloaded — appearing soon</span>
     {% else %}<span class="badge">Not yet{{ ' — the show is' if jf and u.kind == 'tv' }}{{ ' in your library' if jf and u.kind == 'tv' }}</span>{% endif %}</div>
 </div>

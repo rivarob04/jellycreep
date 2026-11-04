@@ -23,7 +23,7 @@
     <span class="ai-body"><span class="ai-title">{{ i.title }}</span><span class="ai-sub">{{ i.sub }}</span>
       <span class="ai-meta">{% if i.time %}{{ i.time }} · {% endif %}{{ i.network or '' }}
         {% if i.premiere %}<span class="badge b-acc">Premiere</span>{% endif %}{% if i.finale %}<span class="badge b-warn">Finale</span>{% endif %}</span></span>
-    <span class="ai-status">{% if i.has_file %}<span class="badge b-ok">Ready</span>{% endif %}</span>
+    <span class="ai-status">{% if i.has_file %}<span class="badge b-ok">Available</span>{% endif %}</span>
   </{{ 'a' if i.ref else 'div' }}>
   {% if loop.last %}</div></section>{% endif %}
 {% else %}

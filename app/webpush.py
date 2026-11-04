@@ -48,7 +48,7 @@ STAFF_PREFS = {
 STAFF_DEFAULTS = {"new_request": True, "download_failed": True, "app_down": True, "new_user": True, "transcode": False,
                   "stream_start": False, "health": False, "new_media": False}
 VIEWER_PREFS = {
-    "request_status": "My requests are approved, declined or ready to watch",
+    "request_status": "My requests are approved, declined or available",
     "new_episode": "New episodes of shows I watch",
     "new_media": "Anything new is added (movies and shows)",
 }
