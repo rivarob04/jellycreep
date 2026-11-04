@@ -1,6 +1,6 @@
 {% if items %}
 <div class="spread section-title"><h2 style="margin:0">Coming up</h2><a class="small" href="/me/upcoming">See more →</a></div>
-<div class="card flush mb">
+<div class="card flush mb up-list">
   {% for i in items[:6] %}
   <{{ 'a' if i.ref else 'div' }} class="agenda-item k-{{ i.kind }}{{ ' tap' if i.ref }}"{% if i.ref %} href="/me/upcoming/{{ i.sid }}/{{ i.ref }}"{% endif %}>
     <span class="thumb k-bg-{{ i.kind }}">{% if i.poster %}<img loading="lazy" src="{{ i.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ i.title[:1] }}</b></span>
@@ -9,6 +9,27 @@
         {% if i.premiere %}<span class="badge b-acc">Premiere</span>{% endif %}{% if i.finale %}<span class="badge b-warn">Finale</span>{% endif %}</span></span>
     <span class="ai-status">{% if i.has_file %}<span class="badge b-ok">Available</span>{% endif %}</span>
   </{{ 'a' if i.ref else 'div' }}>
+  {% endfor %}
+</div>
+{# desktop: a week board — one column per day #}
+<div class="up-board mb">
+  {% for day, group in (items|groupby('day'))[:7] %}
+  {% set g = group|list %}
+  <section class="up-col{{ ' today' if day_label(day) == 'Today' }}">
+    <header><b>{{ day_label(day) }}</b><span>{{ g|length }}</span></header>
+    {% for i in g[:4] %}
+    <{{ 'a' if i.ref else 'div' }} class="up-card k-{{ i.kind }}"{% if i.ref %} href="/me/upcoming/{{ i.sid }}/{{ i.ref }}"{% endif %} title="{{ i.title }} — {{ i.sub }}">
+      <span class="up-poster k-bg-{{ i.kind }}">{% if i.poster %}<img loading="lazy" src="{{ i.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ i.title[:1] }}</b></span>
+      <span class="up-body">
+        <span class="up-title">{{ i.title }}</span>
+        <span class="up-sub">{{ i.sub }}</span>
+        <span class="up-meta">{% if i.time %}{{ i.time }}{% else %}{{ 'Movie' if i.kind == 'movie' else 'All day' }}{% endif %}{% if i.network %} · {{ i.network }}{% endif %}</span>
+        {% if i.has_file or i.premiere or i.finale %}<span class="up-tags">{% if i.has_file %}<span class="badge b-ok">Available</span>{% endif %}{% if i.premiere %}<span class="badge b-acc">Premiere</span>{% endif %}{% if i.finale %}<span class="badge b-warn">Finale</span>{% endif %}</span>{% endif %}
+      </span>
+    </{{ 'a' if i.ref else 'div' }}>
+    {% endfor %}
+    {% if g|length > 4 %}<a class="up-more" href="/me/upcoming">+ {{ g|length - 4 }} more</a>{% endif %}
+  </section>
   {% endfor %}
 </div>
 {% endif %}

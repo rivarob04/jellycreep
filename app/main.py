@@ -190,6 +190,19 @@ templates.env.filters.update(device_name=fmt_device)
 templates.env.globals.update(version=__version__, kinds=SERVICE_KINDS, proxy_modes=PROXY_AUTH_MODES)
 
 
+def _day_label(d) -> str:
+    """Today / Tomorrow / Fri, Nov 6 — in the server's time zone."""
+    today = datetime.now(TZ).date()
+    if d == today:
+        return "Today"
+    if (d - today).days == 1:
+        return "Tomorrow"
+    return f"{d:%a, %b} {d.day}"
+
+
+templates.env.globals.update(day_label=_day_label)
+
+
 _AMBIENT: dict[str, Any] = {}
 
 
