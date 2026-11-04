@@ -54,7 +54,9 @@
     <input type="search" name="q" value="{{ request.query_params.get('q', '') }}" placeholder="{{ 'Search movies & series' if search_to == '/me/discover' else 'Search your library' }}" enterkeyhint="search" autocomplete="off" aria-label="Search">
   </form>
   <div class="spacer"></div>
-  <a class="bell-btn{{ ' on' if path.endswith('/notifications') }}" href="{{ '/me' if user.is_viewer else '' }}/notifications" aria-label="Notifications">
+  {% set on_notif = path.endswith('/notifications') %}
+  <a class="bell-btn{{ ' on' if on_notif }}" href="{{ ('/me' if user.is_viewer else '/') if on_notif else ('/me' if user.is_viewer else '') ~ '/notifications' }}"
+     aria-label="{{ 'Close notification settings' if on_notif else 'Notifications' }}"{% if on_notif %} data-bell-close{% endif %}>
     <svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></a>
   <div class="who">{{ user.name }}{% if user.is_admin %} · admin{% endif %}</div>
   {% if user.is_viewer %}<a class="theme-btn fx-desk" href="/logout">Sign out</a>{% endif %}

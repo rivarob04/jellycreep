@@ -387,3 +387,17 @@ document.querySelectorAll("[data-seasons]").forEach((form) => {
 document.addEventListener("click", (e) => {
   document.querySelectorAll("details.ra-filter[open], details.play-on[open]").forEach((d) => { if (!d.contains(e.target)) d.open = false; });
 });
+
+// v0.18.22 — tapping the bell again closes notification settings (back to where you were)
+(function () {
+  const b = document.querySelector('[data-bell-close]');
+  if (!b) return;
+  b.addEventListener('click', (e) => {
+    let ref = null;
+    try { ref = document.referrer ? new URL(document.referrer) : null; } catch (_) {}
+    if (ref && ref.origin === location.origin && !ref.pathname.endsWith('/notifications') && history.length > 1) {
+      e.preventDefault();
+      history.back();
+    }
+  });
+})();
