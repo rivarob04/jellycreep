@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .upstream import UpstreamError
@@ -494,3 +494,56 @@ async def search(client, uid: str, q: str, limit: int = 60) -> list[dict]:
                                               "IncludeItemTypes": "Movie,Series,MusicAlbum",
                                               "Fields": "DateCreated,ProductionYear,ChildCount,ParentId"}) or {}
     return [card(i) for i in data.get("Items") or []]
+
+
+RECENT_DAYS = 5
+
+
+async def recent_window(client, uid: str, kind: str = "all", days: int = RECENT_DAYS, max_items: int = 3000) -> list[dict]:
+    """Everything added in the last ``days`` days, newest first, with a show's new episodes grouped into one card.
+
+    Jellyfin's own /Items/Latest caps the number of items *before* grouping, so one big batch of episodes
+    could push everything older than a day off the list. This pages through items by date instead."""
+    t = KINDS.get(kind, KINDS["all"])[1]
+    types = t or "Movie,Episode,MusicAlbum"
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    raw: list[dict] = []
+    start, page = 0, 300
+    while start < max_items:
+        data = await _get(client, "/Items", uid, {
+            "Recursive": "true", "IncludeItemTypes": types, "SortBy": "DateCreated", "SortOrder": "Descending",
+            "StartIndex": str(start), "Limit": str(page), "IsMissing": "false", "EnableImageTypes": "Primary,Backdrop,Thumb",
+            "ImageTypeLimit": "1", "Fields": "DateCreated,ProductionYear,ParentId,SeriesId,ParentBackdropItemId"}) or {}
+        items = data.get("Items") or []
+        fresh = [i for i in items if (_when(i.get("DateCreated")) or cutoff) >= cutoff]
+        raw.extend(fresh)
+        if len(items) < page or len(fresh) < len(items):
+            break                       # reached the end, or items older than the window
+        start += page
+
+    # group a show's episodes into one card (single episodes keep their own card)
+    out: list[dict] = []
+    shows: dict[str, list[dict]] = {}
+    for i in raw:
+        if i.get("Type") == "Episode" and i.get("SeriesId"):
+            if i["SeriesId"] not in shows:
+                shows[i["SeriesId"]] = []
+                out.append({"_group": i["SeriesId"]})          # placeholder keeps newest-first order
+            shows[i["SeriesId"]].append(i)
+        else:
+            out.append(i)
+    cards = []
+    for i in out:
+        if "_group" not in i:
+            cards.append(card(i))
+            continue
+        eps = shows[i["_group"]]
+        if len(eps) == 1:
+            cards.append(card(eps[0]))
+        else:
+            first = eps[0]
+            cards.append(card({"Id": first["SeriesId"], "Type": "Series", "Name": first.get("SeriesName"),
+                               "SeriesId": first["SeriesId"], "ChildCount": len(eps),
+                               "DateLastMediaAdded": first.get("DateCreated"), "DateCreated": first.get("DateCreated"),
+                               "ParentBackdropItemId": first.get("ParentBackdropItemId") or first["SeriesId"]}))
+    return cards

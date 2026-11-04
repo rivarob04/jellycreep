@@ -1359,7 +1359,8 @@ async def _recent_page(request: Request, user: User, type: str, server: int | No
         if uid and q:
             items, err = await safe(library.search(client, uid, q))
         elif uid:
-            items, err = await safe(library.latest(client, uid, kind))
+            items, err = await safe(ttl_cached(("recent", svc.id, uid, kind), 60,
+                                               lambda: library.recent_window(client, uid, kind), stale=1800))
     return render(request, "library_recent.html", user, items=items or [], err=err, kind=kind, kinds=library.KINDS, q=q,
                   svc=svc, servers=[] if user.is_viewer else services(("jellyfin",)), lib=_lib_base(user))
 
