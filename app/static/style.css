@@ -1142,3 +1142,6 @@ a.cast-card:active .cast-img, a.cast-card:hover .cast-img { transform: translate
 /* Snap scrolling ignores padding unless told about it, which pushed the first poster against the edge. */
 .posters { scroll-padding-inline: 12px; }
 .prow, .cast-row, .rwide-row, .skel-row { scroll-padding-inline: 2px; }
+a.rank.tap { color: inherit; text-decoration: none; border-radius: 10px; }
+a.rank.tap:active, a.rank.tap:hover { background: rgba(255,255,255,.05); }
+.rank-go { font-size: 18px; margin-left: 4px; color: var(--muted); }

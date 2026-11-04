@@ -72,7 +72,7 @@
 <div class="grid g2 mb">
   <div class="card"><h2>Your favourite shows</h2>
     {% for s in u.top_shows[:6] %}
-    <div class="rank"><img class="mini-poster" loading="lazy" src="{{ imgp }}/{{ s.poster[0] }}/{{ s.poster[1] }}?h=100" alt="" onerror="this.style.visibility='hidden'"><span>{{ s.title }}</span><span class="muted small">{{ s.plays }} eps · {{ s.seconds|duration }}</span></div>
+    <{{ 'a' if s.poster[1] else 'div' }} class="rank{{ ' tap' if s.poster[1] }}"{% if s.poster[1] %} href="/me/library/{{ s.poster[0] }}/{{ s.poster[1] }}"{% endif %}><img class="mini-poster" loading="lazy" src="{{ imgp }}/{{ s.poster[0] }}/{{ s.poster[1] }}?h=100" alt="" onerror="this.style.visibility='hidden'"><span>{{ s.title }}</span><span class="muted small">{{ s.plays }} eps · {{ s.seconds|duration }}{% if s.poster[1] %} <span class="rank-go">›</span>{% endif %}</span></{{ 'a' if s.poster[1] else 'div' }}>
     {% else %}<div class="muted small">Watch some shows and they'll show up here.</div>{% endfor %}
   </div>
   <div class="card"><h2>When you watch</h2>
