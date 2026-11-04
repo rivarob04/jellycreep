@@ -108,7 +108,7 @@
   </div>
   <nav class="drawer-nav">
     {% for href, label, icon, exact in nav_main %}
-    <a href="{{ href }}" class="{{ 'on' if (path == href if exact else path.startswith(href)) }}"><svg viewBox="0 0 24 24">{{ ico[icon]|safe }}</svg>{{ label }}</a>
+    <a href="{{ href }}" class="{{ 'on' if (path == href if exact else path.startswith(href)) }}{{ ' nav-desk' if icon == 'bell' }}"><svg viewBox="0 0 24 24">{{ ico[icon]|safe }}</svg>{{ label }}</a>
     {% endfor %}
     {% if nav_extra %}<hr>{% for href, label, icon, exact in nav_extra %}
     <a href="{{ href }}" class="{{ 'on' if path.startswith(href) }}"><svg viewBox="0 0 24 24">{{ ico[icon]|safe }}</svg>{{ label }}</a>

@@ -1248,6 +1248,8 @@ async def _push_subscribe(request: Request, user: User):
     if not webpush.valid_endpoint(endpoint) or not keys.get("p256dh") or not keys.get("auth") or len(endpoint) > 1000:
         raise HTTPException(400, "That doesn't look like a browser push subscription.")
     key = webpush.user_key(user)
+    if not webpush.subs_for(key):       # first device → main alerts on by default
+        webpush.enable_defaults(key, user.is_viewer)
     with SessionLocal() as db:
         row = db.scalar(select(PushSub).where(PushSub.endpoint == endpoint)) or PushSub(endpoint=endpoint)
         row.p256dh, row.auth = str(keys["p256dh"])[:200], str(keys["auth"])[:100]

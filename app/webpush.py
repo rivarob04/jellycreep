@@ -44,17 +44,17 @@ STAFF_PREFS = {
     "stream_start": "Any stream starts (chatty)",
     "health": "Sonarr / Radarr health warnings",
     "new_media": "New movies and episodes are added",
-    "announce": "Announcements",
 }
 STAFF_DEFAULTS = {"new_request": True, "download_failed": True, "app_down": True, "new_user": True, "transcode": False,
-                  "stream_start": False, "health": False, "new_media": False, "announce": True}
+                  "stream_start": False, "health": False, "new_media": False}
 VIEWER_PREFS = {
     "request_status": "My requests are approved, declined or ready to watch",
     "new_episode": "New episodes of shows I watch",
     "new_media": "Anything new is added (movies and shows)",
-    "announce": "Announcements from the admin",
 }
-VIEWER_DEFAULTS = {"request_status": True, "new_episode": True, "new_media": False, "announce": True}
+VIEWER_DEFAULTS = {"request_status": True, "new_episode": True, "new_media": False}
+# switched on again whenever someone turns notifications on (their first device)
+ON_BY_DEFAULT = {True: ("request_status", "new_episode"), False: ("new_request", "download_failed", "app_down", "new_user")}
 # where a staff notification should open
 STAFF_URLS = {"transcode": "/", "stream_start": "/", "download_failed": "/automation?tab=queue",
               "health": "/automation?tab=queue", "app_down": "/settings", "new_request": "/automation?tab=requests",
@@ -192,6 +192,12 @@ def prefs_for(key: str, viewer: bool) -> dict:
     return base
 
 
+def enable_defaults(key: str, viewer: bool) -> None:
+    """Notifications were just switched on: tick the main alerts again."""
+    cur = prefs_for(key, viewer)
+    save_prefs(key, viewer, {**cur, **{k: True for k in ON_BY_DEFAULT[viewer]}})
+
+
 def save_prefs(key: str, viewer: bool, values: dict) -> None:
     allowed = VIEWER_PREFS if viewer else STAFF_PREFS
     set_setting(f"pushprefs:{key}", {k: bool(values.get(k)) for k in allowed})
@@ -242,8 +248,8 @@ async def notify_viewer(server_id: int | None, jf_id: str, kind: str, title: str
 
 async def announce(title: str, body: str, audience: str = "everyone") -> int:
     where = {"viewers": PushSub.role == "viewer", "staff": PushSub.role != "viewer"}.get(audience, PushSub.id > 0)
-    targets = [s for key, subs in _grouped(where).items()
-               if prefs_for(key, key.startswith("viewer:")).get("announce") for s in subs]
+    # announcements always go out — there's no opt-out
+    targets = [s for subs in _grouped(where).values() for s in subs]
     return await deliver(targets, title, body, "/me" if audience == "viewers" else "/", "announce", "high")
 
 

@@ -1171,3 +1171,6 @@ main { min-width: 0; max-width: 100%; }
 .co-head{display:flex;justify-content:center;margin:6px 0 4px}
 .co-head img{max-height:90px;max-width:min(340px,80%);object-fit:contain}
 @media (min-width:1000px){.co-tile{width:220px;height:118px}}
+
+/* v0.18.21 — Notifications live behind the bell on mobile */
+@media (max-width:999px){.drawer-nav a.nav-desk{display:none}}
