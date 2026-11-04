@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import math
@@ -453,7 +454,7 @@ async def page_stats(request: Request, days: int = 30, user: User = Depends(staf
     jellystat = []
     for svc in services(("jellystat",)):
         client = await client_for(svc)
-        users, err = await safe(client.most_active_users(days))
+        users, err = await safe(ttl_cached(("jstat", svc.id, days), 300, lambda c=client: c.most_active_users(days), stale=3600))
         jellystat.append({"svc": svc, "users": users, "error": err})
     return render(request, "stats.html", user, jellystat=jellystat, **ctx)
 
@@ -599,6 +600,12 @@ async def _calendar(ym: str | None) -> tuple[dict, list[str]]:
     return calendar_view.build(year, month, items, today), errors
 
 
+async def _calendar_cached(ym: str | None) -> tuple[dict, list[str]]:
+    today = datetime.now(TZ).date()
+    key = ("cal", calendar_view.month_bounds(ym, today), today)
+    return await ttl_cached(key, 120, lambda: _calendar(ym), stale=1800)
+
+
 @app.get("/automation", response_class=HTMLResponse)
 async def page_automation(request: Request, tab: str = "calendar", m: str | None = None,
                           user: User = Depends(staff_user)):
@@ -608,7 +615,7 @@ async def page_automation(request: Request, tab: str = "calendar", m: str | None
     ctx: dict[str, Any] = {"tab": tab, "tabs": available, "panels": [], "cal": None, "errors": [],
                            "flash": request.session.pop("flash", None)}
     if tab == "calendar" and available:
-        ctx["cal"], ctx["errors"] = await _calendar(m)
+        ctx["cal"], ctx["errors"] = await _calendar_cached(m)
     elif available:
         if ctx["flash"]:                       # just approved / removed / paused something: show it fresh
             ttl_forget("arrpanel")
@@ -701,11 +708,15 @@ def _invite_url(svc: Service, url: str | None, code: str | None) -> str | None:
 @app.get("/invites", response_class=HTMLResponse)
 async def page_invites(request: Request, user: User = Depends(admin_user)):
     panels = []
+    if "flash" in request.session or "new_invite" in request.session:
+        ttl_forget("wizarr")                 # just created / removed an invite: show it fresh
     for svc in services(("wizarr",)):
         client = await client_for(svc)
-        (status, e1), (servers, e2), (libs, e3), (invs, e4), (users, e5) = await asyncio.gather(
-            safe(client.status()), safe(client.servers()), safe(client.libraries()), safe(client.invitations()),
-            safe(client.users()))
+
+        async def load(client=client):
+            return await asyncio.gather(safe(client.status()), safe(client.servers()), safe(client.libraries()),
+                                        safe(client.invitations()), safe(client.users()))
+        (status, e1), (servers, e2), (libs, e3), (invs, e4), (users, e5) = await ttl_cached(("wizarr", svc.id), 20, load, stale=600)
         invs = sorted(invs or [], key=lambda i: i.get("created") or "", reverse=True)
         invs = [{**i, "url": _invite_url(svc, i.get("url"), i.get("code"))} for i in invs]
         verified = [s for s in servers or [] if s.get("verified", True)]
@@ -940,15 +951,19 @@ async def _anon_streams(user: User, rest: list[dict]) -> list[dict]:
         return []
     client = await client_for(svc)
     ids = list(dict.fromkeys(x["item_id"] for x in rest))[:30]
-    data, err = await safe(client.get("/Items", params={"userId": user.jf_id, "Ids": ",".join(ids)}))
-    visible = {i.get("Id") for i in ((data or {}).get("Items") or [])} if not err else set()
+    async def check():
+        data = await client.get("/Items", params={"userId": user.jf_id, "Ids": ",".join(ids), "Fields": "", "EnableImages": "false"})
+        return {i.get("Id") for i in ((data or {}).get("Items") or [])}
+    # what someone may open rarely changes, so remember it for a few minutes per set of titles
+    visible, err = await safe(ttl_cached(("anonvis", user.jf_id, tuple(sorted(ids))), 300, check, stale=1800))
+    visible = visible or set()
     out = [{k: x.get(k) for k in ANON_FIELDS} for x in rest if x["item_id"] in visible]
     out.sort(key=lambda x: (x["is_paused"] is True, -(x["progress"] or 0)))
     return out[:12]
 
 
 async def _upcoming(days: int = 14) -> list[dict]:
-    return [dict(i) for i in await ttl_cached(("upcoming", days), 300, lambda: _upcoming_fetch(days))]
+    return [dict(i) for i in await ttl_cached(("upcoming", days), 300, lambda: _upcoming_fetch(days), stale=3600)]
 
 
 async def _keep_warm() -> None:
@@ -963,16 +978,53 @@ async def _keep_warm() -> None:
     async def upcoming():
         for days in (14, 90):
             _TTL[("upcoming", days)] = (time.monotonic() + 330, await _upcoming_fetch(days))
+        # and the detail pages for the next two weeks, so tapping a card is instant
+        sem = asyncio.Semaphore(4)
+        svcs = {s.id: s for s in services(("sonarr", "radarr"))}
+
+        async def one(i):
+            svc = svcs.get(i.get("sid"))
+            if svc and (svc.kind == "sonarr") == (str(i.get("ref", ""))[:1] == "e"):
+                async with sem:
+                    try:
+                        await upcoming_arr(svc, svc.id, i["ref"])
+                    except Exception:  # noqa: BLE001
+                        pass
+        await asyncio.gather(*(one(i) for i in (await _upcoming(14))[:60]))
 
     async def discover_rows():
         for svc in services(("jellyseerr",))[:1]:
-            await seerr_portal.discover(await client_for(svc), svc.id)
+            c = await client_for(svc)
+            rows = await seerr_portal.discover(c, svc.id)
+            # the title pages people are most likely to tap next
+            sem = asyncio.Semaphore(4)
+
+            async def one(card):
+                async with sem:
+                    try:
+                        await asyncio.gather(seerr_portal.raw_title(c, svc.id, card["type"], card["id"]),
+                                             seerr_portal.similar(c, svc.id, card["type"], card["id"]))
+                    except Exception:  # noqa: BLE001
+                        pass
+            await asyncio.gather(*(one(x) for r in rows[:3] for x in r["items"][:8]))
+
+            async def company(kind, cid):
+                async with sem:
+                    try:
+                        await seerr_portal.browse_company(c, svc.id, kind, cid, 1)
+                    except Exception:  # noqa: BLE001
+                        pass
+            await asyncio.gather(*(company(k, t["id"]) for k, ts in seerr_portal.TILES.items() for t in ts))
 
     await asyncio.sleep(5)
     while True:
         await step("libraries", ttl_cached(("media",), 120, _media_servers, stale=6 * 3600), 60)
         await step("storage", ttl_cached(("storage",), 600, _storage_report, stale=6 * 3600), 120)
         await step("queue", asyncio.gather(*(_cached_panel(x, "queue") for x in services(("sonarr", "radarr", "lidarr")))), 60)
+        if services(("sonarr", "radarr", "lidarr")):
+            await step("calendar", _calendar_cached(None), 60)
+        if services(("jellyseerr",)):
+            await step("requests", asyncio.gather(*(_cached_panel(x, "requests") for x in services(("jellyseerr",)))), 60)
         if login_settings()["enabled"] and login_settings()["seerr_discover"]:
             await step("discover", discover_rows(), 60)
         if login_settings()["enabled"] and login_settings()["upcoming"]:
@@ -1616,7 +1668,10 @@ def warm_discover(user: User) -> None:
         try:
             sc = await _seerr(user)
             if sc:
-                await asyncio.wait_for(_discover_data(user, sc), timeout=60)
+                jobs = [_discover_data(user, sc)]
+                if login_settings()["requests"]:
+                    jobs.append(_req_feed(sc, sc["everyone"]))
+                await asyncio.wait_for(asyncio.gather(*jobs, return_exceptions=True), timeout=60)
         except Exception:  # noqa: BLE001
             pass
         finally:
@@ -1687,7 +1742,8 @@ async def page_title(request: Request, mt: str, tmdb: int, user: User = Depends(
     (t, err), similar, has4k, quota, jf = await asyncio.gather(
         safe(seerr_portal.detail(c, sid, mt, tmdb, sc["uid"], everyone=sc["everyone"], can_manage=sc["manage"])),
         seerr_portal.similar(c, sid, mt, tmdb), seerr_portal.has_4k(c, sid),
-        seerr_portal.quota(c, sc["uid"]) if sc["uid"] else asyncio.sleep(0), _jf_lookup(user))
+        ttl_cached(("quota", sid, sc["uid"]), 60, lambda: seerr_portal.quota(c, sc["uid"]), stale=3600)
+        if sc["uid"] else asyncio.sleep(0), _jf_lookup(user))
     if err or not t:
         raise HTTPException(404, "Couldn't load that title from Seerr")
     similar = _mark_watchable(jf, similar)
@@ -1738,12 +1794,20 @@ async def act_request(request: Request, mt: str, tmdb: int, user: User = Depends
         return back
     seerr_portal.forget("row")
     seerr_portal.forget("similar")
-    ttl_forget("homereq"); ttl_forget("discfeed"); ttl_forget("quota")
+    seerr_portal.forget("title")
+    ttl_forget("homereq"); ttl_forget("discfeed"); ttl_forget("quota"); ttl_forget("reqfeed")
     log.info("Seerr request by %s: %s %s seasons=%s 4k=%s", user.name, mt, tmdb, seasons, is4k)
     auto = (res or {}).get("status") == 2
     request.session["flash"] = {"ok": True, "msg": "Requested — it was approved automatically and will start downloading."
                                 if auto else "Requested! It'll start downloading once it's approved."}
     return back
+
+
+async def _req_feed(sc: dict, everyone: bool, f: str = "all", page: int = 1):
+    c, sid = sc["client"], sc["svc"].id
+    return await ttl_cached(("reqfeed", sid, sc["uid"], everyone, sc["manage"], f, page), 20,
+                            lambda: seerr_portal.feed(c, sid, sc["uid"], everyone=everyone, can_manage=sc["manage"],
+                                                      flt=f, page=page), stale=600)
 
 
 @app.get("/me/requests", response_class=HTMLResponse)
@@ -1757,10 +1821,11 @@ async def page_requests(request: Request, view: str = "everyone", f: str = "all"
     everyone = sc["everyone"] and view != "mine"
     page = max(1, min(page, 200))
     f = f if f in seerr_portal.FILTERS else "all"
+    c, sid = sc["client"], sc["svc"].id
     (res, err), quota = await asyncio.gather(
-        safe(seerr_portal.feed(sc["client"], sc["svc"].id, sc["uid"], everyone=everyone, can_manage=sc["manage"],
-                               flt=f, page=page)),
-        seerr_portal.quota(sc["client"], sc["uid"]) if sc["uid"] else asyncio.sleep(0))
+        safe(_req_feed(sc, everyone, f, page)),
+        ttl_cached(("quota", sid, sc["uid"]), 60, lambda: seerr_portal.quota(c, sc["uid"]), stale=3600)
+        if sc["uid"] else asyncio.sleep(0))
     rows, pages = res or ([], 1)
     return render(request, "me_requests.html", user, seerr=sc, rows=rows, pages=pages, page=page, f=f,
                   view="everyone" if everyone else "mine", error=err, quota=quota, filters=seerr_portal.FILTERS)
@@ -1784,7 +1849,8 @@ async def act_my_request(request: Request, req_id: int, action: str, user: User 
         else:
             await seerr_portal.moderate(sc["client"], sc["uid"], req_id, action)
         seerr_portal.forget("row")
-        ttl_forget("homereq"); ttl_forget("discfeed"); ttl_forget("quota")
+        seerr_portal.forget("title")
+        ttl_forget("homereq"); ttl_forget("discfeed"); ttl_forget("quota"); ttl_forget("reqfeed")
         request.session["flash"] = {"ok": True, "msg": {"cancel": "Request cancelled.", "approve": "Approved.",
                                                         "decline": "Declined."}[action]}
     except UpstreamError as e:
@@ -1792,22 +1858,12 @@ async def act_my_request(request: Request, req_id: int, action: str, user: User 
     return RedirectResponse(nxt, status_code=303)
 
 
-async def _upcoming_page(request: Request, user: User, sid: int, ref: str):
-    if not (len(ref) > 1 and ref[0] in "em" and ref[1:].isdigit()):
-        raise HTTPException(404)
-    if user.is_viewer:
-        # only things that are actually on this person's Coming up list
-        if not login_settings()["upcoming"] or not any(i.get("sid") == sid and i.get("ref") == ref for i in await _upcoming(90)):
-            raise HTTPException(404)
-    with SessionLocal() as db:
-        svc = db.get(Service, sid)
-    if not svc or svc.kind not in ("sonarr", "radarr") or (svc.kind == "sonarr") != (ref[0] == "e"):
-        raise HTTPException(404)
+async def _upcoming_arr(svc: Service, sid: int, ref: str) -> dict:
+    """Sonarr/Radarr side of a Coming up page — the same for everyone, so it's cached and warmed."""
     arr = await client_for(svc)
     rid = int(ref[1:])
-    arrimg = "/me/arrimg" if user.is_viewer else "/arrimg"
     u: dict[str, Any] = {"kind": "tv" if ref[0] == "e" else "movie", "dates": [], "links": [], "facts": []}
-    try:
+    if True:
         if ref[0] == "e":
             ep = await arr.get(arr.p(f"episode/{rid}")) or {}
             show = ep.get("series") or await arr.get(arr.p(f"series/{ep.get('seriesId')}")) or {}
@@ -1816,7 +1872,7 @@ async def _upcoming_page(request: Request, user: User, sid: int, ref: str):
             u.update(title=show.get("title") or "Unknown series", year=show.get("year"),
                      code=f"S{se} • E{en}", name=ep.get("title") or "TBA", season=se, number=en,
                      overview=ep.get("overview"), about=show.get("overview"), has_file=bool(ep.get("hasFile")),
-                     poster=f"{arrimg}/{sid}/{show.get('id')}", fanart=f"{arrimg}/{sid}/{show.get('id')}?t=fanart",
+                     poster=f"{{A}}/{sid}/{show.get('id')}", fanart=f"{{A}}/{sid}/{show.get('id')}?t=fanart",
                      rating=(show.get("ratings") or {}).get("value") or None, critic=None,
                      premiere=en == 1, finale=ep.get("finaleType"))
             if when:
@@ -1836,7 +1892,7 @@ async def _upcoming_page(request: Request, user: User, sid: int, ref: str):
             r = mv.get("ratings") or {}
             u.update(title=mv.get("title") or "Unknown movie", year=mv.get("year"), code=None, name=None,
                      overview=mv.get("overview"), about=None, has_file=bool(mv.get("hasFile")),
-                     poster=f"{arrimg}/{sid}/{rid}", fanart=f"{arrimg}/{sid}/{rid}?t=fanart",
+                     poster=f"{{A}}/{sid}/{rid}", fanart=f"{{A}}/{sid}/{rid}?t=fanart",
                      rating=((r.get("imdb") or {}).get("value") or (r.get("tmdb") or {}).get("value")) or None,
                      critic=(r.get("rottenTomatoes") or {}).get("value"), premiere=False, finale=None)
             for field, label in (("inCinemas", "In cinemas"), ("digitalRelease", "Digital release"), ("physicalRelease", "Blu-ray / DVD")):
@@ -1853,8 +1909,33 @@ async def _upcoming_page(request: Request, user: User, sid: int, ref: str):
             if mv.get("youTubeTrailerId"):
                 u["links"].insert(0, ("▶ Trailer", f"https://www.youtube.com/watch?v={mv['youTubeTrailerId']}"))
             jf_kind = "Movie"
+    return {"u": u, "ids": ids, "jf_kind": jf_kind}
+
+
+async def upcoming_arr(svc: Service, sid: int, ref: str) -> dict:
+    return await ttl_cached(("upitem", sid, ref), 900, lambda: _upcoming_arr(svc, sid, ref), stale=6 * 3600)
+
+
+async def _upcoming_page(request: Request, user: User, sid: int, ref: str):
+    if not (len(ref) > 1 and ref[0] in "em" and ref[1:].isdigit()):
+        raise HTTPException(404)
+    if user.is_viewer:
+        # only things that are actually on this person's Coming up list
+        if not login_settings()["upcoming"] or not any(i.get("sid") == sid and i.get("ref") == ref for i in await _upcoming(90)):
+            raise HTTPException(404)
+    with SessionLocal() as db:
+        svc = db.get(Service, sid)
+    if not svc or svc.kind not in ("sonarr", "radarr") or (svc.kind == "sonarr") != (ref[0] == "e"):
+        raise HTTPException(404)
+    arrimg = "/me/arrimg" if user.is_viewer else "/arrimg"
+    try:
+        got = await upcoming_arr(svc, sid, ref)
     except UpstreamError as e:
         raise HTTPException(404, f"Couldn't load that from {svc.name}: {e}")
+    u = copy.deepcopy(got["u"])
+    ids, jf_kind = got["ids"], got["jf_kind"]
+    for k in ("poster", "fanart"):
+        u[k] = u[k].replace("{A}", arrimg)
     u["facts"] = [(k, v) for k, v in u["facts"] if v]
     if u["rating"]:
         u["rating"] = round(float(u["rating"]), 1)
@@ -1867,24 +1948,30 @@ async def _upcoming_page(request: Request, user: User, sid: int, ref: str):
     if jsvc:
         jc = await client_for(jsvc)
         uid, _ = await safe(library.browse_as(jc, jsvc.id, user))
-        hit = await library.find(jc, uid, jf_kind, u["title"], u.get("year"), ids) if uid else None
-        if hit:
-            target_id = hit["Id"]
-            if ref[0] == "e":
-                ep_id = await library.find_episode(jc, uid, hit["Id"], u["season"], u["number"])
-                ctx["on_jellyfin"] = bool(ep_id)
-                target_id = ep_id or hit["Id"]
-            else:
-                ctx["on_jellyfin"] = True
-            d, _ = await safe(library.item(jc, uid, target_id, show_paths=False))
-            if d and d.get("id"):
+        if uid:
+            async def lookup():
+                hit = await library.find(jc, uid, jf_kind, u["title"], u.get("year"), ids)
+                if not hit:
+                    return None
+                target_id, on_jf = hit["Id"], True
+                if ref[0] == "e":
+                    ep_id = await library.find_episode(jc, uid, hit["Id"], u["season"], u["number"])
+                    on_jf, target_id = bool(ep_id), ep_id or hit["Id"]
+                d, _ = await safe(library.item(jc, uid, target_id, show_paths=False))
+                if not (d and d.get("id")):
+                    return {"hit": hit["Id"], "on": on_jf, "d": None, "show": None}
                 show_d = d
                 if ref[0] == "e" and d["type"] == "Episode":   # cast of the show, not just this episode's guests
                     sd, _ = await safe(library.item(jc, uid, hit["Id"], show_paths=False))
                     show_d = {**(sd or {}), "cast": (d.get("cast") or []) if not (sd or {}).get("cast") else
                               (sd["cast"] + [c for c in d.get("cast") or [] if c["id"] not in {x["id"] for x in sd["cast"]}])}
-                ctx.update(d=show_d, jf={"sid": jsvc.id, "id": hit["Id"]},
-                           watch=await _watch_ctx(jc, jsvc, uid, user, d))
+                return {"hit": hit["Id"], "on": on_jf, "d": d, "show": show_d}
+            got_jf = await ttl_cached(("upjf", jsvc.id, uid, sid, ref), 120, lookup, stale=1800)
+            if got_jf:
+                ctx["on_jellyfin"] = got_jf["on"]
+                if got_jf["d"]:
+                    ctx.update(d=got_jf["show"], jf={"sid": jsvc.id, "id": got_jf["hit"]},
+                               watch=await _watch_ctx(jc, jsvc, uid, user, got_jf["d"]))
     return render(request, "upcoming_item.html", user, ambient=u["fanart"], **ctx)
 
 

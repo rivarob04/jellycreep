@@ -450,8 +450,15 @@ async def feed(client, svc_id: int, me: int | None, *, everyone: bool, can_manag
     return rows, max(1, -(-total // take))
 
 
+async def raw_title(client, svc_id: int, mt: str, tmdb: int) -> dict:
+    """Seerr's full record for one title — shared by everyone, kept warm, dropped after a request."""
+    async def load():
+        return await client.get(f"/api/v1/{mt}/{tmdb}") or {}
+    return await cached(("title", svc_id, mt, tmdb), 120, load, stale=1800)
+
+
 async def detail(client, svc_id: int, mt: str, tmdb: int, me: int | None, *, everyone: bool, can_manage: bool) -> dict:
-    d, reg = await asyncio.gather(client.get(f"/api/v1/{mt}/{tmdb}"), region(client, svc_id))
+    d, reg = await asyncio.gather(raw_title(client, svc_id, mt, tmdb), region(client, svc_id))
     d = d or {}
     c = card({**d, "mediaType": mt}) or {}
     mi = d.get("mediaInfo") or {}
