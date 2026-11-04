@@ -165,23 +165,10 @@
 
 // Theme: Auto (follows the phone) → Light → Dark, remembered per device.
 (function () {
-  const order = ["auto", "light", "dark"];
-  const label = { auto: "🌓 Auto", light: "☀️ Light", dark: "🌙 Dark" };
-  const root = document.documentElement;
+  // Always dark (the theme picker was removed).
+  document.documentElement.dataset.theme = "dark";
   const meta = document.getElementById("theme-color");
-  const get = () => { try { return localStorage.getItem("jc-theme") || "auto"; } catch (_) { return "auto"; } };
-  const apply = (t) => {
-    if (t === "auto") delete root.dataset.theme; else root.dataset.theme = t;
-    const light = t === "light" || (t === "auto" && matchMedia("(prefers-color-scheme: light)").matches);
-    if (meta) meta.content = light ? "#eef0f7" : "#0a0a10";
-    document.querySelectorAll("[data-theme-label]").forEach((el) => (el.textContent = el.closest(".drawer") ? "Theme: " + label[t].replace(/^\S+\s/, "") : label[t]));
-  };
-  apply(get());
-  document.querySelectorAll("[data-theme-toggle]").forEach((b) => b.addEventListener("click", () => {
-    const next = order[(order.indexOf(get()) + 1) % order.length];
-    try { localStorage.setItem("jc-theme", next); } catch (_) {}
-    apply(next);
-  }));
+  if (meta) meta.content = "#0a0a10";
 })();
 
 // Pull to refresh (mostly for the installed home-screen app, which has no reload button).
@@ -229,24 +216,8 @@
   sync();
 })();
 
-// Glass effects on/off (per device) – off = no blur, for slower phones.
-(function () {
-  const root = document.documentElement;
-  const get = () => { try { return localStorage.getItem("jc-fx") === "off" ? "off" : "on"; } catch (_) { return "on"; } };
-  const paint = () => {
-    const on = get() === "on";
-    if (on) delete root.dataset.fx; else root.dataset.fx = "off";
-    document.querySelectorAll("[data-fx-label]").forEach((el) => {
-      el.textContent = el.closest(".drawer") ? `Glass effects: ${on ? "on" : "off"}` : el.closest(".sheet-btn") ? `✨ Glass effects: ${on ? "on" : "off"}` : (on ? "✨ Glass" : "▫️ Flat");
-    });
-  };
-  paint();
-  document.querySelectorAll("[data-fx-toggle]").forEach((b) => b.addEventListener("click", (e) => {
-    e.preventDefault();
-    try { localStorage.setItem("jc-fx", get() === "on" ? "off" : "on"); } catch (_) {}
-    paint();
-  }));
-})();
+// Glass effects are always on.
+delete document.documentElement.dataset.fx;
 
 // Quality scan progress: poll while scanning, reload when done.
 (function () {

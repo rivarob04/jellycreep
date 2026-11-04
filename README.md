@@ -141,7 +141,7 @@ When a viewer's stream is being transcoded, JellyCreep explains why in plain Eng
 ### Desktop layout
 
 On wide screens (1000 px and up), JellyCreep uses a Seerr-style layout:
-- A fixed left sidebar with the logo, your name, every page (current one highlighted), theme and glass switches, Sign out and the version.
+- A fixed left sidebar with the logo, your name, every page (current one highlighted), Sign out and the version.
 - A full-width search bar along the top. Jellyfin users search Discover, or their library if Seerr isn't set up. Admins search the Jellyfin library.
 - Discover opens with **Recently Added** (from the person's own Jellyfin), then **Recent Requests** as wide cards (backdrop, year, title, who asked, seasons, status, poster), then larger poster rows.
 
@@ -206,7 +206,7 @@ Requirements: JellyCreep must be opened over **https://**. The container also ne
 
 ### Navigation on phones
 
-On phones and tablets, tap **☰** in the top-left corner, or swipe in from the left edge, to open the slide-out menu. It lists every page (the current one highlighted), plus the theme and glass switches and Sign out. Tap outside it, swipe it left or press Esc to close it. Wide screens keep the menu bar across the top.
+On phones and tablets, tap **☰** in the top-left corner, or swipe in from the left edge, to open the slide-out menu. It lists every page (the current one highlighted) and Sign out. Tap outside it, swipe it left or press Esc to close it. Wide screens keep the menu bar across the top.
 
 ### Recently added & library pages (like Tautulli Remote)
 
@@ -304,3 +304,7 @@ DATA_DIR=./data AUTH_MODE=none COOKIE_SECURE=false uvicorn app.main:app --reload
 ```
 
 Stack: FastAPI, SQLite (WAL), httpx and Jinja. No JavaScript framework and no CDN, so it works fully offline on your LAN.
+
+### Look
+
+JellyCreep is always dark with the glass effect on; there are no theme or glass switches.

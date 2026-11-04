@@ -526,10 +526,6 @@ h1 { letter-spacing: -.01em; }
 @supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
   .card, .stream, .more-sheet, .seg, .tabbar, .top, .health-strip a { background: rgba(23, 23, 34, .94); }
 }
-@media (prefers-reduced-transparency: reduce) {
-  .ambient-img { display: none; }
-  .card, .stream, .more-sheet, .seg, .tabbar, .top { background: #171722; -webkit-backdrop-filter: none; backdrop-filter: none; }
-}
 
 /* glass — light theme */
 :root[data-theme="light"] {
