@@ -1157,3 +1157,17 @@ main { min-width: 0; max-width: 100%; }
 .health-long .show-all { color: var(--accent-2); font-weight: 600; white-space: nowrap; }
 .health-long[open] > summary { display: none; }
 .drive-hide { margin-top: 8px; } .drive-hide .btn { opacity: .75; } .hidden-tag { color: var(--warn); }
+
+/* v0.18.18 — Discover: Networks / Studios tiles (Seerr-style) */
+.co-row{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-inline:2px;padding:2px 2px 8px;scrollbar-width:none}
+.co-row::-webkit-scrollbar{display:none}
+.co-tile{position:relative;flex:0 0 auto;width:170px;height:96px;border-radius:14px;scroll-snap-align:start;display:grid;place-items:center;
+  background:linear-gradient(180deg,rgba(55,65,81,.55),rgba(17,24,39,.75));border:1px solid rgba(255,255,255,.08);
+  box-shadow:0 4px 14px rgba(0,0,0,.25);overflow:hidden;transition:transform .15s,border-color .15s,box-shadow .15s}
+.co-tile:hover,.co-tile:focus-visible{transform:scale(1.04);border-color:rgba(255,255,255,.3);box-shadow:0 6px 20px rgba(0,0,0,.4)}
+.co-tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:18px 20px;box-sizing:border-box}
+.co-tile b{font-size:.85rem;color:var(--muted,#9ca3af);text-align:center;padding:0 10px}
+.co-tile.ok b{visibility:hidden}
+.co-head{display:flex;justify-content:center;margin:6px 0 4px}
+.co-head img{max-height:90px;max-width:min(340px,80%);object-fit:contain}
+@media (min-width:1000px){.co-tile{width:220px;height:118px}}

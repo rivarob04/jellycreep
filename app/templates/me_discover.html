@@ -14,12 +14,13 @@
 {{ not_linked(seerr) }}
 
 {% if q or row %}
+{% if co_logo %}<div class="co-head"><img src="{{ co_logo }}" alt="{{ row_title }}" onerror="this.remove()"></div>{% endif %}
 <div class="spread section-title"><h2 style="margin:0">{% if q %}Results for “{{ q }}”{% else %}{{ row_title }}{% endif %}</h2>
   <a class="small" href="/me/discover">← Discover</a></div>
 {% if error %}<div class="notice bad small">Couldn't reach Seerr: {{ error }}</div>{% endif %}
 <div class="pgrid">{% for c in results %}{{ pcard(c) }}{% else %}<p class="muted">Nothing found.</p>{% endfor %}</div>
 {% if results|length >= 20 %}
-<div class="pager"><a class="btn" href="?{{ 'q=' ~ q|urlencode if q else 'row=' ~ row }}&page={{ page + 1 }}">More →</a></div>
+<div class="pager"><a class="btn" href="?{{ 'q=' ~ q|urlencode if q else (row if '=' in row else 'row=' ~ row) }}&page={{ page + 1 }}">More →</a></div>
 {% endif %}
 
 {% else %}
@@ -44,6 +45,12 @@
 {% for r in rows %}
 <div class="spread section-title"><h2 style="margin:0">{{ r.title }}</h2><a class="small" href="/me/discover?row={{ r.key }}">See all →</a></div>
 <div class="prow mb">{% for c in r['items'] %}{{ pcard(c) }}{% endfor %}</div>
+{% endfor %}
+{% for kind, title in (('network', 'Networks'), ('studio', 'Studios')) %}
+<div class="spread section-title"><h2 style="margin:0">{{ title }}</h2></div>
+<div class="co-row mb">{% for t in tiles[kind] %}
+  <a class="co-tile" href="/me/discover?{{ kind }}={{ t.id }}" title="{{ t.name }}"><b>{{ t.name }}</b><img loading="lazy" src="{{ t.logo }}" alt="" onload="this.parentNode.classList.add('ok')" onerror="this.remove()"></a>
+{% endfor %}</div>
 {% endfor %}
 {% endif %}
 {% endif %}

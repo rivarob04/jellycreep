@@ -41,6 +41,33 @@ ROWS = [
     ("upcoming-tv", "Upcoming series", "/api/v1/discover/tv/upcoming"),
 ]
 ROW_BY_KEY = {k: (t, p) for k, t, p in ROWS}
+
+# Seerr's Networks / Studios tiles (same TMDB company ids and logos Seerr uses)
+LOGO = "https://image.tmdb.org/t/p/w780_filter(duotone,ffffff,bababa)"
+NETWORKS = [
+    (213, "Netflix", "/wwemzKWzjKYJFfCeiB57q3r4Bcm.png"), (2739, "Disney+", "/gJ8VX6JSu3ciXHuC2dDGAo2lvwM.png"),
+    (1024, "Prime Video", "/ifhbNuuVnlwYy5oXA5VIb2YR8AZ.png"), (2552, "Apple TV+", "/4KAy34EHvRM25Ih8wb82AuGU7zJ.png"),
+    (453, "Hulu", "/pqUTCleNUiTLAVlelGxUgWn1ELh.png"), (49, "HBO", "/tuomPhY2UtuPTqqFnKMVHvSb724.png"),
+    (4353, "Discovery+", "/1D1bS3Dyw4ScYnFWTlBOvJXC3nb.png"), (2, "ABC", "/ndAvF4JLsliGreX87jAc9GdjmJY.png"),
+    (19, "FOX", "/1DSpHrWyOORkL9N2QHX7Adt31mQ.png"), (359, "Cinemax", "/6mSHSquNpfLgDdv6VnOOvC5Uz2h.png"),
+    (174, "AMC", "/pmvRmATOCaDykE6JrVoeYxlFHw3.png"), (67, "Showtime", "/Allse9kbjiP6ExaQrnSpIhkurEi.png"),
+    (318, "Starz", "/8GJjw3HHsAJYwIWKIPBPfqMxlEa.png"), (71, "The CW", "/ge9hzeaU7nMtQ4PjkFlc68dGAJ9.png"),
+    (6, "NBC", "/o3OedEP0f9mfZr33jz2BfXOUK5.png"), (16, "CBS", "/nm8d7P7MJNiBLdgIzUK0gkuEA4r.png"),
+    (4330, "Paramount+", "/fi83B1oztoS47xxcemFdPMhIzK.png"), (4, "BBC One", "/mVn7xESaTNmjBUyUtGNvDQd3CT1.png"),
+    (56, "Cartoon Network", "/c5OC6oVCg6QP4eqzW6XIq17CQjI.png"), (80, "Adult Swim", "/9AKyspxVzywuaMuZ1Bvilu8sXly.png"),
+    (13, "Nickelodeon", "/ikZXxg6GnwpzqiZbRPhJGaZapqB.png"), (3353, "Peacock", "/gIAcGTjKKr0KOHL5s4O36roJ8p7.png"),
+]
+STUDIOS = [
+    (2, "Disney", "/wdrCwmRnLFJhEoH8GSfymY85KHT.png"), (127928, "20th Century Studios", "/h0rjX5vjW5r8yEnUBStFarjcLT4.png"),
+    (34, "Sony Pictures", "/GagSvqWlyPdkFHMfQ3pNq6ix9P.png"), (174, "Warner Bros. Pictures", "/ky0xOc5OrhzkZ1N6KyUxacfQsCk.png"),
+    (33, "Universal", "/8lvHyhjr8oUKOOy2dKXoALWKdp0.png"), (4, "Paramount", "/fycMZt242LVjagMByZOLUGbCvv3.png"),
+    (3, "Pixar", "/1TjvGVDMYsj6JBxOAkUHpPEwLf7.png"), (521, "DreamWorks", "/kP7t6RwGz2AvvTkvnI1uteEwHet.png"),
+    (420, "Marvel Studios", "/hUzeosd33nzE5MCNsZxCGEKTXaQ.png"), (9993, "DC", "/2Tc1P3Ac8M479naPp1kYT3izLS5.png"),
+    (41077, "A24", "/1ZXsGaFPgrgS6ZZGS37AqD5uU12.png"),
+]
+COMPANIES = {"network": {i: (n, LOGO + p) for i, n, p in NETWORKS},
+             "studio": {i: (n, LOGO + p) for i, n, p in STUDIOS}}
+TILES = {k: [{"id": i, "name": n, "logo": l} for i, (n, l) in v.items()] for k, v in COMPANIES.items()}
 FILTERS = {"all": "All", "pending": "Waiting", "processing": "Approved", "available": "Available"}
 
 # --------------------------------------------------------------------------- cache
@@ -353,6 +380,16 @@ async def discover(client, svc_id: int) -> list[dict]:
 
 async def browse(client, svc_id: int, key: str, page: int) -> list[dict]:
     return await _row(client, svc_id, key, page)
+
+
+async def browse_company(client, svc_id: int, kind: str, cid: int, page: int) -> list[dict]:
+    """Everything from one TV network or movie studio (Seerr's /discover/tv/network|movies/studio)."""
+    path = f"/api/v1/discover/tv/network/{cid}" if kind == "network" else f"/api/v1/discover/movies/studio/{cid}"
+
+    async def load():
+        data = await client.get(path, params={"page": str(page)}) or {}
+        return [c for c in (card(r) for r in data.get("results") or []) if c]
+    return await cached(("co", svc_id, kind, cid, page), 1800, load)
 
 
 async def search(client, q: str, page: int = 1) -> list[dict]:

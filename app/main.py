@@ -1623,12 +1623,16 @@ def warm_discover(user: User) -> None:
 
 
 @app.get("/me/discover", response_class=HTMLResponse)
-async def page_discover(request: Request, q: str = "", row: str = "", page: int = 1, user: User = Depends(current_user)):
+async def page_discover(request: Request, q: str = "", row: str = "", page: int = 1, network: int = 0, studio: int = 0,
+                        user: User = Depends(current_user)):
     if (r := _viewer_page(user)):
         return r
     sc = await _seerr(user)
     ctx: dict[str, Any] = {"seerr": sc, "q": q.strip()[:100], "row": row if row in seerr_portal.ROW_BY_KEY else "",
-                           "page": max(1, min(page, 50)), "rows": [], "results": [], "recent": [], "error": None, "quota": None}
+                           "page": max(1, min(page, 50)), "rows": [], "results": [], "recent": [], "error": None, "quota": None,
+                           "tiles": seerr_portal.TILES}
+    co = (("network", network) if network in seerr_portal.COMPANIES["network"] else
+          ("studio", studio) if studio in seerr_portal.COMPANIES["studio"] else None)
     if sc:
         c, sid = sc["client"], sc["svc"].id
         if ctx["q"]:
@@ -1636,6 +1640,11 @@ async def page_discover(request: Request, q: str = "", row: str = "", page: int 
         elif ctx["row"]:
             ctx["results"], ctx["error"] = await safe(seerr_portal.browse(c, sid, ctx["row"], ctx["page"]))
             ctx["row_title"] = seerr_portal.ROW_BY_KEY[ctx["row"]][0]
+        elif co:
+            kind, cid = co
+            ctx["results"], ctx["error"] = await safe(seerr_portal.browse_company(c, sid, kind, cid, ctx["page"]))
+            name, logo = seerr_portal.COMPANIES[kind][cid]
+            ctx.update(row_title=name, co_logo=logo, row=f"{kind}={cid}")
         else:
             (rows, e1), (recent, _), quota, jf_added, jf = await _discover_data(user, sc)
             ctx.update(rows=rows or [], recent=(recent or ([], 0))[0], error=e1, quota=quota,
