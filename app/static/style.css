@@ -1214,3 +1214,17 @@ main { min-width: 0; max-width: 100%; }
   /* like Seerr: the hover card carries the title, so the captions under the poster go */
   .pcard:has(.phover) .pcap { display: none; }
 }
+
+/* v0.18.27 — more visible links: brighter blue everywhere, "See all / All / ← Back" as pills */
+a { color: #4fd1ff; }
+a.small, .watch-more a {
+  display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px; border-radius: 999px; white-space: nowrap;
+  font-size: 13px; font-weight: 650; line-height: 1.2; color: #7fdcff;
+  background: rgba(0,164,220,.16); border: 1px solid rgba(79,209,255,.45);
+  box-shadow: 0 2px 8px rgba(0,0,0,.25); transition: background .15s, border-color .15s, color .15s;
+}
+a.small:hover, a.small:focus-visible, .watch-more a:hover {
+  color: #fff; background: rgba(0,164,220,.35); border-color: rgba(127,220,255,.85); text-decoration: none;
+}
+a.back-link { margin-bottom: 10px; }
+.section-title a.small { flex: none; }

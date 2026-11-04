@@ -109,7 +109,7 @@
   {% if not (cal.is_current and day < cal.today) %}{{ agenda_day(day, its) }}{% set ns.shown = ns.shown + 1 %}{% endif %}
 {% endfor %}
 {% if ns.shown == 0 and not ns.past %}<div class="card empty"><div class="empty-icon">🗓️</div>Nothing on the calendar for {{ cal.label }}.</div>
-{% elif ns.shown == 0 %}<div class="card empty small">No more releases this month. <a href="/automation?tab=calendar&m={{ cal.next }}">See next month →</a></div>{% endif %}
+{% elif ns.shown == 0 %}<div class="card empty small">No more releases this month. <a class="small" href="/automation?tab=calendar&m={{ cal.next }}">See next month →</a></div>{% endif %}
 {% endif %}
 
 {# ============================ OTHER TABS ============================ #}

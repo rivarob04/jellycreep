@@ -27,6 +27,6 @@
   </{{ 'a' if i.ref else 'div' }}>
   {% if loop.last %}</div></section>{% endif %}
 {% else %}
-<div class="card empty"><div class="empty-icon">🗓️</div>Nothing scheduled in the next {{ {'7': 'week', '14': '2 weeks', '30': 'month', '90': '3 months'}[days] }}{{ '' if kind == 'all' else (' for ' ~ ('shows' if kind == 'tv' else 'movies')) }}.{% if days != '90' %} <a href="?days=90&kind={{ kind }}">Look 3 months ahead →</a>{% endif %}</div>
+<div class="card empty"><div class="empty-icon">🗓️</div>Nothing scheduled in the next {{ {'7': 'week', '14': '2 weeks', '30': 'month', '90': '3 months'}[days] }}{{ '' if kind == 'all' else (' for ' ~ ('shows' if kind == 'tv' else 'movies')) }}.{% if days != '90' %} <a class="small" href="?days=90&kind={{ kind }}">Look 3 months ahead →</a>{% endif %}</div>
 {% endfor %}
 {% endblock %}
