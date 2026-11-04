@@ -438,6 +438,7 @@ async def page_stats(request: Request, days: int = 30, user: User = Depends(staf
             methods=stats.grouped(db, Play.play_method, days), clients=stats.grouped(db, Play.client, days),
             types=stats.grouped(db, Play.item_type, days),
         )
+        ctx["heat"], ctx["by_hour"], ctx["heat_peak"] = stats.heatmap(db, days, TZ)
         ctx["conc"] = stats.concurrency(db, days, TZ)
     jellystat = []
     for svc in services(("jellystat",)):
