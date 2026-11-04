@@ -48,14 +48,15 @@
   <a class="co-tile" href="/me/discover?{{ kind }}={{ t.id }}" title="{{ t.name }}"><b>{{ t.name }}</b><img loading="lazy" src="{{ t.logo }}" alt="" onload="this.parentNode.classList.add('ok')" onerror="this.remove()"></a>
 {% endfor %}</div>
 {% endmacro %}
-{% set ns = namespace(studios=False) %}
+{% set ns = namespace(studios=False, networks=False) %}
 {% for r in rows %}
 <div class="spread section-title"><h2 style="margin:0">{{ r.title }}</h2><a class="small" href="/me/discover?row={{ r.key }}">See all →</a></div>
 <div class="prow mb">{% for c in r['items'] %}{{ pcard(c) }}{% endfor %}</div>
 {% if r.key == 'movies' %}{{ co_tiles('studio', 'Studios') }}{% set ns.studios = True %}{% endif %}
+{% if r.key == 'tv' %}{{ co_tiles('network', 'Networks') }}{% set ns.networks = True %}{% endif %}
 {% endfor %}
 {% if not ns.studios %}{{ co_tiles('studio', 'Studios') }}{% endif %}
-{{ co_tiles('network', 'Networks') }}
+{% if not ns.networks %}{{ co_tiles('network', 'Networks') }}{% endif %}
 {% endif %}
 {% endif %}
 {% endblock %}
