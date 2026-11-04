@@ -1296,3 +1296,43 @@ a.back-link { margin-bottom: 10px; }
 }
 @media (max-width: 899px) { .rq-sort { flex-basis: 100%; } }
 a.rq-dir { display: grid; place-items: center; }
+
+/* v0.18.29 — Recently added: grouped by day; on desktop a Seerr-sized poster wall */
+.ra-day { display: flex; align-items: baseline; gap: 10px; margin: 18px 0 10px; }
+.ra-day:first-of-type { margin-top: 4px; }
+.ra-day h2 { margin: 0; font-size: 19px; font-weight: 750; }
+.ra-kind, .ra-new, .ra-hover { display: none; }
+@media (min-width: 1000px) {
+  .ra-day { margin: 26px 0 12px; }
+  .ra-day h2 { font-size: 22px; }
+  .ra-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 22px 16px; }
+  .ra-card { flex-direction: column; gap: 0; padding: 0; min-height: 0; border: 0; border-radius: 0; background: none; overflow: visible; }
+  .ra-card::before, .ra-card::after { display: none; }
+  .ra-card:active { transform: none; }
+  .ra-poster { width: 100%; aspect-ratio: 2/3; min-height: 0; align-self: auto; border-radius: 12px;
+    border: 1px solid rgba(255,255,255,.08); box-shadow: 0 6px 18px rgba(0,0,0,.4); transition: transform .15s, box-shadow .15s, border-color .15s; }
+  .ra-poster.sq { aspect-ratio: 1; }
+  .ra-poster b { font-size: 34px; }
+  .ra-card:hover .ra-poster, .ra-card:focus-visible .ra-poster { transform: translateY(-3px); border-color: rgba(255,255,255,.3); box-shadow: 0 12px 28px rgba(0,0,0,.5); }
+  .ra-kind { display: block; z-index: 2; }
+  .ra-kind.music { background: rgba(217,119,6,.9); border-color: rgba(253,186,116,.35); }
+  .ra-new { display: block; position: absolute; left: 7px; bottom: 7px; z-index: 2; font-style: normal; font-size: 11.5px; font-weight: 700;
+    padding: 3px 9px; border-radius: 999px; color: #fff; background: rgba(10,12,18,.78); border: 1px solid rgba(255,255,255,.2);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+  .ra-body { padding: 9px 2px 0; gap: 2px; }
+  .ra-title { font-size: 14.5px; font-weight: 650; -webkit-line-clamp: 1; }
+  .ra-sub { font-size: 12.5px; color: var(--muted); }
+  .ra-sub + .ra-sub { display: none; }           /* S5 • E16 is already on the poster */
+  .ra-added { margin-top: 1px; padding-top: 0; font-size: 12px; color: var(--muted); }
+  .ra-icon { display: none; }
+}
+@media (min-width: 1000px) and (hover: hover) {
+  .ra-hover { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 3px;
+    padding: 12px 10px 38px; opacity: 0; transition: opacity .18s;
+    background: linear-gradient(180deg, rgba(17,24,39,.2) 0%, rgba(17,24,39,.85) 50%, rgba(17,24,39,.97) 100%); }
+  .ra-hover strong { font-size: 15px; font-weight: 800; color: #fff; line-height: 1.2; }
+  .ra-hover span { font-size: 12.5px; color: rgba(255,255,255,.85); }
+  .ra-hover small { font-size: 11.5px; color: rgba(255,255,255,.7); margin-top: 2px; }
+  .ra-card:hover .ra-hover, .ra-card:focus-visible .ra-hover { opacity: 1; }
+}
+.ra-card, .ra-card:hover, .ra-card * { text-decoration: none !important; }

@@ -1417,6 +1417,31 @@ def _lib_server(user: User, sid: int | None) -> Service | None:
     return next((x for x in jfs if x.id == sid), None) if sid else (jfs[0] if jfs else None)
 
 
+def _day_groups(items: list[dict]) -> list[tuple[str, list[dict]]]:
+    """Recently added, split into Today / Yesterday / Monday … / Oct 28 (local time)."""
+    today = datetime.now(TZ).date()
+    out: list[tuple[str, list[dict]]] = []
+    floor = datetime.min.replace(tzinfo=timezone.utc)
+    for i in sorted(items, key=lambda x: x.get("added") or floor, reverse=True):
+        a = i.get("added")
+        d = a.astimezone(TZ).date() if a else None
+        if d is None:
+            label = "Earlier"
+        elif d >= today:
+            label = "Today"
+        elif (today - d).days == 1:
+            label = "Yesterday"
+        elif (today - d).days < 7:
+            label = f"{d:%A}"
+        else:
+            label = f"{d:%A, %B} {d.day}"
+        if out and out[-1][0] == label:
+            out[-1][1].append(i)
+        else:
+            out.append((label, [i]))
+    return out
+
+
 async def _recent_page(request: Request, user: User, type: str, server: int | None):
     svc = _lib_server(user, server)
     kind = type if type in library.KINDS else "all"
@@ -1430,7 +1455,8 @@ async def _recent_page(request: Request, user: User, type: str, server: int | No
         elif uid:
             items, err = await safe(ttl_cached(("recent", svc.id, uid, kind), 60,
                                                lambda: library.recent_window(client, uid, kind), stale=1800))
-    return render(request, "library_recent.html", user, items=items or [], err=err, kind=kind, kinds=library.KINDS, q=q,
+    return render(request, "library_recent.html", user, items=items or [], groups=_day_groups(items or []) if not q else [],
+                  err=err, kind=kind, kinds=library.KINDS, q=q,
                   svc=svc, servers=[] if user.is_viewer else services(("jellyfin",)), lib=_lib_base(user))
 
 

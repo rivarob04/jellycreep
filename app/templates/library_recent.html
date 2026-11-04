@@ -32,10 +32,14 @@
 {% if not svc %}<div class="card empty"><div class="empty-icon">📚</div>Connect a Jellyfin server first.</div>
 {% else %}
 {% if err %}<div class="notice bad small">Couldn't load from Jellyfin: {{ err }}</div>{% endif %}
-<div class="ra-list">
-  {% for i in items %}
-  <a class="ra-card" href="{{ lib }}/{{ svc.id }}/{{ i.id }}"{% if i.backdrop_id %} style="--bd:url('{{ imgp }}/{{ svc.id }}/{{ i.backdrop_id }}?t=Backdrop&h=360')"{% endif %}>
-    <span class="ra-poster{{ ' sq' if i.icon == 'music' }}"><b>{{ i.title[:1] }}</b>{% if i.poster_id %}<img loading="lazy" src="{{ imgp }}/{{ svc.id }}/{{ i.poster_id }}?h=300" alt="" onerror="this.remove()">{% endif %}</span>
+{% macro ra_card(i) %}
+  <a class="ra-card" href="{{ lib }}/{{ svc.id }}/{{ i.id }}"{% if i.backdrop_id %} style="--bd:url('{{ imgp }}/{{ svc.id }}/{{ i.backdrop_id }}?t=Backdrop&h=360')"{% endif %} title="{{ i.title }}{{ ' — ' ~ i.sub|join(' · ') if i.sub }}">
+    <span class="ra-poster{{ ' sq' if i.icon == 'music' }}"><b>{{ i.title[:1] }}</b>{% if i.poster_id %}<img loading="lazy" src="{{ imgp }}/{{ svc.id }}/{{ i.poster_id }}?h=420" alt="" onerror="this.remove()">{% endif %}
+      <em class="ptype ra-kind {{ i.icon }}">{{ {'tv': 'Series', 'music': 'Album'}.get(i.icon, 'Movie') }}</em>
+      {% if i.type == 'Series' and i.sub and 'new episodes' in i.sub[0] %}<i class="ra-new">{{ i.sub[0].split(' ')[0] }} new</i>
+      {% elif i.type == 'Episode' and i.sub|length > 1 %}<i class="ra-new">{{ i.sub[-1] }}</i>{% endif %}
+      <span class="ra-hover"><strong>{{ i.title }}</strong>{% for s in i.sub %}<span>{{ s }}</span>{% endfor %}<small>Added {{ i.ago }}</small></span>
+    </span>
     <span class="ra-body">
       <span class="ra-title">{{ i.title }}</span>
       {% for s in i.sub %}<span class="ra-sub">{{ s }}</span>{% endfor %}
@@ -43,9 +47,19 @@
     </span>
     <span class="ra-icon" aria-hidden="true">{{ type_icon(i.icon) }}</span>
   </a>
+{% endmacro %}
+{% if groups %}
+  {% for label, gitems in groups %}
+  <div class="ra-day"><h2>{{ label }}</h2><span class="muted small">{{ gitems|length }} item{{ 's' if gitems|length != 1 }}</span></div>
+  <div class="ra-list">{% for i in gitems %}{{ ra_card(i) }}{% endfor %}</div>
+  {% endfor %}
+{% else %}
+<div class="ra-list">
+  {% for i in items %}{{ ra_card(i) }}
   {% else %}
   <div class="card empty"><div class="empty-icon">🆕</div>{{ 'Nothing matches “' ~ q ~ '” in your library.' if q else 'Nothing has been added recently.' }}</div>
   {% endfor %}
 </div>
+{% endif %}
 {% endif %}
 {% endblock %}
