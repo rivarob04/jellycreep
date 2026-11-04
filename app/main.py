@@ -27,7 +27,7 @@ from .auth import (CSRF_COOKIE, LoginRequired, User, ViewerOnly, admin_user, api
                    user_from_claims, verify_csrf)
 from .config import settings
 from .db import (PushSub, PROXY_AUTH_MODES, SERVICE_KINDS, ActiveStream, ApiToken, Event, Play, Service, SessionLocal,
-                 hash_token, init_db, set_setting, utcnow)
+                 get_setting, hash_token, init_db, set_setting, utcnow)
 from .services import client_for
 from .upstream import UpstreamError, pool
 
@@ -471,8 +471,31 @@ async def page_media(request: Request, tab: str = "overview", server: int | None
         ttl_cached(("storage",), 600, _storage_report, stale=6 * 3600))
     svcs = {x.id: x for x in services(("jellyfin",))}
     servers = [{**x, "svc": svcs.get(x["sid"])} for x in servers if svcs.get(x["sid"])]
-    return render(request, "media.html", user, servers=servers, drives=drives, storage_notes=notes,
-                  storage_sum=storage.summary(drives))
+    # drives you've hidden (and the OS drive, hidden by default) don't show or count toward totals
+    prefs = get_setting("storage_drives", {}) or {}
+    drives = [dict(d) for d in drives]
+    visible, hidden = storage.split_hidden(drives, set(prefs.get("hidden") or []), set(prefs.get("shown") or []))
+    show_all = request.query_params.get("drives") == "all"
+    return render(request, "media.html", user, servers=servers, drives=(visible + hidden) if show_all else visible,
+                  hidden_drives=hidden, show_all=show_all, storage_notes=notes,
+                  storage_sum=storage.summary(visible), flash=request.session.pop("flash", None))
+
+
+@app.post("/media/storage/{action}")
+async def storage_drive_pref(action: str, request: Request, user: User = Depends(admin_user)):
+    await verify_csrf(request)
+    form = await request.form()
+    key = str(form.get("key") or "")[:300]
+    if action not in ("hide", "show") or not key:
+        raise HTTPException(400)
+    prefs = get_setting("storage_drives", {}) or {}
+    hidden, shown = set(prefs.get("hidden") or []), set(prefs.get("shown") or [])
+    if action == "hide":
+        hidden.add(key); shown.discard(key)
+    else:
+        hidden.discard(key); shown.add(key)
+    set_setting("storage_drives", {"hidden": sorted(hidden), "shown": sorted(shown)})
+    return RedirectResponse("/media" + ("?drives=all" if action == "show" and form.get("all") else "") + "#storage", status_code=303)
 
 
 async def _media_servers() -> list[dict]:

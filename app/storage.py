@@ -131,3 +131,29 @@ async def snapshot_now() -> None:
     drives, _ = await collect()
     if drives:
         await asyncio.to_thread(record, drives)
+
+
+# --------------------------------------------------------------------------- hiding drives
+SYSTEM_PATHS = {"c:", "/", "/boot", "/etc", "/var", "/usr", "/opt", "/config", "/app"}
+
+
+def drive_key(d: dict) -> str:
+    return str(d.get("device") or (d["paths"][0] if d.get("paths") else f"size:{int(d['total'] // 1e9)}"))
+
+
+def is_system(d: dict) -> bool:
+    """The OS / app drive (C:\\ or /): no library on it, just Jellyfin's or the *arrs' own files."""
+    if d.get("libraries"):
+        return False
+    paths = [str(p).replace("\\", "/").rstrip("/").lower() or "/" for p in d.get("paths") or []]
+    return bool(paths) and any(p in SYSTEM_PATHS or p.startswith("c:") for p in paths)
+
+
+def split_hidden(drives: list[dict], hidden: set[str], shown: set[str]) -> tuple[list[dict], list[dict]]:
+    keep, hide = [], []
+    for d in drives:
+        k = drive_key(d)
+        d["key"] = k
+        d["auto_hidden"] = is_system(d) and k not in shown
+        (hide if (k in hidden or d["auto_hidden"]) else keep).append(d)
+    return keep, hide

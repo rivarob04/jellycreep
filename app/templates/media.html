@@ -11,9 +11,9 @@
 </nav>
 
 {# ============================ STORAGE ============================ #}
-{% if drives %}
+{% if drives or hidden_drives %}
 {% set sm = storage_sum %}
-<div class="card mb storage-card">
+<div class="card mb storage-card" id="storage">
   <div class="storage-top">
     <div class="ring lvl-{{ level(sm.pct) }}" style="--p: {{ sm.pct }}">
       <div class="ring-in"><b>{{ (100 - sm.pct)|round|int }}%</b><span>free</span></div>
@@ -39,6 +39,7 @@
         <span class="drive-name"><span class="drive-ico">{{ '🎞️' if d.libraries else ('⚙️' if d.roles else '💽') }}</span>{{ d.name }}</span>
         <span class="drive-free"><b>{{ d.free|bytes }}</b> free</span>
       </div>
+      {% if d in hidden_drives %}<div class="meta hidden-tag">Hidden{{ ' (system drive)' if d.auto_hidden }}</div>{% endif %}
       <div class="bar fat"><i style="width: {{ d.pct }}%"></i></div>
       <div class="meta spread">
         <span>{{ d.used|bytes }} of {{ d.total|bytes }} · {{ d.pct|round|int }}% used</span>
@@ -54,9 +55,16 @@
         <div class="meta">Seen by {{ d.sources|join(', ') }}{% if d.per_day is not none and d.per_day > 0 %} · growing ~{{ d.per_day|bytes }}/day{% endif %}</div>
       </details>
       {% endif %}
+      {% if user.is_admin %}
+      <form method="post" action="/media/storage/{{ 'show' if d in hidden_drives else 'hide' }}" class="drive-hide">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="key" value="{{ d.key }}">{% if show_all %}<input type="hidden" name="all" value="1">{% endif %}
+        <button class="btn sm">{{ 'Show this drive' if d in hidden_drives else 'Hide' }}</button>
+      </form>
+      {% endif %}
     </div>
     {% endfor %}
   </div>
+  {% if hidden_drives %}<p class="small muted" style="margin:12px 0 0">{% if show_all %}<a href="/media#storage">Hide the {{ hidden_drives|length }} hidden drive{{ 's' if hidden_drives|length != 1 }} again</a>{% else %}{{ hidden_drives|length }} drive{{ 's' if hidden_drives|length != 1 }} hidden ({{ hidden_drives|map(attribute='name')|join(', ') }}) · <a href="/media?drives=all#storage">Show</a>{% endif %}</p>{% endif %}
   {% for n in storage_notes %}<div class="notice small" style="margin:12px 0 0">{{ n }}</div>{% endfor %}
   <p class="hint" style="margin:10px 0 0">Fill-up estimates appear after a couple of days of readings.</p>
 </div>

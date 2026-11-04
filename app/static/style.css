@@ -1156,3 +1156,4 @@ main { min-width: 0; max-width: 100%; }
 .health-long > summary { list-style: none; cursor: pointer; } .health-long > summary::-webkit-details-marker { display: none; }
 .health-long .show-all { color: var(--accent-2); font-weight: 600; white-space: nowrap; }
 .health-long[open] > summary { display: none; }
+.drive-hide { margin-top: 8px; } .drive-hide .btn { opacity: .75; } .hidden-tag { color: var(--warn); }
