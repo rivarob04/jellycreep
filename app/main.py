@@ -74,6 +74,24 @@ def seed_services_from_env() -> None:
         db.commit()
 
 
+def _fix_progress() -> None:
+    """One-time: plays whose app reported position 0 at stop get their progress from the time actually watched."""
+    if get_setting("fix_progress_v1"):
+        return
+    with SessionLocal() as db:
+        n = 0
+        for p in db.scalars(select(Play).where(Play.runtime_seconds > 0, Play.watched_seconds > 0)):
+            by_time = round(min(100.0, (p.watched_seconds or 0) / p.runtime_seconds * 100), 1)
+            if by_time > (p.percent or 0):
+                p.percent = by_time
+                p.completed = by_time >= settings.watched_percent
+                n += 1
+        db.commit()
+    set_setting("fix_progress_v1", True)
+    if n:
+        log.info("Recalculated progress for %d plays", n)
+
+
 def _rename_seerr() -> None:
     """One-time: services still named 'Jellyseerr / Seerr' (the old default) become just 'Seerr'."""
     with SessionLocal() as db:
@@ -88,6 +106,7 @@ async def lifespan(app: FastAPI):
     init_db()
     seed_services_from_env()
     _rename_seerr()
+    _fix_progress()
     task = asyncio.create_task(tracker.run_forever())
     warm = asyncio.create_task(_keep_warm())
     yield
@@ -148,7 +167,7 @@ def fmt_duration(seconds: float | None) -> str:
     return f"{m}m" if m else f"{seconds}s"
 
 
-def fmt_local(dt: datetime | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
+def fmt_local(dt: datetime | None, fmt: str = "%b %-d, %Y · %-I:%M %p") -> str:
     if not dt:
         return "—"
     return dt.replace(tzinfo=timezone.utc).astimezone(TZ).strftime(fmt)
@@ -207,7 +226,40 @@ def _ep_pretty(code: str) -> str:
     return f"S{int(m.group(1))} • E{int(m.group(2))}" if m else code
 
 
-templates.env.globals.update(day_label=_day_label, ep_pretty=_ep_pretty)
+def _nice_ticks(mx: float, n: int = 4, time: bool = False) -> list[float]:
+    """Round axis ticks from 0 up to just above ``mx`` (e.g. 0, 2, 4, 6; or 0, 15m, 30m, 45m for time)."""
+    import math as _m
+    if not mx or mx <= 0:
+        return [0, 3600] if time else [0, 1]
+    if time:
+        raw = mx / n
+        steps = [300, 600, 900, 1200, 1800, 3600, 7200, 10800, 14400, 21600, 43200, 86400, 172800, 432000, 864000]
+        step = next((x for x in steps if x >= raw), steps[-1])
+        top = _m.ceil(mx / step) * step
+        return [i * step for i in range(int(top // step) + 1)]
+    raw = mx / n
+    mag = 10 ** _m.floor(_m.log10(raw))
+    step = next(m * mag for m in (1, 2, 2.5, 5, 10) if m * mag >= raw)
+    step = max(1, round(step)) if step < 1 or step != int(step) else step   # counts: whole numbers only
+    top = _m.ceil(mx / step) * step
+    return [round(i * step, 6) for i in range(int(round(top / step)) + 1)]
+
+
+def _hour12(h: int, short: bool = True) -> str:
+    h = int(h) % 24
+    suf = ("a" if h < 12 else "p") if short else (" AM" if h < 12 else " PM")
+    return f"{(h % 12) or 12}{suf}"
+
+
+def _hours(secs: float) -> str:
+    """Axis label for a number of seconds: 45m, 2h, 1.5h."""
+    if secs < 3600:
+        return f"{round(secs / 60)}m"
+    h = secs / 3600
+    return f"{h:.0f}h" if abs(h - round(h)) < 0.05 else f"{h:.1f}h"
+
+
+templates.env.globals.update(day_label=_day_label, ep_pretty=_ep_pretty, nice_ticks=_nice_ticks, hour12=_hour12, axis_hours=_hours)
 
 
 _AMBIENT: dict[str, Any] = {}
@@ -528,7 +580,7 @@ async def page_stats(request: Request, days: int = 30, user: User = Depends(staf
         ctx = dict(
             days=days, summary=stats.summary(db, days), top_users=stats.top_users(db, days),
             top_movies=stats.top_movies(db, days), top_shows=stats.top_shows(db, days),
-            per_day=stats.plays_per_day(db, days),
+            per_day=stats.plays_per_day(db, days, TZ), cmp=stats.compare(db, days), weekdays=stats.by_weekday(db, days, TZ),
             methods=stats.grouped(db, Play.play_method, days), clients=stats.grouped(db, Play.client, days),
             types=stats.grouped(db, Play.item_type, days),
         )
@@ -2639,7 +2691,8 @@ async def api_stats(days: int = 30, user: User = Depends(api_user)):
         return {
             "days": days, "summary": stats.summary(db, days), "top_users": top_users,
             "top_movies": stats.top_movies(db, days), "top_shows": stats.top_shows(db, days),
-            "plays_per_day": stats.plays_per_day(db, days), "plays_by_hour": stats.plays_by_hour(db, days),
+            "plays_per_day": [{**d, "day": d["day"].isoformat(), "seconds": int(d["seconds"])} for d in stats.plays_per_day(db, days, TZ)],
+            "plays_by_hour": stats.plays_by_hour(db, days),
             "play_methods": stats.grouped(db, Play.play_method, days), "clients": stats.grouped(db, Play.client, days),
         }
 

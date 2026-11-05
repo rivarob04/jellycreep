@@ -7,85 +7,117 @@
   {% else %}<div class="muted small">No data</div>{% endfor %}
 {% endmacro %}
 {% block content %}
-<div class="spread"><h1>Statistics</h1>
-  <div class="tabs">{% for d in [7, 30, 90, 365] %}<a href="?days={{ d }}" class="{{ 'on' if d == days }}">{{ d }} days</a>{% endfor %}</div>
+{% from "_charts.html" import bar_chart, legend, share_bars %}
+{% macro delta(v) %}{% if v is not none %}<span class="delta {{ 'up' if v >= 0 else 'down' }}">{{ '▲' if v >= 0 else '▼' }} {{ v|abs }}%</span>{% endif %}{% endmacro %}
+<div class="st-head"><h1>Statistics</h1>
+  <div class="seg st-range">{% for d, lbl in [(7, '7 days'), (30, '30 days'), (90, '90 days'), (365, '1 year')] %}<a href="?days={{ d }}" class="{{ 'on' if d == days }}">{{ lbl }}</a>{% endfor %}</div>
 </div>
-<div class="grid g4 mb">
-  <div class="card tile"><div class="n">{{ summary.plays }}</div><div class="l">Plays</div></div>
-  <div class="card tile"><div class="n">{{ summary.seconds|duration }}</div><div class="l">Watch time</div></div>
-  <div class="card tile"><div class="n">{{ summary.users }}</div><div class="l">Active users</div></div>
-  <div class="card tile"><div class="n">{{ (summary.plays / ((days) or 1))|round(1) }}</div><div class="l">Plays / day</div></div>
+
+<div class="st-tiles mb">
+  <div class="card st-tile"><span class="st-ico">▶</span><div><b>{{ summary.plays }}{{ delta(cmp.plays_delta) }}</b><span>Plays · {{ (summary.plays / days)|round(1) }} a day</span></div></div>
+  <div class="card st-tile"><span class="st-ico">⏱</span><div><b>{{ summary.seconds|duration }}{{ delta(cmp.secs_delta) }}</b><span>Watch time · {{ (summary.seconds / days)|duration if summary.seconds else '0m' }} a day</span></div></div>
+  <div class="card st-tile"><span class="st-ico">👥</span><div><b>{{ summary.users }}{{ delta(cmp.users_delta) }}</b><span>Active users</span></div></div>
+  <div class="card st-tile"><span class="st-ico">🎬</span><div><b>{{ cmp.avg_session|duration if cmp.avg_session else '—' }}</b><span>Average session</span></div></div>
+  <div class="card st-tile"><span class="st-ico">✅</span><div><b>{{ cmp.finish_rate }}%</b><span>Plays finished</span></div></div>
+  <div class="card st-tile"><span class="st-ico">⚙️</span><div><b>{{ cmp.transcode_rate }}%</b><span>Had to transcode</span></div></div>
+</div>
+<p class="small muted st-note">▲▼ compare with the {{ days }} days before.</p>
+
+{% set nd = per_day|length %}
+{% set every = [1, (nd / 5)|round(0, 'ceil')|int]|max %}
+<div class="card mb">
+  <div class="spread"><h2 style="margin:0">Watch Time per Day</h2><span class="small muted">hover a bar for details</span></div>
+  {% set bars = [] %}
+  {% for d in per_day %}
+    {% set tip = d.day.strftime('%a, %b %-d') ~ '\n' ~ ((d.seconds|duration ~ ' · ' ~ d.plays ~ ' play' ~ ('s' if d.plays != 1 else '')) if d.plays else 'Nothing played')
+       ~ (('\nEpisodes: ' ~ d.episodes ~ ' · ' ~ d.s_episodes|duration) if d.episodes else '') ~ (('\nMovies: ' ~ d.movies ~ ' · ' ~ d.s_movies|duration) if d.movies else '')
+       ~ (('\nOther: ' ~ d.other) if d.other else '') %}
+    {% set _ = bars.append({'total': d.seconds, 'parts': [(d.s_episodes, 's-ep'), (d.s_movies, 's-mov'), (d.s_other, 's-oth')], 'tip': tip, 'today': loop.last,
+                             'label': ('Today' if loop.last else (d.day.strftime('%b %-d') if (loop.index0 % every == 0 and loop.revindex > (every / 2 + 1)) else ''))}) %}
+  {% endfor %}
+  <div class="mt">{{ bar_chart(bars, 'time', 200, 'dense' if nd > 60 else '') }}</div>
+  {{ legend([('Episodes', 's-ep'), ('Movies', 's-mov'), ('Other', 's-oth')]) }}
+</div>
+
+<div class="grid g2 mb">
+  <div class="card">
+    <div class="spread"><h2 style="margin:0">Time of Day</h2><span class="small muted">plays started</span></div>
+    {% set hb = [] %}
+    {% for n in by_hour %}{% set _ = hb.append({'total': n, 'parts': [(n, 's-one')], 'tip': hour12(loop.index0, False) ~ ' – ' ~ hour12(loop.index0 + 1, False) ~ '\n' ~ n ~ ' play' ~ ('s' if n != 1 else ''),
+        'label': hour12(loop.index0) if loop.index0 % 3 == 0 else ''}) %}{% endfor %}
+    <div class="mt">{{ bar_chart(hb, 'count', 150) }}</div>
+    {% if by_hour|max %}{% set best = by_hour.index(by_hour|max) %}<p class="small muted" style="margin:10px 0 0">Busiest: <b style="color:var(--text)">{{ hour12(best, False) }} – {{ hour12(best + 1, False) }}</b></p>{% endif %}
+  </div>
+  <div class="card">
+    <div class="spread"><h2 style="margin:0">Day of the Week</h2><span class="small muted">watch time</span></div>
+    {% set wb = [] %}
+    {% for w in weekdays %}{% set _ = wb.append({'total': w.seconds, 'parts': [(w.seconds, 's-one')], 'tip': w.label ~ '\n' ~ (w.seconds|duration if w.seconds else '0m') ~ ' · ' ~ w.plays ~ ' play' ~ ('s' if w.plays != 1 else ''), 'label': w.label}) %}{% endfor %}
+    <div class="mt">{{ bar_chart(wb, 'time', 150) }}</div>
+    {% set bw = weekdays|sort(attribute='seconds', reverse=True)|first %}
+    {% if bw and bw.seconds %}<p class="small muted" style="margin:10px 0 0">Busiest: <b style="color:var(--text)">{{ bw.label }}</b></p>{% endif %}
+  </div>
+</div>
+
+<div class="spread section-title"><h2 style="margin:0">Top Users</h2></div>
+{% set umx = (top_users|map(attribute='seconds')|max) if top_users else 1 %}
+<div class="st-users mb">
+  {% for u in top_users %}
+  <a class="card st-user" href="/users/{{ u.user|urlencode }}">
+    <span class="st-rank">{{ loop.index }}</span><span class="avatar">{{ u.user[:1]|upper }}</span>
+    <span class="st-ubody"><b>{{ u.user }}</b><small>{{ u.seconds|duration }} · {{ u.plays }} play{{ 's' if u.plays != 1 }}{% if u.last %} · last {{ u.last|ago }}{% endif %}</small>
+      <span class="sb-track"><i style="width:{{ (u.seconds / umx * 100)|round(1) if umx else 0 }}%"></i></span></span>
+  </a>
+  {% else %}<div class="card muted small">Nobody has watched anything in this period.</div>{% endfor %}
+</div>
+
+{% macro top_card(m, kind, rank) %}
+  <div class="uc-card k-{{ kind }}" style="--bd:url('/img/{{ m.server }}/{{ m.poster }}?t=Backdrop&h=360')">
+    <span class="uc-poster k-bg-{{ kind }}"><b>{{ (m.title or '?')[:1] }}</b>{% if m.poster %}<img loading="lazy" src="/img/{{ m.server }}/{{ m.poster }}?h=300" alt="" onerror="this.remove()">{% endif %}<i class="uc-rank">{{ rank }}</i></span>
+    <span class="uc-body"><span class="uc-title">{{ m.title or 'Unknown' }}</span>{% if m.year %}<span class="uc-sub">{{ m.year }}</span>{% endif %}
+      <span class="uc-sub">{{ m.plays }} play{{ 's' if m.plays != 1 }} · {{ m.users }} {{ 'person' if m.users == 1 else 'people' }}</span>
+      <span class="uc-when">{{ m.seconds|duration }} watched</span></span>
+  </div>
+{% endmacro %}
+<div class="spread section-title"><h2 style="margin:0">Most Watched Shows</h2></div>
+<div class="uc-list mb">{% for m in top_shows %}{{ top_card(m, 'tv', loop.index) }}{% else %}<div class="card muted small">No shows watched in this period.</div>{% endfor %}</div>
+<div class="spread section-title"><h2 style="margin:0">Most Watched Movies</h2></div>
+<div class="uc-list mb">{% for m in top_movies %}{{ top_card(m, 'movie', loop.index) }}{% else %}<div class="card muted small">No movies watched in this period.</div>{% endfor %}</div>
+
+<div class="grid g3 mb">
+  <div class="card"><h2>Playback</h2>{{ share_bars(methods, summary.plays) }}</div>
+  <div class="card"><h2>Apps</h2>{{ share_bars(clients, summary.plays) }}</div>
+  <div class="card"><h2>Media Type</h2>{{ share_bars(types, summary.plays) }}</div>
 </div>
 
 <div class="card mb">
-  <h2>Plays per Day</h2>
-  {% set mx = (per_day|map(attribute='plays')|max) or 1 %}
-  <div class="chart">
-    {% for d in per_day %}
-    <div class="col" title="{{ d.day }}: {{ d.plays }} plays ({{ d.movies }} movies, {{ d.episodes }} episodes, {{ d.other }} other)">
-      <i class="c-mov" style="height: {{ (d.movies / mx * 100)|round(2) }}%"></i>
-      <i class="c-ep" style="height: {{ (d.episodes / mx * 100)|round(2) }}%"></i>
-      <i class="c-oth" style="height: {{ (d.other / mx * 100)|round(2) }}%"></i>
-    </div>
-    {% endfor %}
-  </div>
-  <div class="legend"><span><i class="c-mov"></i>Movies</span><span><i class="c-ep"></i>Episodes</span><span><i class="c-oth"></i>Other</span>
-    <span style="margin-left:auto">{{ per_day[0].day }} → {{ per_day[-1].day }} (UTC)</span></div>
-</div>
-
-<div class="grid g3 mb">
-  <div class="card"><h2>Top Users</h2>
-    {% for u in top_users %}
-    <div class="rank"><span class="muted">#{{ loop.index }}</span><a href="/users/{{ u.user|urlencode }}">{{ u.user }}</a><span class="muted small">{{ u.seconds|duration }} · {{ u.plays }}</span></div>
-    {% else %}<div class="muted small">No data</div>{% endfor %}
-  </div>
-  <div class="card"><h2>Most Watched Movies</h2>
-    {% for m in top_movies %}
-    <div class="rank"><img class="mini-poster" loading="lazy" src="/img/{{ m.server }}/{{ m.poster }}?h=100" alt=""><span>{{ m.title }}{% if m.year %} <span class="muted">({{ m.year }})</span>{% endif %}</span><span class="muted small">{{ m.plays }} plays · {{ m.users }} users</span></div>
-    {% else %}<div class="muted small">No data</div>{% endfor %}
-  </div>
-  <div class="card"><h2>Most Watched Shows</h2>
-    {% for m in top_shows %}
-    <div class="rank"><img class="mini-poster" loading="lazy" src="/img/{{ m.server }}/{{ m.poster }}?h=100" alt=""><span>{{ m.title }}</span><span class="muted small">{{ m.plays }} plays · {{ m.users }} users</span></div>
-    {% else %}<div class="muted small">No data</div>{% endfor %}
-  </div>
-</div>
-
-<div class="grid g3 mb">
-  <div class="card"><h2>Play Method</h2>{{ hbars(methods) }}</div>
-  <div class="card"><h2>Clients</h2>{{ hbars(clients) }}</div>
-  <div class="card"><h2>Media Type</h2>{{ hbars(types) }}</div>
-</div>
-
-<div class="card mb">
-  <div class="spread"><h2 style="margin:0">Concurrent Streams</h2><span class="muted small">daily peak</span></div>
+  <div class="spread"><h2 style="margin:0">Streams at the Same Time</h2><span class="muted small">daily peak</span></div>
   {% if conc.max %}
-  <div class="grid g4 mt mb">
-    <div class="tile"><div class="n">{{ conc.best.streams }}</div><div class="l">All-time peak{% if conc.best.at %} · {{ conc.best.at.strftime('%b %-d, %-I %p') }}{% endif %}</div></div>
-    <div class="tile"><div class="n">{{ (conc.days|map(attribute='transcodes')|max) or 0 }}</div><div class="l">Peak transcodes</div></div>
+  <div class="chart-sum mt">
+    <div><b>{{ conc.best.streams }}</b><span>all-time peak{% if conc.best.at %} · {{ conc.best.at.strftime('%b %-d, %-I %p') }}{% endif %}</span></div>
+    <div><b>{{ (conc.days|map(attribute='transcodes')|max) or 0 }}</b><span>most transcodes at once</span></div>
+    <div><b>{{ conc.max }}</b><span>busiest day in this period</span></div>
+    <div><b>{{ (conc.days|selectattr('streams')|list|length) }}</b><span>days with streams</span></div>
   </div>
-  <div class="chart" style="height:110px">
-    {% for d in conc.days %}<div class="col" title="{{ d.day.strftime('%a %b %-d') }}: {{ d.streams }} at once, {{ d.transcodes }} transcoding">
-      <i class="c-oth" style="height: {{ (d.transcodes / conc.max * 100)|round(2) }}%"></i>
-      <i class="c-ep" style="height: {{ ((d.streams - d.transcodes) / conc.max * 100)|round(2) }}%"></i></div>{% endfor %}
-  </div>
-  <div class="legend"><span><i class="c-ep"></i>Direct</span><span><i class="c-oth"></i>Transcoding</span><span style="margin-left:auto">max {{ conc.max }} at once</span></div>
+  {% set cb = [] %}{% set cn = conc.days|length %}{% set ce = [1, (cn / 5)|round(0, 'ceil')|int]|max %}
+  {% for d in conc.days %}{% set _ = cb.append({'total': d.streams, 'parts': [(d.streams - d.transcodes, 's-dp'), (d.transcodes, 's-tc')], 'today': loop.last,
+      'tip': d.day.strftime('%a, %b %-d') ~ '\n' ~ d.streams ~ ' at once' ~ (('\n' ~ d.transcodes ~ ' transcoding') if d.transcodes else ''),
+      'label': ('Today' if loop.last else (d.day.strftime('%b %-d') if (loop.index0 % ce == 0 and loop.revindex > (ce / 2 + 1)) else ''))}) %}{% endfor %}
+  {{ bar_chart(cb, 'count', 140, 'dense' if cn > 60 else '') }}
+  {{ legend([('Direct', 's-dp'), ('Transcoding', 's-tc')]) }}
   {% else %}<p class="muted small mt">Not enough history yet.</p>{% endif %}
 </div>
 
 <div class="card mb">
-  <div class="spread"><h2 style="margin:0">When People Watch</h2><span class="muted small">local time</span></div>
+  <div class="spread"><h2 style="margin:0">When People Watch</h2><span class="muted small">plays by day and hour</span></div>
   {% if heat_peak %}
   <div class="heat mt">
-    <span></span>{% for h in range(24) %}<span class="hr">{{ h if h % 6 == 0 else '' }}</span>{% endfor %}
+    <span></span>{% for h in range(24) %}<span class="hr">{{ hour12(h) if h % 3 == 0 else '' }}</span>{% endfor %}
     {% for row in heat %}
-    <span class="lbl">{{ ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][loop.index0] }}</span>
     {% set wd = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][loop.index0] %}
-    {% for n in row %}<span class="c" title="{{ wd }} {{ '%02d'|format(loop.index0) }}:00 – {{ n }} play{{ 's' if n != 1 }}"{% if n %} style="background: rgba(169,107,255,{{ (0.18 + 0.82 * n / heat_peak)|round(2) }})"{% endif %}></span>{% endfor %}
+    <span class="lbl">{{ wd }}</span>
+    {% for n in row %}<span class="c" title="{{ wd }} {{ hour12(loop.index0, False) }} – {{ n }} play{{ 's' if n != 1 }}"{% if n %} style="background: rgba(169,107,255,{{ (0.18 + 0.82 * n / heat_peak)|round(2) }})"{% endif %}></span>{% endfor %}
     {% endfor %}
   </div>
-  {% set best = by_hour.index(by_hour|max) %}
-  <p class="muted small" style="margin:10px 0 0">Busiest hour: <strong style="color:var(--text)">{{ '%d:00'|format(best) }}–{{ '%d:00'|format((best + 1) % 24) }}</strong></p>
   {% else %}<p class="muted small mt">No plays in this period yet.</p>{% endif %}
 </div>
 

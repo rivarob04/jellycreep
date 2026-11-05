@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_charts.html" import bar_chart, legend %}
 {% block title %}{{ u.name }}{% endblock %}
 {% block content %}
 <div class="profile-head">
@@ -23,13 +24,25 @@
 </div>
 {% endif %}
 
+{% set m = u.month %}
 <div class="card mb">
-  <h2>Last 30 Days</h2>
-  {% set mx = (u.last30|map(attribute='seconds')|max) or 1 %}
-  <div class="chart" style="height:110px">
-    {% for d in u.last30 %}<div class="col" title="{{ d.day.strftime('%a %b %-d') }}: {{ d.seconds|duration }}"><i class="c-ep" style="height: {{ (d.seconds / mx * 100)|round(2) }}%"></i></div>{% endfor %}
+  <div class="spread"><h2 style="margin:0">Last 30 Days</h2><span class="small muted">watch time per day</span></div>
+  <div class="chart-sum mt">
+    <div><b>{{ m.total|duration if m.total else '0m' }}</b><span>watched · {{ m.plays }} play{{ 's' if m.plays != 1 }}</span></div>
+    <div><b>{{ m.avg|duration if m.avg >= 60 else '<1m' }}</b><span>daily average</span></div>
+    <div><b>{{ m.active }} / 30</b><span>days with plays</span></div>
+    <div><b>{% if m.best %}{{ m.best.seconds|duration }}{% else %}—{% endif %}</b><span>{% if m.best %}best day · {{ m.best.day.strftime('%a %b %-d') }}{% else %}best day{% endif %}</span></div>
   </div>
-  <div class="legend"><span>{{ u.last30[0].day.strftime('%b %-d') }}</span><span style="margin-left:auto">Today</span></div>
+  {% set bars = [] %}
+  {% for d in u.last30 %}
+    {% set tip = d.day.strftime('%a, %b %-d') ~ '\n' ~ ((d.seconds|duration ~ ' · ' ~ d.plays ~ ' play' ~ ('s' if d.plays != 1 else '')) if d.plays else 'Nothing watched')
+       ~ (('\nEpisodes: ' ~ d.episodes|duration) if d.episodes else '') ~ (('\nMovies: ' ~ d.movies|duration) if d.movies else '')
+       ~ (('\nMostly: ' ~ d.top) if d.top else '') %}
+    {% set _ = bars.append({'total': d.seconds, 'parts': [(d.episodes, 's-ep'), (d.movies, 's-mov'), (d.other, 's-oth')], 'tip': tip,
+                             'today': loop.last, 'label': ('Today' if loop.last else (d.day.strftime('%b %-d') if (loop.index0 % 7 == 0 and loop.revindex > 4) else ''))}) %}
+  {% endfor %}
+  {{ bar_chart(bars, 'time', 170) }}
+  {{ legend([('Episodes', 's-ep'), ('Movies', 's-mov'), ('Other', 's-oth')]) }}
 </div>
 
 {% macro tv_icon() %}<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>{% endmacro %}
@@ -69,11 +82,11 @@
   </div>
   <div class="card"><h2>When They Watch</h2>
     <div class="heat">
-      <span></span>{% for h in range(24) %}<span class="hr">{{ h if h % 6 == 0 else '' }}</span>{% endfor %}
+      <span></span>{% for h in range(24) %}<span class="hr">{{ hour12(h) if h % 6 == 0 else '' }}</span>{% endfor %}
       {% for row in u.heat %}
       {% set wd = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][loop.index0] %}
       <span class="lbl">{{ wd }}</span>
-      {% for n in row %}<span class="c" title="{{ wd }} {{ '%02d'|format(loop.index0) }}:00 – {{ n }}"{% if n and u.heat_peak %} style="background: rgba(0,164,220,{{ (0.2 + 0.8 * n / u.heat_peak)|round(2) }})"{% endif %}></span>{% endfor %}
+      {% for n in row %}<span class="c" title="{{ wd }} {{ hour12(loop.index0, False) }} – {{ n }} play{{ 's' if n != 1 }}"{% if n and u.heat_peak %} style="background: rgba(0,164,220,{{ (0.2 + 0.8 * n / u.heat_peak)|round(2) }})"{% endif %}></span>{% endfor %}
       {% endfor %}
     </div>
     <div class="mt">{% for m in u.methods %}<span class="badge {{ 'b-warn' if m.label == 'Transcode' else 'b-ok' }}" style="margin:0 4px 4px 0">{{ m.label }} · {{ m.plays }}</span>{% endfor %}</div>

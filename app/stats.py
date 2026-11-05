@@ -38,7 +38,7 @@ def top_movies(db, days: int, limit: int = 10) -> list[dict]:
 def top_shows(db, days: int, limit: int = 10) -> list[dict]:
     q = (select(Play.series_name, func.max(Play.poster_id), func.max(Play.server_id), func.count(Play.id),
                 func.count(func.distinct(Play.user_name)), func.sum(Play.watched_seconds))
-         .where(Play.started_at >= _since(days), Play.item_type == "Episode")
+         .where(Play.started_at >= _since(days), Play.item_type == "Episode", Play.series_name.isnot(None))
          .group_by(Play.series_name).order_by(func.count(Play.id).desc()).limit(limit))
     return [{"title": t, "poster": pid, "server": sid, "plays": p, "users": u, "seconds": int(s or 0)}
             for t, pid, sid, p, u, s in db.execute(q)]
@@ -50,19 +50,56 @@ def grouped(db, column, days: int, limit: int = 10) -> list[dict]:
     return [{"label": label or "Unknown", "plays": p, "seconds": int(s or 0)} for label, p, s in db.execute(q)]
 
 
-def plays_per_day(db, days: int) -> list[dict]:
-    day = func.date(Play.started_at)
-    q = (select(day, func.count(Play.id),
-                func.sum(case((Play.item_type == "Movie", 1), else_=0)),
-                func.sum(case((Play.item_type == "Episode", 1), else_=0)))
-         .where(Play.started_at >= _since(days)).group_by(day).order_by(day))
-    rows = {d: (p, m, e) for d, p, m, e in db.execute(q)}
+def plays_per_day(db, days: int, tz=None) -> list[dict]:
+    """Plays and watch time per local day, split into movies / episodes / other."""
+    from collections import defaultdict
+    from datetime import timedelta as _td
+    rows = db.execute(select(Play.started_at, Play.item_type, Play.watched_seconds).where(Play.started_at >= _since(days))).all()
+    agg = defaultdict(lambda: {"plays": 0, "movies": 0, "episodes": 0, "other": 0, "s_movies": 0.0, "s_episodes": 0.0, "s_other": 0.0})
+    for st, t, secs in rows:
+        d = _local(st, tz).date() if tz else st.date()
+        k = "movies" if t == "Movie" else ("episodes" if t == "Episode" else "other")
+        b = agg[d]
+        b["plays"] += 1
+        b[k] += 1
+        b["s_" + k] += secs or 0
+    today = (_local(utcnow(), tz) if tz else utcnow()).date()
     out = []
-    start = _since(days).date()
-    for i in range(days + 1):
-        d = (start + timedelta(days=i)).isoformat()
-        p, m, e = rows.get(d, (0, 0, 0))
-        out.append({"day": d, "plays": p, "movies": m or 0, "episodes": e or 0, "other": p - (m or 0) - (e or 0)})
+    for i in range(days - 1, -1, -1):
+        d = today - _td(days=i)
+        b = agg.get(d) or {"plays": 0, "movies": 0, "episodes": 0, "other": 0, "s_movies": 0.0, "s_episodes": 0.0, "s_other": 0.0}
+        out.append({"day": d, **b, "seconds": b["s_movies"] + b["s_episodes"] + b["s_other"]})
+    return out
+
+
+def compare(db, days: int) -> dict:
+    """This period vs the one before it, plus finish / transcode rates."""
+    now = utcnow()
+    cur_start, prev_start = now - timedelta(days=days), now - timedelta(days=2 * days)
+
+    def agg(a, b):
+        q = select(func.count(Play.id), func.coalesce(func.sum(Play.watched_seconds), 0),
+                   func.coalesce(func.sum(case((Play.completed.is_(True), 1), else_=0)), 0),
+                   func.coalesce(func.sum(case((Play.play_method == "Transcode", 1), else_=0)), 0),
+                   func.count(func.distinct(Play.user_name))).where(Play.started_at >= a, Play.started_at < b)
+        return db.execute(q).one()
+    cp, cs, cdone, ctc, cu = agg(cur_start, now + timedelta(days=1))
+    pp, ps, _, _, pu = agg(prev_start, cur_start)
+
+    def pct(a, b):
+        return None if not b else round((a - b) / b * 100)
+    return {"plays_delta": pct(cp, pp), "secs_delta": pct(cs, ps), "users_delta": pct(cu, pu),
+            "finish_rate": round(cdone / cp * 100) if cp else 0, "transcode_rate": round(ctc / cp * 100) if cp else 0,
+            "avg_session": (cs / cp) if cp else 0}
+
+
+def by_weekday(db, days: int, tz) -> list[dict]:
+    rows = db.execute(select(Play.started_at, Play.watched_seconds).where(Play.started_at >= _since(days))).all()
+    out = [{"label": d, "plays": 0, "seconds": 0.0} for d in ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")]
+    for st, secs in rows:
+        o = out[_local(st, tz).weekday()]
+        o["plays"] += 1
+        o["seconds"] += secs or 0
     return out
 
 
@@ -155,11 +192,25 @@ def user_profile(db, name: str, tz) -> dict | None:
         d["plays"] += 1
         if p.stopped_at and p.stopped_at >= d["last"]:
             d["last"], d["ip"] = p.stopped_at, p.ip
-    # last 30 days of watch time
-    per_day = defaultdict(float)
+    # last 30 days of watch time, split by kind
+    per_day = defaultdict(lambda: {"episodes": 0.0, "movies": 0.0, "other": 0.0, "plays": 0, "titles": Counter()})
     for p in plays:
-        per_day[_local(p.started_at, tz).date()] += (p.watched_seconds or 0)
-    last30 = [{"day": today - _td(days=i), "seconds": per_day.get(today - _td(days=i), 0)} for i in range(29, -1, -1)]
+        b = per_day[_local(p.started_at, tz).date()]
+        k = "episodes" if p.item_type == "Episode" else ("movies" if p.item_type == "Movie" else "other")
+        b[k] += p.watched_seconds or 0
+        b["plays"] += 1
+        b["titles"][p.series_name or p.title] += 1
+    last30 = []
+    for i in range(29, -1, -1):
+        dd = today - _td(days=i)
+        b = per_day.get(dd)
+        e, m, o = (b["episodes"], b["movies"], b["other"]) if b else (0, 0, 0)
+        last30.append({"day": dd, "seconds": e + m + o, "episodes": e, "movies": m, "other": o,
+                       "plays": b["plays"] if b else 0, "top": b["titles"].most_common(1)[0][0] if b else None})
+    secs30 = [d["seconds"] for d in last30]
+    best30 = max(last30, key=lambda d: d["seconds"])
+    month = {"total": sum(secs30), "active": sum(1 for x in secs30 if x > 0), "avg": sum(secs30) / 30,
+             "best": best30 if best30["seconds"] else None, "plays": sum(d["plays"] for d in last30)}
     grid = [[0] * 24 for _ in range(7)]
     for p in plays:
         lt = _local(p.started_at, tz)
@@ -173,8 +224,9 @@ def user_profile(db, name: str, tz) -> dict | None:
         "top_shows": [{"title": t, "plays": n, "seconds": int(show_secs[t]), "poster": show_poster[t]} for t, n in shows.most_common(8)],
         "top_movies": [{"title": t, "plays": n, "seconds": int(movie_secs[t]), "poster": movie_poster[t]} for t, n in movies.most_common(8)],
         "devices": sorted(devices.values(), key=lambda d: d["last"], reverse=True),
-        "last30": last30, "heat": grid, "heat_peak": max(max(r) for r in grid),
+        "last30": last30, "month": month, "heat": grid, "heat_peak": max(max(r) for r in grid),
         "methods": [{"label": k, "plays": v, "seconds": 0} for k, v in methods.most_common()],
+        "by_hour": [sum(grid[d][h] for d in range(7)) for h in range(24)],
         "recent": list(reversed(plays[-15:])),
     }
 

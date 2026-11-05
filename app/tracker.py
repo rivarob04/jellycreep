@@ -93,6 +93,10 @@ def _finalize(db, stream: ActiveStream, stopped_at) -> Play | None:
     runtime = data.get("runtime_seconds")
     position = data.get("position_seconds")
     percent = round(min(100.0, position / runtime * 100), 1) if runtime and position is not None else None
+    # some apps (e.g. Wholphin) report position 0 when they stop: fall back to how long it was actually watched
+    if runtime:
+        by_time = round(min(100.0, stream.watched_seconds / runtime * 100), 1)
+        percent = max(percent or 0.0, by_time)
     play = Play(**{k: v for k, v in data.items() if k in _PLAY_FIELDS})
     play.server_id = stream.server_id
     play.session_id = stream.session_id

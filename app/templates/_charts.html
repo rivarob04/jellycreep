@@ -1,0 +1,37 @@
+{# Bar charts with an axis, gridlines and hover / tap tooltips.
+   bars: [{label, tip (plain text; first line is the heading, \n for new lines), parts: [(value, css class)], today?}]   kind: 'time' (seconds) or 'count' #}
+{% macro bar_chart(bars, kind='time', height=180, cls='') %}
+{% set totals = bars|map(attribute='total')|list %}
+{% set ticks = nice_ticks((totals|max) if totals else 0, time=(kind == 'time')) %}
+{% set top = ticks[-1] or 1 %}
+<div class="bc {{ cls }}" style="--h:{{ height }}px">
+  <div class="bc-y" aria-hidden="true">{% for t in ticks|reverse %}<span>{{ axis_hours(t) if kind == 'time' else (t|int if t == t|int else t) }}</span>{% endfor %}</div>
+  <div class="bc-area">
+    <div class="bc-plot">
+      <div class="bc-grid" aria-hidden="true">{% for t in ticks %}<i style="bottom:{{ (t / top * 100)|round(3) }}%"></i>{% endfor %}</div>
+      <div class="bc-bars" style="grid-template-columns:repeat({{ bars|length }}, minmax(0, 1fr))">
+        {% for b in bars %}
+        <div class="bc-col{{ ' today' if b.today }}{{ ' edge-l' if loop.index <= 3 }}{{ ' edge-r' if loop.revindex <= 3 }}" tabindex="0">
+          <div class="bc-stack" style="height:{{ (b.total / top * 100)|round(3) }}%">{% for v, c in b.parts %}{% if v %}<i class="{{ c }}" style="flex:{{ v }} 0 0"></i>{% endif %}{% endfor %}</div>
+          <span class="bc-tip" role="tooltip">{{ b.tip }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="bc-x" style="grid-template-columns:repeat({{ bars|length }}, minmax(0, 1fr))" aria-hidden="true">{% for b in bars %}<span>{{ b.label }}</span>{% endfor %}</div>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro legend(items) %}<div class="bc-legend">{% for label, c in items %}<span><i class="{{ c }}"></i>{{ label }}</span>{% endfor %}</div>{% endmacro %}
+
+{# horizontal bars with share and watch time #}
+{% macro share_bars(rows, total_plays) %}
+{% set mx = (rows|map(attribute='plays')|max) if rows else 1 %}
+{% for r in rows %}
+<div class="sb-row">
+  <div class="sb-top"><span class="sb-label" title="{{ r.label }}">{{ r.label }}</span><span class="sb-val">{{ r.plays }} <small>· {{ ((r.plays / total_plays * 100) if total_plays else 0)|round|int }}%{% if r.seconds %} · {{ r.seconds|duration }}{% endif %}</small></span></div>
+  <div class="sb-track"><i class="{{ 'warn' if r.label == 'Transcode' else ('ok' if r.label in ('DirectPlay', 'DirectStream') else '') }}" style="width:{{ (r.plays / mx * 100)|round(1) }}%"></i></div>
+</div>
+{% else %}<div class="muted small">No data yet.</div>{% endfor %}
+{% endmacro %}

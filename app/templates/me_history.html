@@ -55,7 +55,7 @@
   {% for e in day.entries %}
     {% set p = e.play %}
     {% if e.kind == 'binge' %}
-    <details class="hi-card hi-binge k-tv">
+    <details class="hi-card hi-binge k-tv"{% if p.poster_id %} style="--bd:url('{{ imgp }}/{{ p.server_id }}/{{ p.poster_id }}?t=Backdrop&h=360')"{% endif %}>
       <summary>
         {{ thumb(p, 'tv') }}
         <span class="hi-body">
@@ -74,7 +74,7 @@
       </div>
     </details>
     {% else %}
-    <{{ 'a' if p.item_id else 'div' }} class="hi-card k-{{ e.kind }}"{% if p.item_id %} href="/me/library/{{ p.server_id }}/{{ p.item_id }}"{% endif %}>
+    <{{ 'a' if p.item_id else 'div' }} class="hi-card k-{{ e.kind }}"{% if p.item_id %} href="/me/library/{{ p.server_id }}/{{ p.item_id }}"{% endif %}{% if p.poster_id %} style="--bd:url('{{ imgp }}/{{ p.server_id }}/{{ p.poster_id }}?t=Backdrop&h=360')"{% endif %}>
       {{ thumb(p, e.kind) }}
       <span class="hi-body">
         <span class="hi-title">{{ p.series_name if p.item_type == 'Episode' and p.series_name else p.title }}</span>
