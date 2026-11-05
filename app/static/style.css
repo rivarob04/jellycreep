@@ -1865,3 +1865,6 @@ a.hi-card:hover { background: #151a24; border-color: rgba(255,255,255,.25); }
 .pm-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .pm-legend i { width: 10px; height: 10px; border-radius: 3px; }
 .pm-legend small { color: var(--muted); }
+
+/* v0.18.46 — Home Coming Up on desktop: only the week board (the card list is for phones) */
+@media (min-width: 1000px) { .uc-list.up-list { display: none !important; } }
