@@ -10,9 +10,9 @@
     <summary class="btn"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></svg> Open in app</summary>
     <div class="play-sheet card">
       <p class="small muted" style="margin:0 0 8px">Open {{ what or 'it' }} in:</p>
-      <a class="dev-btn oi-app" href="{{ watch.apps.moonfin }}" data-android="{{ watch.apps.moonfin_android }}"><span class="oi-ico oi-moonfin">M</span>
+      <a class="dev-btn oi-app" href="{{ watch.apps.moonfin }}" data-android="{{ watch.apps.moonfin_android }}"><span class="oi-ico oi-moonfin"><img src="{{ svc_icon('moonfin') or '' }}" alt=""></span>
         <span><b>Moonfin</b><small>Opens this title in the Moonfin app</small></span></a>
-      <a class="dev-btn oi-app" href="{{ watch.apps.moonfin_play }}" data-android="{{ watch.apps.moonfin_android_play }}"><span class="oi-ico oi-moonfin">▶</span>
+      <a class="dev-btn oi-app" href="{{ watch.apps.moonfin_play }}" data-android="{{ watch.apps.moonfin_android_play }}"><span class="oi-ico oi-moonfin"><img src="{{ svc_icon('moonfin') or '' }}" alt=""><i class="oi-play">▶</i></span>
         <span><b>Play in Moonfin</b><small>Starts playing straight away</small></span></a>
       <a class="dev-btn oi-app" href="{{ watch.apps.jellyfin_android }}" data-only="android"><span class="oi-ico oi-jf"><img src="{{ svc_icon('jellyfin') or '' }}" alt=""></span>
         <span><b>Jellyfin app</b><small>Opens the app — it can't jump to this title, so search for it there</small></span></a>

@@ -1997,3 +1997,7 @@ a.mcal-item:hover { background: rgba(255,255,255,.13); transform: translateX(1px
 .oi-web { background: rgba(255,255,255,.08); font-size: 17px; }
 .play-sheet .dev-btn.oi-app { display: flex !important; flex-direction: row !important; align-items: center !important; justify-content: flex-start !important; text-align: left !important; gap: 12px; }
 .play-sheet .dev-btn.oi-app > span:last-child { align-items: flex-start; }
+.oi-moonfin { background: transparent; position: relative; overflow: visible; }
+.oi-moonfin img { width: 100%; height: 100%; object-fit: contain; border-radius: 50%; }
+.oi-play { position: absolute; right: -4px; bottom: -4px; width: 17px; height: 17px; border-radius: 50%; display: grid; place-items: center;
+  font-style: normal; font-size: 8px; color: #fff; background: #16a34a; border: 2px solid #171822; padding-left: 1px; box-sizing: border-box; }
