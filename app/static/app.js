@@ -406,3 +406,47 @@ document.addEventListener("click", (e) => {
 document.querySelectorAll('form[data-autosubmit] select').forEach((s) => {
   s.addEventListener('change', () => s.form.requestSubmit ? s.form.requestSubmit() : s.form.submit());
 });
+
+// v0.18.48 — big blue ‹ › arrows on sideways-scrolling rows (desktop / mouse only)
+(function () {
+  if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+  const SEL = '.ra-day + .ra-list, .prow, .posters.one-row, .co-row, .rwide-row, .cast-row, .up-board';
+  const arrow = (dir) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'row-arrow ' + dir;
+    b.setAttribute('aria-label', dir === 'next' ? 'Scroll right' : 'Scroll left');
+    b.innerHTML = dir === 'next'
+      ? '<svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg>'
+      : '<svg viewBox="0 0 24 24"><path d="M19 12H6M11 6l-6 6 6 6"/></svg>';
+    return b;
+  };
+  function setup(row) {
+    if (row.dataset.arrows) return;
+    row.dataset.arrows = '1';
+    const wrap = document.createElement('div');
+    wrap.className = 'row-arrows';
+    row.parentNode.insertBefore(wrap, row);
+    wrap.appendChild(row);
+    const prev = arrow('prev'), next = arrow('next');
+    wrap.append(prev, next);
+    const step = () => Math.max(240, row.clientWidth * 0.85);
+    prev.addEventListener('click', () => row.scrollBy({ left: -step(), behavior: 'smooth' }));
+    next.addEventListener('click', () => row.scrollBy({ left: step(), behavior: 'smooth' }));
+    const update = () => {
+      const max = row.scrollWidth - row.clientWidth;
+      wrap.classList.toggle('can-scroll', max > 4);
+      prev.hidden = row.scrollLeft <= 4;
+      next.hidden = row.scrollLeft >= max - 4;
+    };
+    row.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    new ResizeObserver(update).observe(row);
+    update();
+  }
+  const scan = (root) => root.querySelectorAll(SEL).forEach(setup);
+  scan(document);
+  // rows that arrive later (lazy Home sections, live refresh)
+  new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => { if (n.nodeType === 1) { if (n.matches && n.matches(SEL)) setup(n); scan(n); } })))
+    .observe(document.body, { childList: true, subtree: true });
+})();

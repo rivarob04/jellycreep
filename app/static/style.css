@@ -1875,3 +1875,20 @@ a.hi-card:hover { background: #151a24; border-color: rgba(255,255,255,.25); }
     padding: 4px 2px 10px; scroll-snap-type: x proximity; scroll-padding-inline: 2px; scrollbar-width: thin; }
   .ra-day + .ra-list .ra-card { scroll-snap-align: start; }
 }
+
+/* v0.18.48 — big blue scroll arrows instead of grey scrollbars (mouse devices) */
+@media (hover: hover) and (pointer: fine) {
+  .row-arrows { position: relative; }
+  .row-arrows > .ra-list, .row-arrows > .prow, .row-arrows > .posters, .row-arrows > .co-row, .row-arrows > .rwide-row,
+  .row-arrows > .cast-row, .row-arrows > .up-board { scrollbar-width: none; }
+  .row-arrows > *::-webkit-scrollbar { display: none; }
+  .row-arrow { position: absolute; top: 50%; z-index: 15; width: 52px; height: 52px; margin-top: -40px; border-radius: 50%; border: 0; cursor: pointer;
+    display: none; place-items: center; color: #fff; background: linear-gradient(135deg, #2563eb, #00a4dc);
+    box-shadow: 0 8px 24px rgba(0,0,0,.55), 0 0 0 3px rgba(255,255,255,.12); transition: transform .15s, box-shadow .15s, opacity .15s; }
+  .row-arrows.can-scroll .row-arrow { display: grid; }
+  .row-arrows .row-arrow[hidden] { display: none; }
+  .row-arrow svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+  .row-arrow.prev { left: -10px; } .row-arrow.next { right: -10px; }
+  .row-arrow:hover { transform: scale(1.1); box-shadow: 0 10px 30px rgba(37,99,235,.55), 0 0 0 3px rgba(255,255,255,.25); }
+  .row-arrows:not(:hover) .row-arrow { opacity: .85; }
+}
