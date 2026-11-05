@@ -1871,9 +1871,10 @@ a.hi-card:hover { background: #151a24; border-color: rgba(255,255,255,.25); }
 
 /* v0.18.47 — Recently Added on desktop: one scrolling row per day */
 @media (min-width: 1000px) {
-  .ra-day + .ra-list { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 176px; overflow-x: auto; overflow-y: hidden;
-    padding: 4px 2px 10px; scroll-snap-type: x proximity; scroll-padding-inline: 2px; scrollbar-width: thin; }
-  .ra-day + .ra-list .ra-card { scroll-snap-align: start; }
+  .ra-list.ra-row { grid-template-columns: none !important; grid-auto-flow: column; grid-auto-columns: 176px; overflow-x: auto; overflow-y: hidden;
+    padding: 4px 2px 10px; scroll-snap-type: x proximity; scroll-padding-inline: 2px; scrollbar-width: none; }
+  .ra-list.ra-row::-webkit-scrollbar { display: none; }
+  .ra-list.ra-row .ra-card { scroll-snap-align: start; }
 }
 
 /* v0.18.48 — big blue scroll arrows instead of grey scrollbars (mouse devices) */

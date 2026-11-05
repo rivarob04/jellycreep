@@ -410,7 +410,7 @@ document.querySelectorAll('form[data-autosubmit] select').forEach((s) => {
 // v0.18.48 — big blue ‹ › arrows on sideways-scrolling rows (desktop / mouse only)
 (function () {
   if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
-  const SEL = '.ra-day + .ra-list, .prow, .posters.one-row, .co-row, .rwide-row, .cast-row, .up-board';
+  const SEL = '.ra-row, .prow, .posters.one-row, .co-row, .rwide-row, .cast-row, .up-board';
   const arrow = (dir) => {
     const b = document.createElement('button');
     b.type = 'button';

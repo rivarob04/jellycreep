@@ -51,7 +51,7 @@
 {% if groups %}
   {% for label, gitems in groups %}
   <div class="ra-day"><h2>{{ label }}</h2><span class="muted small">{{ gitems|length }} item{{ 's' if gitems|length != 1 }}</span></div>
-  <div class="ra-list">{% for i in gitems %}{{ ra_card(i) }}{% endfor %}</div>
+  <div class="ra-list ra-row">{% for i in gitems %}{{ ra_card(i) }}{% endfor %}</div>
   {% endfor %}
 {% else %}
 <div class="ra-list">
