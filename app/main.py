@@ -1216,11 +1216,59 @@ async def page_my_upcoming(request: Request, user: User = Depends(current_user))
         request.session["up_days"] = days
     days = request.session.get("up_days") or "14"
     kind = request.query_params.get("kind") or "all"
-    up = []
+    kind = kind if kind in ("all", "tv", "movie") else "all"
+    view = request.query_params.get("view")
+    if view in ("list", "calendar"):
+        request.session["up_view"] = view
+    view = request.session.get("up_view") or "list"
+    up, cal = [], None
     if login_settings()["upcoming"]:
-        end = datetime.now(TZ).date() + timedelta(days=int(days))
-        up = [i for i in await _upcoming(90) if i["day"] <= end and (kind == "all" or i["kind"] == kind)]
-    return render(request, "me_upcoming.html", user, upcoming=up, days=days, ranges=UPCOMING_RANGES, kind=kind)
+        allup = [i for i in await _upcoming(90) if kind == "all" or i["kind"] == kind]
+        if view == "calendar":
+            cal = _month_grid(allup, request.query_params.get("m"))
+        else:
+            end = datetime.now(TZ).date() + timedelta(days=int(days))
+            up = [i for i in allup if i["day"] <= end]
+    return render(request, "me_upcoming.html", user, upcoming=up, days=days, ranges=UPCOMING_RANGES, kind=kind,
+                  view=view, cal=cal)
+
+
+def _month_grid(items: list[dict], ym: str | None) -> dict:
+    """A Mon–Sun month calendar of Coming Up items (this month and the next two)."""
+    today = datetime.now(TZ).date()
+    first_allowed = today.replace(day=1)
+    months = [first_allowed]
+    for _ in range(2):
+        nxt = (months[-1] + timedelta(days=32)).replace(day=1)
+        months.append(nxt)
+    pick = first_allowed
+    if ym:
+        try:
+            y, m = (int(x) for x in ym.split("-", 1))
+            cand = first_allowed.replace(year=y, month=m)
+            if cand in months:
+                pick = cand
+        except ValueError:
+            pass
+    nxt_month = (pick + timedelta(days=32)).replace(day=1)
+    start = pick - timedelta(days=pick.weekday())
+    end = nxt_month + timedelta(days=(6 - (nxt_month - timedelta(days=1)).weekday()) - 1)
+    by_day: dict = {}
+    for i in items:
+        by_day.setdefault(i["day"], []).append(i)
+    weeks, d = [], start
+    while d <= end:
+        week = []
+        for _ in range(7):
+            week.append({"date": d, "items": by_day.get(d, []), "in_month": d.month == pick.month,
+                         "today": d == today, "past": d < today})
+            d += timedelta(days=1)
+        weeks.append(week)
+    idx = months.index(pick)
+    return {"label": f"{pick:%B %Y}", "weeks": weeks,
+            "prev": f"{months[idx - 1]:%Y-%m}" if idx > 0 else None,
+            "next": f"{months[idx + 1]:%Y-%m}" if idx + 1 < len(months) else None,
+            "count": sum(len(c["items"]) for w in weeks for c in w if c["in_month"])}
 
 
 UPCOMING_RANGES = {"7": "1 week", "14": "2 weeks", "30": "1 month", "90": "3 months"}

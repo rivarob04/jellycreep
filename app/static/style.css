@@ -1424,3 +1424,59 @@ a.fav-card:hover { transform: translateY(-2px); border-color: rgba(255,255,255,.
   .up-grid .ai-title { font-size: 15.5px; }
   .up-grid .ai-status { align-self: flex-start; }
 }
+
+/* v0.18.33 — Coming Up: plain day headings (no dark band) + List / Calendar switch + month calendar */
+@media (min-width: 1000px) {
+  .up-day .agenda-h { position: static; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding: 4px 2px; }
+}
+.up-views { display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); }
+.up-views a { display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; border-radius: 9px; color: var(--muted); font-weight: 650; font-size: 14px; }
+.up-views a svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.up-views a.on { color: #fff; background: linear-gradient(135deg, rgba(169,107,255,.35), rgba(0,164,220,.25)); box-shadow: inset 0 0 0 1px rgba(169,107,255,.5); }
+.up-views a:hover { text-decoration: none; color: #fff; }
+
+.cal-head { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; }
+.cal-head h2 { margin: 0; font-size: 22px; font-weight: 800; min-width: 170px; text-align: center; }
+.cal-nav { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; font-size: 22px; line-height: 1; color: #fff;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); }
+.cal-nav:hover { background: rgba(255,255,255,.16); text-decoration: none; color: #fff; }
+.cal-nav.off { opacity: .3; }
+.cal-count { margin-left: auto; }
+
+.mcal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.mcal-wd { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; padding: 0 6px 2px; }
+.mcal-day { min-height: 128px; padding: 6px; border-radius: 10px; background: rgba(17,24,39,.55); border: 1px solid rgba(255,255,255,.07);
+  display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.mcal-day.out { background: transparent; border-color: rgba(255,255,255,.03); }
+.mcal-day.out .mcal-date { opacity: .35; }
+.mcal-day.past:not(.out) { opacity: .55; }
+.mcal-day.today { border-color: rgba(169,107,255,.7); box-shadow: inset 0 0 0 1px rgba(169,107,255,.35); opacity: 1; }
+.mcal-date { display: flex; align-items: center; gap: 6px; padding: 0 2px 2px; }
+.mcal-date b { font-size: 14px; font-weight: 750; }
+.mcal-date em { font-style: normal; font-size: 10.5px; font-weight: 750; color: #fff; padding: 1px 7px; border-radius: 999px; background: rgba(169,107,255,.85); }
+.mcal-day.today .mcal-date b { color: #c4a3ff; }
+.mcal-wd-m { display: none; }
+.mcal-item { position: relative; display: flex; flex-direction: column; min-width: 0; padding: 4px 6px 4px 8px; border-radius: 6px; color: var(--text);
+  background: rgba(255,255,255,.05); border-left: 3px solid var(--tv); font-size: 12px; line-height: 1.25; }
+.mcal-item.k-movie { border-left-color: var(--movie); }
+.mcal-item.k-music { border-left-color: var(--music); }
+a.mcal-item:hover { background: rgba(255,255,255,.12); text-decoration: none; color: var(--text); }
+.mcal-t { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 12px; }
+.mcal-s { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mcal-ok { position: absolute; top: 4px; right: 5px; font-style: normal; font-size: 10px; font-weight: 800; color: var(--ok); }
+.mcal-more summary { cursor: pointer; list-style: none; font-size: 11.5px; font-weight: 700; color: #7fdcff; padding: 2px 4px; }
+.mcal-more summary::-webkit-details-marker { display: none; }
+.mcal-more[open] summary { margin-bottom: 4px; }
+.mcal-more[open] { display: flex; flex-direction: column; gap: 4px; }
+/* phones: only the days that have something, as a simple list */
+@media (max-width: 760px) {
+  .mcal { grid-template-columns: 1fr; gap: 8px; }
+  .mcal-wd, .mcal-day.out, .mcal-day:not(.has) { display: none; }
+  .mcal-day { min-height: 0; }
+  .mcal-wd-m { display: inline; font-weight: 700; }
+  .mcal-day.past:not(.today) { display: none; }
+  .mcal-item { font-size: 13px; padding: 6px 8px 6px 10px; }
+  .mcal-s { font-size: 12px; }
+  .cal-head h2 { min-width: 0; font-size: 19px; }
+}
+.cal-head h2 { flex: 0 0 auto; width: auto; }
