@@ -142,8 +142,11 @@
     sync();
   }
 
-  document.querySelectorAll("form[data-confirm]").forEach((f) =>
-    f.addEventListener("submit", (e) => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));
+  // works for forms that arrive later too (live refresh)
+  document.addEventListener("submit", (e) => {
+    const f = e.target;
+    if (f.matches && f.matches("form[data-confirm]") && !confirm(f.dataset.confirm)) e.preventDefault();
+  });
 })();
 
 // Live progress for the Jellystat import on the Settings page.

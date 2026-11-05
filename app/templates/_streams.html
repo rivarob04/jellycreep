@@ -1,41 +1,73 @@
 {% for e in errors %}<div class="notice bad">{{ e }}</div>{% endfor %}
 {% if streams %}
-<div class="streams">
+{# summary banner, like Tautulli: "3 streams (1 Direct Stream, 1 Direct Play, 1 Transcode) · 29.1 Mbps (LAN 15.1, WAN 14.0)" #}
+{% set ns = namespace(dp=0, ds=0, tc=0, lan=0, wan=0) %}
+{% for s in streams %}
+  {% if s.play_method == 'Transcode' %}{% set ns.tc = ns.tc + 1 %}{% elif s.play_method == 'DirectStream' %}{% set ns.ds = ns.ds + 1 %}{% else %}{% set ns.dp = ns.dp + 1 %}{% endif %}
+  {% if ip_kind(s.ip) == 'public' %}{% set ns.wan = ns.wan + (s.bitrate or 0) %}{% else %}{% set ns.lan = ns.lan + (s.bitrate or 0) %}{% endif %}
+{% endfor %}
+<div class="sa-summary">
+  <span class="sa-info">i</span>
+  <div>
+    <b>{{ streams|length }} stream{{ 's' if streams|length != 1 }}</b>
+    <span>({{ [(ns.ds ~ ' Direct Stream') if ns.ds, (ns.dp ~ ' Direct Play') if ns.dp, (ns.tc ~ ' Transcode') if ns.tc]|select|join(', ') }})</span><br>
+    <b>{{ '%.2f'|format((ns.lan + ns.wan) / 1000000) }} Mbps</b>
+    <span>(LAN: {{ '%.2f'|format(ns.lan / 1000000) }} Mbps, WAN: {{ '%.2f'|format(ns.wan / 1000000) }} Mbps)</span>
+  </div>
+</div>
+
+<div class="sa-list">
   {% for s in streams %}
-  <div class="stream">
-    {% if s.poster_id %}<div class="backdrop" style="background-image:url('/img/{{ s.server_id }}/{{ s.poster_id }}?t=Backdrop&h=360')"></div>{% endif %}
-    {% if s.poster_id %}<img class="poster" loading="lazy" src="/img/{{ s.server_id }}/{{ s.poster_id }}?h=280" alt="">{% else %}<div class="poster"></div>{% endif %}
-    <div class="body">
-      <div class="spread">
-        <span class="badge {{ 'b-warn' if s.play_method == 'Transcode' else 'b-ok' }}">{{ s.play_method or 'Unknown' }}</span>
-        {% if s.is_paused %}<span class="badge">Paused</span>{% else %}<span class="badge b-acc">Playing</span>{% endif %}
-      </div>
-      <div class="t" title="{{ s.display }}">{{ s.display }}</div>
+  {% set pf = platform(s.client, s.device) %}
+  {% set kind = 'tv' if s.item_type == 'Episode' else ('music' if s.item_type == 'Audio' else 'movie') %}
+  {% set left = time_left(s) %}
+  <details class="sa-card{{ ' paused' if s.is_paused }}"{% if s.poster_id %} style="--bd:url('/img/{{ s.server_id }}/{{ s.poster_id }}?t=Backdrop&h=360')"{% endif %}>
+    <summary>
+      <span class="sa-poster k-bg-{{ kind }}">{% if s.poster_id %}<img loading="lazy" src="/img/{{ s.server_id }}/{{ s.poster_id }}?h=300" alt="" onerror="this.remove()">{% endif %}<b>{{ (s.series_name or s.title or '?')[:1] }}</b></span>
+      <span class="sa-body">
+        <span class="sa-title">{{ s.series_name if s.item_type == 'Episode' and s.series_name else s.title }}</span>
+        {% if s.item_type == 'Episode' %}<span class="sa-sub">{{ s.title }}</span><span class="sa-sub">S{{ s.season or 0 }} • E{{ s.episode or 0 }}</span>
+        {% else %}<span class="sa-sub">{{ s.year or ('Song' if kind == 'music' else '') }}</span>{% endif %}
+        <span class="sa-foot">
+          <span class="sa-user">{{ s.user_name }}</span>
+          <span class="sa-meta">
+            <i class="sa-ico" title="{{ {'tv': 'Episode', 'movie': 'Movie', 'music': 'Music'}[kind] }}">{% if kind == 'tv' %}<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>{% elif kind == 'music' %}<svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>{% else %}<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" fill="currentColor" stroke="none"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4" stroke="#0b0d14"/></svg>{% endif %}</i>
+            <i class="sa-ico pm-{{ (s.play_method or 'x')|lower }}" title="{{ {'DirectPlay': 'Direct Play', 'DirectStream': 'Direct Stream', 'Transcode': 'Transcode'}.get(s.play_method, 'Unknown') }}">{% if s.play_method == 'Transcode' %}<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4"/></svg>{% elif s.play_method == 'DirectStream' %}<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2.5" fill="currentColor" stroke="none"/><rect x="3" y="13" width="18" height="7" rx="2.5" fill="currentColor" stroke="none"/><circle cx="16.5" cy="7.5" r="1" fill="#0b0d14" stroke="none"/><circle cx="16.5" cy="16.5" r="1" fill="#0b0d14" stroke="none"/></svg>{% else %}<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"/><path d="M10 8l6 4-6 4z" fill="#0b0d14" stroke="none"/></svg>{% endif %}</i>
+            <span class="sa-left">{% if s.is_paused %}⏸ Paused{% elif left %}{{ left }}{% endif %}</span>
+          </span>
+        </span>
+      </span>
+      <span class="sa-plat{{ ' mono' if pf.mono }}" style="--pc:{{ pf.colour }}" title="{{ pf.label }} · {{ s.client or '' }}{{ ' · ' ~ s.device if s.device }}">{% if pf.src %}<img src="{{ pf.src }}" alt="{{ pf.label }}">{% else %}<svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>{% endif %}</span>
+      <span class="sa-progress"><i class="buf" style="width:{{ [s.progress or 0, (s.transcode_progress or 0)]|max }}%"></i><i class="pos" style="width:{{ s.progress or 0 }}%"></i></span>
+    </summary>
+
+    <div class="sa-more">
       <dl class="kv">
-        <dt>User</dt><dd><a href="/history?user_name={{ s.user_name|urlencode }}">{{ s.user_name }}</a></dd>
-        <dt>Player</dt><dd>{{ s.client or '?' }} · {{ s.device or '?' }}</dd>
-        <dt>Video</dt><dd>{{ (s.source_video_codec or '?')|upper }} {{ s.resolution or '' }}{% if s.play_method == 'Transcode' and s.video_codec != s.source_video_codec %} → {{ (s.video_codec or '?')|upper }} {{ s.transcode_resolution or '' }}{% endif %}</dd>
-        <dt>Audio</dt><dd>{{ (s.source_audio_codec or '?')|upper }}{% if s.play_method == 'Transcode' and s.audio_codec != s.source_audio_codec %} → {{ (s.audio_codec or '?')|upper }}{% endif %}</dd>
-        {% if s.transcode_reasons %}<dt>Reason</dt><dd title="{{ s.transcode_reasons }}">{{ s.transcode_reasons }}</dd>{% endif %}
-        <dt>Bitrate</dt><dd>{{ ((s.bitrate or 0) / 1000000)|round(1) }} Mbps{% if s.container %} · {{ s.container }}{% endif %}</dd>
-        <dt>IP</dt><dd>{{ s.ip or '?' }}</dd>
+        <dt>Player</dt><dd>{{ s.client or '?' }} · {{ s.device or '?' }} <span class="muted">({{ pf.label }})</span></dd>
+        <dt>Quality</dt><dd>{{ (s.source_video_codec or '?')|upper }} {{ s.resolution or '' }}{% if s.play_method == 'Transcode' and (s.video_codec != s.source_video_codec or s.transcode_resolution != s.resolution) %} → {{ (s.video_codec or '?')|upper }} {{ s.transcode_resolution or '' }}{% endif %}
+          · {{ (s.source_audio_codec or '?')|upper }}{% if s.play_method == 'Transcode' and s.audio_codec != s.source_audio_codec %} → {{ (s.audio_codec or '?')|upper }}{% endif %}</dd>
+        <dt>Stream</dt><dd>{{ {'DirectPlay': 'Direct Play', 'DirectStream': 'Direct Stream', 'Transcode': 'Transcode'}.get(s.play_method, 'Unknown') }} · {{ ((s.bitrate or 0) / 1000000)|round(1) }} Mbps{% if s.container %} · {{ s.container|upper }}{% endif %}</dd>
+        {% if s.transcode_reasons %}{% set why = explain(s.transcode_reasons) %}<dt>Why</dt><dd>{% if why %}{{ why|map(attribute='text')|join(' ') }}{% else %}{{ s.transcode_reasons }}{% endif %}</dd>{% endif %}
+        <dt>Time</dt><dd>{{ s.position_seconds|duration }} / {{ s.runtime_seconds|duration }} · watched {{ s.watched|duration }}{% if s.ends_at and not s.is_paused %} · ends {{ s.ends_at }}{% endif %}</dd>
+        {% if user.is_admin %}{% set g = (geo or {}).get(s.ip) %}
+        <dt>From</dt><dd><span class="mono">{{ s.ip or '?' }}</span>{% if g %} · {{ g.icon }} {{ g.label }}{% if g.isp %} · {{ g.isp }}{% endif %}{% endif %}</dd>{% endif %}
         <dt>Server</dt><dd>{{ s.server_name }}</dd>
       </dl>
-      <div class="spread small muted"><span>{{ s.position_seconds|duration }} / {{ s.runtime_seconds|duration }}</span><span>watched {{ s.watched|duration }}</span></div>
-      <div class="bar"><i style="width: {{ s.progress }}%"></i></div>
+      <div class="sa-actions">
+        <a class="btn sm" href="/users/{{ s.user_name|urlencode }}">{{ s.user_name }}'s profile →</a>
+        {% if s.item_id %}<a class="btn sm" href="/library/{{ s.server_id }}/{{ s.item_id }}">Open in library →</a>{% endif %}
+      </div>
       {% if user.is_admin %}
-      <details><summary class="muted">Stop stream…</summary>
-        <form method="post" action="/activity/{{ s.server_id }}/{{ s.session_id }}/stop">
-          <input type="hidden" name="csrf" value="{{ csrf }}">
-          <input name="message" placeholder="Optional message to the user" style="flex:1">
-          <button class="btn sm danger">Stop</button>
-        </form>
-      </details>
+      <form class="sa-stop" method="post" action="/activity/{{ s.server_id }}/{{ s.session_id }}/stop" data-confirm="Stop {{ s.user_name }}'s stream?">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input name="message" placeholder="Optional message to {{ s.user_name }}">
+        <button class="btn sm danger">Stop stream</button>
+      </form>
       {% endif %}
     </div>
-  </div>
+  </details>
   {% endfor %}
 </div>
 {% else %}
-<div class="card empty">Nothing is playing right now.</div>
+<div class="card empty"><div class="empty-icon">📺</div>Nothing is playing right now.</div>
 {% endif %}

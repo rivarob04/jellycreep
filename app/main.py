@@ -338,7 +338,61 @@ def _device_kind(client: str | None, device: str | None = None) -> str:
     return "other"
 
 
-templates.env.globals.update(svc_icon=_svc_icon, device_kind=_device_kind)
+_PLATFORM_DIR = Path(__file__).parent / "static" / "icons" / "platform"
+_PLATFORM_ICONS = {f.stem for f in _PLATFORM_DIR.glob("*.svg")} if _PLATFORM_DIR.is_dir() else set()
+# (key, label, tile colour, words to look for in "client device") — first match wins
+_PLATFORMS = [
+    ("playstation", "PlayStation", "#00439c", ("playstation", "ps4", "ps5")),
+    ("xbox", "Xbox", "#107c10", ("xbox",)),
+    ("roku", "Roku", "#6c3c97", ("roku",)),
+    ("appletv", "Apple TV", "#8e8e93", ("apple tv", "appletv", "tvos")),
+    ("firetv", "Fire TV", "#ff9900", ("fire tv", "firetv", "aftm", "aftt", "afts", "aftka")),
+    ("samsung", "Samsung TV", "#1428a0", ("samsung", "tizen")),
+    ("lg", "LG TV", "#a50034", ("webos", " lg ", "lgtv", "lg tv")),
+    ("kodi", "Kodi", "#17b2e7", ("kodi",)),
+    ("moonfin", "Moonfin", "#4c1d95", ("moonfin",)),
+    ("streamyfin", "Streamyfin", "#7c3aed", ("streamyfin",)),
+    ("findroid", "Findroid", "#00a4dc", ("findroid",)),
+    ("finamp", "Finamp", "#aa5cc3", ("finamp",)),
+    ("androidtv", "Android TV", "#3ddc84", ("android tv", "androidtv", "shield", "wholphin", "chromecast", "google tv")),
+    ("android", "Android", "#3ddc84", ("android",)),
+    ("apple", "iPhone / iPad", "#e5e5ea", ("ios", "iphone", "ipad", "swiftfin", "infuse")),
+    ("edge", "Edge", "#0b6bd3", ("edge",)),
+    ("firefox", "Firefox", "#20123a", ("firefox",)),
+    ("safari", "Safari", "#e5e5ea", ("safari",)),
+    ("chrome", "Chrome", "#ffffff", ("chrome", "chromium")),
+    ("windows", "Windows", "#0078d4", ("windows",)),
+    ("apple", "Mac", "#e5e5ea", ("mac", "macos")),
+    ("linux", "Linux", "#fcc624", ("linux",)),
+]
+_PLATFORM_ALIAS = {"androidtv": "android"}
+
+
+def _platform(client: str | None, device: str | None) -> dict:
+    """Which kind of device a stream is on, with a logo (or a glyph) and a brand colour for its tile."""
+    hay = f" {(client or '').lower()} {(device or '').lower()} "
+    for key, label, colour, words in _PLATFORMS:
+        if any(w in hay for w in words):
+            icon = _PLATFORM_ALIAS.get(key, key)
+            src = (f"/static/icons/platform/{icon}.svg?v={__version__}" if icon in _PLATFORM_ICONS
+                   else (_svc_icon(icon) if icon == "moonfin" else None))
+            return {"key": key, "label": label, "colour": colour, "src": src,
+                    "mono": key in ("playstation", "xbox", "android", "androidtv", "windows", "edge", "firetv", "appletv", "roku"),
+                    "tv": key in
+                    ("playstation", "xbox", "roku", "appletv", "firetv", "samsung", "lg", "androidtv", "kodi")}
+    return {"key": "jellyfin", "label": client or "Jellyfin", "colour": "#101826", "src": _svc_icon("jellyfin"), "tv": False, "mono": False}
+
+
+def _left(st: dict) -> str | None:
+    rt, pos = st.get("runtime_seconds"), st.get("position_seconds")
+    if not rt or pos is None:
+        return None
+    m = max(0, round((rt - pos) / 60))
+    return f"{m // 60}h {m % 60}min left" if m >= 60 else f"{m}min left"
+
+
+templates.env.globals.update(svc_icon=_svc_icon, device_kind=_device_kind, platform=_platform, time_left=_left,
+                             ip_kind=geoip.kind)
 templates.env.globals.update(day_label=_day_label, ep_pretty=_ep_pretty, nice_ticks=_nice_ticks, hour12=_hour12, axis_hours=_hours)
 
 
@@ -506,7 +560,8 @@ async def page_activity(request: Request, user: User = Depends(staff_user)):
     with SessionLocal() as db:
         recent = list(db.scalars(select(Play).order_by(Play.stopped_at.desc()).limit(8)))
         today = stats.summary(db, 1)
-    return render(request, "activity.html", user, streams=streams, errors=errors, recent=recent, today=today,
+    geo = await geoip.lookup([x.get("ip") for x in streams], wait=False) if user.is_admin else {}
+    return render(request, "activity.html", user, streams=streams, errors=errors, recent=recent, today=today, geo=geo,
                   last=recent[0] if recent else None,
                   health=services(),
                   has_servers=bool(services(("jellyfin",), enabled_only=False)))
@@ -517,7 +572,8 @@ async def partial_activity(request: Request, user: User = Depends(staff_user)):
     streams, errors = await current_activity()
     with SessionLocal() as db:
         last = db.scalar(select(Play).order_by(Play.stopped_at.desc()))
-    return render(request, "_live.html", user, streams=streams, errors=errors, last=last)
+    geo = await geoip.lookup([x.get("ip") for x in streams], wait=False) if user.is_admin else {}
+    return render(request, "_live.html", user, streams=streams, errors=errors, last=last, geo=geo)
 
 
 @app.post("/activity/{server_id}/{session_id}/stop")
