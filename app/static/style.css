@@ -2098,3 +2098,11 @@ a.uc-card:hover, a.hi-card:hover { transform: translateY(-2px); box-shadow: 0 10
   .sa-title { font-size: 16.5px; }
 }
 .sa-plat.mono img { filter: brightness(0) invert(1); }
+
+/* v0.18.59 — "Also playing on the server" can't push the page wider than the screen */
+.anon-list { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .anon-list { grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); } }
+.anon-card, .anon-list > *, .anon-body, .anon-meta { min-width: 0; max-width: 100%; }
+.anon-meta { flex-wrap: wrap; }
+.anon-sub, .anon-title { display: block; }
+#live-streams, #live-streams > * { min-width: 0; max-width: 100%; }
