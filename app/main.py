@@ -92,6 +92,46 @@ def _fix_progress() -> None:
         log.info("Recalculated progress for %d plays", n)
 
 
+async def _backfill_runtimes(limit: int = 1000) -> int:
+    """Plays without a length (imported from Jellystat, or from apps that didn't send one): look the length up
+    in Jellyfin so progress and "finished" can be worked out. Items Jellyfin no longer has are marked so
+    they aren't asked about again."""
+    done = 0
+    for svc in services(("jellyfin",)):
+        with SessionLocal() as db:
+            rows = list(db.execute(select(Play.id, Play.item_id).where(Play.server_id == svc.id, Play.runtime_seconds.is_(None),
+                                                                      Play.item_id.isnot(None)).limit(limit)))
+        if not rows:
+            continue
+        client = await client_for(svc)
+        uid = await library.browse_as(client, svc.id, User(name="system", is_admin=True, via="none", role="admin"))
+        if not uid:
+            continue
+        ids = list(dict.fromkeys(library._norm_id(i) for _, i in rows))
+        found: dict[str, float] = {}
+        for k in range(0, len(ids), 80):
+            try:
+                found.update(await library.runtimes(client, uid, ids[k:k + 80]))
+            except UpstreamError:
+                return done
+        with SessionLocal() as db:
+            for pid, iid in rows:
+                p = db.get(Play, pid)
+                rt = found.get(library._norm_id(iid))
+                p.runtime_seconds = rt or 0.0          # 0 = looked, Jellyfin doesn't have it any more
+                if rt:
+                    by_time = round(min(100.0, (p.watched_seconds or 0) / rt * 100), 1)
+                    if by_time > (p.percent or 0):
+                        p.percent = by_time
+                    p.completed = (p.percent or 0) >= settings.watched_percent
+                    done += 1
+            db.commit()
+    if done:
+        log.info("Filled in length and progress for %d plays", done)
+        ttl_forget("uprof"); ttl_forget("profile")
+    return done
+
+
 def _rename_seerr() -> None:
     """One-time: services still named 'Jellyseerr / Seerr' (the old default) become just 'Seerr'."""
     with SessionLocal() as db:
@@ -1169,6 +1209,7 @@ async def _keep_warm() -> None:
 
     await asyncio.sleep(5)
     while True:
+        await step("play lengths", _backfill_runtimes(), 120)
         await step("libraries", ttl_cached(("media",), 120, _media_servers, stale=6 * 3600), 60)
         await step("storage", ttl_cached(("storage",), 600, _storage_report, stale=6 * 3600), 120)
         await step("queue", asyncio.gather(*(_cached_panel(x, "queue") for x in services(("sonarr", "radarr", "lidarr")))), 60)

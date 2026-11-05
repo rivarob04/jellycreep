@@ -3,7 +3,7 @@
 {% block content %}
 {% macro thumb(p, kind) %}<span class="hi-poster k-bg-{{ kind }}">{% if p.poster_id %}<img loading="lazy" src="/img/{{ p.server_id }}/{{ p.poster_id }}?h=180" alt="" onerror="this.remove()">{% endif %}<b>{{ (p.series_name or p.title)[:1] }}</b></span>{% endmacro %}
 {% macro ep(p) %}{% if p.season is not none %}S{{ '%02d'|format(p.season) }}E{{ '%02d'|format(p.episode or 0) }}{% endif %}{% endmacro %}
-{% macro bar(p) %}{% set pct = 100 if p.completed else ((p.percent or 0)|round|int) %}<span class="hi-bar{{ ' done' if p.completed }}"><i style="width:{{ pct }}%"></i></span>{% endmacro %}
+{% macro bar(p) %}{% if p.completed or p.percent %}{% set pct = 100 if p.completed else [2, (p.percent or 0)|round|int]|max %}<span class="hi-bar{{ ' done' if p.completed }}" title="{{ 'Finished' if p.completed else ((p.percent|round|int) ~ '% watched') }}"><i style="width:{{ pct }}%"></i></span>{% endif %}{% endmacro %}
 {% macro who(name) %}<span class="hi-who"><span class="avatar xs">{{ name[:1]|upper }}</span>{{ name }}</span>{% endmacro %}
 {% macro method(p) %}{% if p.play_method %}<span class="badge {{ 'b-warn' if p.play_method == 'Transcode' else 'b-ok' }}" title="{{ p.transcode_reasons or '' }}">{{ methods.get(p.play_method, p.play_method) }}</span>{% endif %}{% endmacro %}
 

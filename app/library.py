@@ -32,6 +32,14 @@ async def browse_as(client, svc_id: int, user) -> str | None:
     return uid
 
 
+async def runtimes(client, uid: str, ids: list[str]) -> dict[str, float]:
+    """{item id: length in seconds} for up to ~100 items (missing ones are left out)."""
+    if not ids:
+        return {}
+    data = await _get(client, "/Items", uid, {"Ids": ",".join(ids), "Fields": "", "EnableImages": "false"}) or {}
+    return {_norm_id(i.get("Id")): i["RunTimeTicks"] / 10_000_000 for i in data.get("Items") or [] if i.get("RunTimeTicks")}
+
+
 async def _get(client, path: str, uid: str, params: dict | None = None) -> Any:
     """10.9+ takes ?userId=; older servers only have /Users/{id}/… routes."""
     params = dict(params or {})
