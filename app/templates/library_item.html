@@ -26,6 +26,7 @@
 </section>
 
 {% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}
+<div class="lib-actions">
 {% if watch %}
 {{ watch_bar(watch, lib, sid, request.url.path, csrf, show_user=not user.is_viewer) }}
 {% if watch.internal and user.is_admin %}<p class="hint" style="margin:-6px 0 12px">This button uses Jellyfin's internal address, so it only works at home. <a href="/settings?edit={{ sid }}#edit">Set Jellyfin's Link URL →</a> to the address your phone uses (e.g. https://jellyfin.example.com).</p>{% endif %}
@@ -35,12 +36,15 @@
 {% if d.links %}
 <div class="lib-links lib-links-top mb">{% for name, url in d.links %}<a class="btn sm" href="{{ url }}" target="_blank" rel="noopener">{{ name }} ↗</a>{% endfor %}</div>
 {% endif %}
+</div>
 
 <nav class="lib-tabs" aria-label="Sections">
   {% for k, label in tabs %}<a href="?tab={{ k }}" class="{{ 'on' if tab == k }}">{{ label }}</a>{% endfor %}
 </nav>
 
 {% if tab == 'details' %}
+<div class="lib-detail">
+<div class="ld-main">
   {% if d.tagline or d.overview %}
   <div class="card mb lib-summary">
     {% if d.tagline %}<h2 class="lib-tagline">{{ d.tagline }}</h2>{% endif %}
@@ -52,13 +56,16 @@
   </div>
   {% endif %}
 
-  {% if d.facts %}
-  <dl class="facts mb">
-    {% for k, v in d.facts %}<dt>{{ k }}</dt><dd>{{ v }}</dd>{% endfor %}
-  </dl>
-  {% endif %}
-
   {% if d.cast %}{% set cast_sid = sid %}{% include "_cast.html" %}{% endif %}
+
+</div>
+<div class="ld-side">
+  {% if d.facts %}
+  <div class="card mb ld-facts"><h2>Details</h2>
+  <dl class="facts tight">
+    {% for k, v in d.facts %}<dt>{{ k }}</dt><dd>{{ v }}</dd>{% endfor %}
+  </dl></div>
+  {% endif %}
 
   {% if d.critic is not none or d.community %}
   <div class="card mb">
@@ -85,8 +92,8 @@
     </dl>
   </div>
   {% endfor %}
-
-
+</div>
+</div>
 
 {% elif tab == 'seasons' %}
   {% if err %}<div class="notice bad small">{{ err }}</div>{% endif %}

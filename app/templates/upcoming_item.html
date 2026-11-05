@@ -31,18 +31,19 @@
     {% else %}<span class="badge">Not yet{{ ' — the show is' if jf and u.kind == 'tv' }}{{ ' in your library' if jf and u.kind == 'tv' }}</span>{% endif %}</div>
 </div>
 
+<div class="lib-actions">
+{% if watch %}
+  {% if u.kind == 'tv' and not on_jellyfin %}<p class="small muted" style="margin:0 0 8px">This episode isn't out yet. Catch up on the show meanwhile:</p>{% endif %}
+  {{ watch_bar(watch, lib, watch.sid, request.url.path, csrf, show_user=not user.is_viewer) }}
+  {% if watch.internal and user.is_admin %}<p class="hint" style="margin:-6px 0 12px">This button uses Jellyfin's internal address, so it only works at home. <a href="/settings?edit={{ watch.sid }}#edit">Set Jellyfin's Link URL →</a></p>{% endif %}
+{% endif %}
 {% if jf or u.links %}
 <div class="lib-links lib-links-top mb">
   {% if jf %}<a class="btn sm" href="{{ lib }}/{{ jf.sid }}/{{ jf.id }}">Open in library</a>{% endif %}
   {% for name, url in u.links %}<a class="btn sm" href="{{ url }}" target="_blank" rel="noopener">{{ name }} ↗</a>{% endfor %}
 </div>
 {% endif %}
-
-{% if watch %}
-  {% if u.kind == 'tv' and not on_jellyfin %}<p class="small muted" style="margin:0 0 8px">This episode isn't out yet. Catch up on the show meanwhile:</p>{% endif %}
-  {{ watch_bar(watch, lib, watch.sid, request.url.path, csrf, show_user=not user.is_viewer) }}
-  {% if watch.internal and user.is_admin %}<p class="hint" style="margin:-6px 0 12px">This button uses Jellyfin's internal address, so it only works at home. <a href="/settings?edit={{ watch.sid }}#edit">Set Jellyfin's Link URL →</a></p>{% endif %}
-{% endif %}
+</div>
 
 {% if u.overview %}
 <div class="card mb lib-summary">

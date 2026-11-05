@@ -1937,3 +1937,32 @@ a.mcal-item:hover { background: rgba(255,255,255,.13); transform: translateX(1px
 .mcal-more summary:hover { background: rgba(255,255,255,.06); }
 .mcal-cnt { margin-left: auto; font-size: 10.5px; font-weight: 800; color: var(--muted); padding: 1px 7px; border-radius: 999px; background: rgba(255,255,255,.07); }
 .lib-links-top { margin-top: -2px; }
+
+/* v0.18.52 — cleaner title pages on desktop */
+@media (min-width: 1000px) {
+  .lib-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin: 4px 0 18px; }
+  .lib-actions .watch-bar { flex: 0 1 auto; margin: 0; flex-wrap: nowrap; }
+  .lib-actions .watch-btn { flex: 0 0 auto; min-width: 280px; padding: 10px 26px; justify-content: flex-start; }
+  .lib-actions .play-on { flex: 0 0 auto; }
+  .lib-actions .play-on > summary { padding: 0 20px; }
+  .lib-actions .lib-links-top { margin: 0 0 0 auto; display: flex; gap: 8px; }
+  .lib-actions .lib-links-top .btn { min-height: 40px; display: inline-flex; align-items: center; }
+  .lib-actions .hint { order: 5; flex-basis: 100%; margin: 0 !important; font-size: 12.5px; color: var(--muted); }
+  .lib-tabs { justify-content: flex-start; gap: 4px; margin: 0 0 18px; }
+  .lib-tabs a { flex: 0 0 auto; padding: 12px 22px; }
+  .lib-tabs a.on::after { left: 14px; right: 14px; }
+  .lib-detail { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); gap: 18px; align-items: start; }
+  .ld-main > .card:first-child, .ld-side > .card:first-child { margin-top: 0; }
+  .ld-main .lib-summary { padding: 20px 22px; }
+  .ld-main .lib-overview { font-size: 15.5px; line-height: 1.65; }
+  .ld-side .card { padding: 16px 18px; }
+  .ld-side .card h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .ld-side .facts dt { text-align: left; font-size: 13px; }
+  .ld-side .facts dd { font-size: 14px; }
+  .ld-side .rating-row { flex-wrap: wrap; }
+}
+.ld-facts .facts { padding: 0; }
+@media (min-width: 1000px) {
+  .title-hero { padding: 120px 32px 28px; }
+  .title-hero .th-info h1 { font-size: 40px; letter-spacing: -.02em; line-height: 1.05; }
+}
