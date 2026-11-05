@@ -1,32 +1,104 @@
 {% extends "base.html" %}
 {% block title %}My History{% endblock %}
 {% block content %}
-<div class="spread"><h1>Your History</h1><span class="muted small">{{ total }} play{{ 's' if total != 1 }}</span></div>
-<form method="get" class="search-bar mb">
-  <input type="search" name="q" value="{{ q }}" placeholder="Search your history" enterkeyhint="search">
-  <button class="btn primary">Search</button>
-</form>
-{% if rows %}
-<div class="card flush">
-  {% for p in rows %}
-  {% set kind = 'tv' if p.item_type == 'Episode' else ('music' if p.item_type == 'Audio' else 'movie') %}
-  <{{ 'a' if p.item_id else 'div' }} class="agenda-item k-{{ kind }}{{ ' tap' if p.item_id }}"{% if p.item_id %} href="/me/library/{{ p.server_id }}/{{ p.item_id }}"{% endif %}>
-    <span class="thumb k-bg-{{ kind }}">{% if p.poster_id %}<img loading="lazy" src="{{ imgp }}/{{ p.server_id }}/{{ p.poster_id }}?h=120" alt="" onerror="this.remove()">{% endif %}<b>{{ (p.series_name or p.title)[:1] }}</b></span>
-    <span class="ai-body"><span class="ai-title">{{ p.series_name if p.item_type == 'Episode' and p.series_name else p.title }}</span>
-      <span class="ai-sub">{% if p.item_type == 'Episode' %}{% if p.season is not none %}S{{ '%02d'|format(p.season) }}E{{ '%02d'|format(p.episode or 0) }} · {% endif %}{{ p.title }}{% else %}{{ p.year or '' }}{% endif %}</span>
-      <span class="ai-meta">{{ p.started_at|local('%a %b %-d, %-I:%M %p') }} · {{ p.watched_seconds|duration }}{% if p.client %} · {{ p.client }}{% endif %}</span>
-      {% if p.play_method == 'Transcode' %}{% set why = explain(p.transcode_reasons) %}
-      <span class="ai-why">⚠ Converted{% if why %} — {{ why[0].text }}{% if why[0].tip %} <em>{{ why[0].tip }}</em>{% endif %}{% endif %}</span>{% endif %}</span>
-    <span class="ai-status">{% if p.completed %}<span class="badge b-ok">✓</span>{% elif p.percent is not none %}<span class="badge">{{ p.percent|round|int }}%</span>{% endif %}</span>
-  </{{ 'a' if p.item_id else 'div' }}>
-  {% endfor %}
+{% macro thumb(p, kind, h=180) %}<span class="hi-poster k-bg-{{ kind }}">{% if p.poster_id %}<img loading="lazy" src="{{ imgp }}/{{ p.server_id }}/{{ p.poster_id }}?h={{ h }}" alt="" onerror="this.remove()">{% endif %}<b>{{ (p.series_name or p.title)[:1] }}</b></span>{% endmacro %}
+{% macro ep(p) %}{% if p.season is not none %}S{{ '%02d'|format(p.season) }}E{{ '%02d'|format(p.episode or 0) }}{% endif %}{% endmacro %}
+{% macro bar(p) %}{% set pct = 100 if p.completed else ((p.percent or 0)|round|int) %}<span class="hi-bar{{ ' done' if p.completed }}"><i style="width:{{ pct }}%"></i></span>{% endmacro %}
+
+<div class="hi-head">
+  <h1>Your History</h1>
+  <form method="get" class="hi-search" role="search">
+    {% for k in ('type', 'when', 'status', 'device', 'conv') %}{% set v = {'type': type, 'when': when, 'status': status, 'device': device, 'conv': conv}[k] %}{% if v and v != 'all' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+    {% if not grouped %}<input type="hidden" name="group" value="0">{% endif %}
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <input type="search" name="q" value="{{ q }}" placeholder="Search your history" enterkeyhint="search" aria-label="Search your history">
+  </form>
+  <details class="hi-filter">
+    <summary class="ra-filter-btn{{ ' on' if active }}" aria-label="Filters"><svg viewBox="0 0 24 24"><path d="M3 5h18l-7 8.5V19l-4 2v-7.5z"/></svg>{% if active %}<i class="hi-fcount">{{ active|length }}</i>{% endif %}</summary>
+    <form method="get" class="hi-sheet card">
+      {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+      <div class="hi-sheet-head"><b>Filters</b>{% if active %}<a class="small" href="?{{ 'q=' ~ q|urlencode if q }}">Clear all</a>{% endif %}</div>
+      <fieldset><legend>Type</legend><div class="hi-opts">
+        {% for k, v in types.items() %}<label class="hi-opt"><input type="radio" name="type" value="{{ k }}" {{ 'checked' if type == k }}><span>{{ v[0] }}</span></label>{% endfor %}</div></fieldset>
+      <fieldset><legend>When</legend><div class="hi-opts">
+        {% for k, v in whens.items() %}<label class="hi-opt"><input type="radio" name="when" value="{{ k }}" {{ 'checked' if when == k }}><span>{{ v }}</span></label>{% endfor %}</div></fieldset>
+      <fieldset><legend>Watched</legend><div class="hi-opts">
+        {% for k, v in statuses.items() %}<label class="hi-opt"><input type="radio" name="status" value="{{ k }}" {{ 'checked' if status == k }}><span>{{ v }}</span></label>{% endfor %}</div></fieldset>
+      {% if devices|length > 1 %}
+      <fieldset><legend>App</legend>
+        <select name="device" class="hi-select"><option value="">Any app</option>{% for d in devices %}<option value="{{ d }}" {{ 'selected' if device == d }}>{{ d }}</option>{% endfor %}</select></fieldset>
+      {% endif %}
+      <label class="hi-switch"><input type="checkbox" name="conv" value="1" {{ 'checked' if conv == '1' }}><span></span>Only plays that had to be converted</label>
+      <label class="hi-switch"><input type="hidden" name="group" value="0"><input type="checkbox" name="group" value="1" {{ 'checked' if grouped }}><span></span>Group back-to-back episodes</label>
+      <button class="btn primary hi-apply">Show results</button>
+    </form>
+  </details>
 </div>
-{% if pages > 1 %}
-<div class="pager">
-  {% if page > 1 %}<a class="btn sm" href="?q={{ q|urlencode }}&page={{ page - 1 }}">← Newer</a>{% else %}<span></span>{% endif %}
-  <span class="muted small">{{ page }} / {{ pages }}</span>
-  {% if page < pages %}<a class="btn sm" href="?q={{ q|urlencode }}&page={{ page + 1 }}">Older →</a>{% else %}<span></span>{% endif %}
+
+{% if active or q %}
+<div class="hi-active">
+  {% if q %}<a class="hi-chip" href="{{ link(q='', page=None) }}">“{{ q }}” <span aria-hidden="true">✕</span></a>{% endif %}
+  {% for k, label in active %}<a class="hi-chip" href="{{ link(**{k: ''}) }}">{{ label }} <span aria-hidden="true">✕</span></a>{% endfor %}
 </div>
 {% endif %}
-{% else %}<div class="card empty">{{ 'No matches.' if q else 'Nothing watched yet.' }}</div>{% endif %}
+
+<div class="hi-stats">
+  <div><b>{{ total }}</b><span>play{{ 's' if total != 1 }}</span></div>
+  <div><b>{{ secs|duration }}</b><span>watched</span></div>
+  <div><b>{{ done }}</b><span>finished</span></div>
+</div>
+
+{% for day in days %}
+<section class="hi-day">
+  <h2><span>{{ day.label }}</span><small>{{ day.plays }} play{{ 's' if day.plays != 1 }} · {{ day.secs|duration }}</small></h2>
+  <div class="hi-list">
+  {% for e in day.entries %}
+    {% set p = e.play %}
+    {% if e.kind == 'binge' %}
+    <details class="hi-card hi-binge k-tv">
+      <summary>
+        {{ thumb(p, 'tv') }}
+        <span class="hi-body">
+          <span class="hi-title">{{ p.series_name }}</span>
+          <span class="hi-sub"><b class="hi-count">{{ e.plays|length }} episodes</b>{% if e.first and e.last %} · {{ ep(e.first) }} – {{ ep(e.last) }}{% endif %}</span>
+          <span class="hi-meta">{{ e.plays[-1].started_at|local('%-I:%M %p') }} – {{ p.stopped_at|local('%-I:%M %p') }} · {{ e.secs|duration }}</span>
+        </span>
+        <span class="hi-more" aria-hidden="true">▾</span>
+      </summary>
+      <div class="hi-eps">
+        {% for x in e.plays|reverse %}
+        <a class="hi-ep" href="{{ '/me/library/' ~ x.server_id ~ '/' ~ x.item_id if x.item_id else '#' }}">
+          <span class="hi-ep-code">{{ ep(x) or '—' }}</span><span class="hi-ep-name">{{ x.title }}</span>
+          <span class="hi-ep-time">{{ x.started_at|local('%-I:%M %p') }}</span>{{ bar(x) }}</a>
+        {% endfor %}
+      </div>
+    </details>
+    {% else %}
+    <{{ 'a' if p.item_id else 'div' }} class="hi-card k-{{ e.kind }}"{% if p.item_id %} href="/me/library/{{ p.server_id }}/{{ p.item_id }}"{% endif %}>
+      {{ thumb(p, e.kind) }}
+      <span class="hi-body">
+        <span class="hi-title">{{ p.series_name if p.item_type == 'Episode' and p.series_name else p.title }}</span>
+        <span class="hi-sub">{% if p.item_type == 'Episode' %}{{ ep(p) }}{{ ' · ' if p.season is not none }}{{ p.title }}{% else %}{{ p.year or ('Movie' if e.kind == 'movie' else '') }}{% endif %}</span>
+        <span class="hi-meta">{{ p.started_at|local('%-I:%M %p') }} · {{ p.watched_seconds|duration }}{% if p.client %} · {{ p.client }}{% endif %}</span>
+        {% if p.play_method == 'Transcode' %}{% set why = explain(p.transcode_reasons) %}
+        <span class="ai-why">⚠ Converted{% if why %} — {{ why[0].text }}{% if why[0].tip %} <em>{{ why[0].tip }}</em>{% endif %}{% endif %}</span>{% endif %}
+        {{ bar(p) }}
+      </span>
+      <span class="hi-state">{% if p.completed %}<span class="badge b-ok">✓ Finished</span>{% elif p.percent is not none %}<span class="badge">{{ p.percent|round|int }}%</span>{% endif %}</span>
+    </{{ 'a' if p.item_id else 'div' }}>
+    {% endif %}
+  {% endfor %}
+  </div>
+</section>
+{% else %}
+<div class="card empty"><div class="empty-icon">🎞️</div>{{ 'Nothing matches these filters.' if (q or active) else 'Nothing watched yet.' }}</div>
+{% endfor %}
+
+{% if pages > 1 %}
+<div class="pager">
+  {% if page > 1 %}<a class="btn sm" href="{{ link(page=page - 1) }}">← Newer</a>{% else %}<span></span>{% endif %}
+  <span class="muted small">Page {{ page }} of {{ pages }}</span>
+  {% if page < pages %}<a class="btn sm" href="{{ link(page=page + 1) }}">Older →</a>{% else %}<span></span>{% endif %}
+</div>
+{% endif %}
 {% endblock %}

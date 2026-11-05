@@ -20,7 +20,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import __version__, calendar_view, explain, importer, library, notify, quality, seerr_portal, webpush, stats, storage, tracker, webhooks
@@ -1190,20 +1190,90 @@ async def partial_me(request: Request, user: User = Depends(current_user)):
 
 
 @app.get("/me/history", response_class=HTMLResponse)
-async def page_my_history(request: Request, page: int = 1, q: str | None = None, user: User = Depends(current_user)):
+async def page_my_history(request: Request, page: int = 1, q: str | None = None, type: str = "all", when: str = "all",
+                          status: str = "all", device: str = "", conv: str = "", group: str = "1",
+                          user: User = Depends(current_user)):
     if not user.is_viewer:
         return RedirectResponse("/history", status_code=303)
-    per = 30
-    page = max(1, page)
+    per = 40
+    page = max(1, min(page, 500))
+    q = (q or "").strip()[:100]
+    type = type if type in HIST_TYPES else "all"
+    when = when if when in HIST_WHEN else "all"
+    status = status if status in HIST_STATUS else "all"
+    grouped = group != "0"
     with SessionLocal() as db:
+        devices = sorted({c for c in db.scalars(select(Play.client).where(_mine(user)).distinct()) if c})
+        device = device if device in devices else ""
         stmt = select(Play).where(_mine(user))
         if q:
             like = f"%{q}%"
             stmt = stmt.where(or_(Play.title.ilike(like), Play.series_name.ilike(like)))
-        total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+        if type != "all":
+            stmt = stmt.where(Play.item_type == HIST_TYPES[type][1])
+        if when != "all":
+            stmt = stmt.where(Play.started_at >= utcnow() - timedelta(days=int(when)))
+        if status == "finished":
+            stmt = stmt.where(Play.completed.is_(True))
+        elif status == "partial":
+            stmt = stmt.where(Play.completed.is_(False))
+        if device:
+            stmt = stmt.where(Play.client == device)
+        if conv == "1":
+            stmt = stmt.where(Play.play_method == "Transcode")
+        sub = stmt.subquery()
+        total, secs, done = db.execute(select(func.count(), func.coalesce(func.sum(sub.c.watched_seconds), 0),
+                                              func.coalesce(func.sum(case((sub.c.completed.is_(True), 1), else_=0)), 0))).one()
         rows = list(db.scalars(stmt.order_by(Play.started_at.desc()).offset((page - 1) * per).limit(per)))
-    return render(request, "me_history.html", user, rows=rows, total=total, page=page,
-                  pages=max(1, math.ceil(total / per)), q=q or "")
+    days = _history_days(rows, grouped)
+    params = {"q": q, "type": type, "when": when, "status": status, "device": device, "conv": conv, "group": "1" if grouped else "0"}
+    active = [(k, v) for k, v in (("type", HIST_TYPES[type][0] if type != "all" else None),
+                                  ("when", HIST_WHEN[when] if when != "all" else None),
+                                  ("status", HIST_STATUS[status] if status != "all" else None),
+                                  ("device", device or None), ("conv", "Converted only" if conv == "1" else None)) if v]
+    def link(**kw):
+        return "?" + urlencode({k: v for k, v in {**params, **kw}.items() if v not in ("", None)})
+    return render(request, "me_history.html", user, days=days, total=total, secs=secs, done=done, page=page,
+                  pages=max(1, math.ceil(total / per)), q=q, type=type, when=when, status=status, device=device, conv=conv,
+                  grouped=grouped, devices=devices, active=active, link=link, types=HIST_TYPES, whens=HIST_WHEN,
+                  statuses=HIST_STATUS)
+
+
+HIST_TYPES = {"all": ("All", None), "tv": ("Shows", "Episode"), "movie": ("Movies", "Movie"), "music": ("Music", "Audio")}
+HIST_WHEN = {"all": "All time", "7": "Last 7 days", "30": "Last 30 days", "90": "Last 3 months", "365": "Last year"}
+HIST_STATUS = {"all": "Any", "finished": "Finished", "partial": "Not finished"}
+
+
+def _history_days(rows: list[Play], grouped: bool) -> list[dict]:
+    """Plays split by local day; back-to-back episodes of one show become a single "binge" entry."""
+    today = datetime.now(TZ).date()
+    out: list[dict] = []
+    for p in rows:
+        d = p.started_at.replace(tzinfo=timezone.utc).astimezone(TZ).date()
+        if not out or out[-1]["date"] != d:
+            gap = (today - d).days
+            label = "Today" if gap == 0 else "Yesterday" if gap == 1 else (f"{d:%A}" if gap < 7 else f"{d:%A, %B} {d.day}" + (f", {d.year}" if d.year != today.year else ""))
+            out.append({"date": d, "label": label, "entries": [], "secs": 0.0, "plays": 0})
+        day = out[-1]
+        day["secs"] += p.watched_seconds or 0
+        day["plays"] += 1
+        last = day["entries"][-1] if day["entries"] else None
+        if (grouped and p.item_type == "Episode" and p.series_name and last
+                and last["kind"] in ("tv", "binge") and last["series"] == p.series_name):
+            if last["kind"] == "tv":
+                last.update(kind="binge", plays=[last["play"]])
+            last["plays"].append(p)
+            last["secs"] += p.watched_seconds or 0
+            continue
+        kind = "tv" if p.item_type == "Episode" else ("music" if p.item_type == "Audio" else "movie")
+        day["entries"].append({"kind": kind, "play": p, "series": p.series_name, "secs": p.watched_seconds or 0})
+    for day in out:
+        for e in day["entries"]:
+            if e["kind"] == "binge":
+                eps = [x for x in e["plays"] if x.season is not None]
+                e["first"], e["last"] = (eps[-1], eps[0]) if eps else (None, None)   # rows are newest first
+                e["play"] = e["plays"][0]
+    return out
 
 
 @app.get("/me/upcoming", response_class=HTMLResponse)
