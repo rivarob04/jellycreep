@@ -294,6 +294,8 @@ class SeerrClient(Upstream):
                 req["_year"] = (d.get("releaseDate") or d.get("firstAirDate") or "")[:4]
                 if d.get("posterPath"):
                     req["_poster"] = f"https://image.tmdb.org/t/p/w185{d['posterPath']}"
+                if d.get("backdropPath"):
+                    req["_backdrop"] = f"https://image.tmdb.org/t/p/w780{d['backdropPath']}"
             except UpstreamError:
                 pass
 

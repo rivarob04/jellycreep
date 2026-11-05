@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_svc.html" import svc_logo %}
 {% block title %}Media{% endblock %}
 
 {% macro level(p) -%}{{ 'bad' if p >= 95 else ('warn' if p >= 85 else 'ok') }}{%- endmacro %}
@@ -76,7 +77,7 @@
 {% for s in servers %}
 <div class="card mb">
   <div class="spread mb">
-    <h2 style="margin:0">{{ s.svc.name }}</h2>
+    <h2 style="margin:0" class="row">{{ svc_logo(s.svc) }}{{ s.svc.name }}</h2>
     <span class="muted small">{% if s.info %}v{{ s.info.Version }}{% endif %}</span>
   </div>
   {% if s.error %}<div class="notice bad">{{ s.error }}</div>{% endif %}

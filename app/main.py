@@ -299,6 +299,23 @@ def _hours(secs: float) -> str:
     return f"{h:.0f}h" if abs(h - round(h)) < 0.05 else f"{h:.1f}h"
 
 
+_ICON_DIR = Path(__file__).parent / "static" / "icons"
+_ICONS = {f.stem.lower(): f.name for f in _ICON_DIR.glob("*") if f.suffix in (".svg", ".png", ".webp")} if _ICON_DIR.is_dir() else {}
+_ICON_ALIASES = {"jellyseerr": "seerr", "qbit": "qbittorrent", "sab": "sabnzbd"}
+
+
+def _svc_icon(kind: str | None, name: str | None = None) -> str | None:
+    """Logo for a service: by its kind first, then by any word in its name (so 'My Lidarr' finds lidarr.svg)."""
+    tries = [_ICON_ALIASES.get(kind or "", kind or "")]
+    tries += [w for w in re.split(r"[^a-z0-9]+", (name or "").lower()) if w]
+    for t in tries:
+        t = _ICON_ALIASES.get(t, t)
+        if t in _ICONS:
+            return f"/static/icons/{_ICONS[t]}?v={__version__}"
+    return None
+
+
+templates.env.globals.update(svc_icon=_svc_icon)
 templates.env.globals.update(day_label=_day_label, ep_pretty=_ep_pretty, nice_ticks=_nice_ticks, hour12=_hour12, axis_hours=_hours)
 
 

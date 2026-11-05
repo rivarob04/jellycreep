@@ -1790,3 +1790,27 @@ a.hi-card:hover { background: #151a24; border-color: rgba(255,255,255,.25); }
 .us-share i { display: block; height: 100%; background: linear-gradient(90deg, #f0a33a, #e5534b); }
 .us-ip { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: rgba(255,255,255,.65); }
 .us-ip .mono { font-size: 11.5px; }
+
+/* v0.18.44 — real service logos */
+.svc-logo.has-img { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); padding: 3px; box-sizing: border-box; }
+.svc-logo.has-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.svc-logo { width: 32px; height: 32px; border-radius: 9px; flex: none; }
+.svc-logo.sm { width: 22px; height: 22px; border-radius: 6px; font-size: 11px; padding: 2px; }
+
+/* v0.18.44 — Automation items in the Recently Added style */
+.ux-list { display: flex; flex-direction: column; gap: 9px; }
+.ux-row { position: relative; display: flex; gap: 12px; align-items: stretch; padding: 6px 12px 8px 6px; border-radius: 14px; overflow: hidden; isolation: isolate;
+  background: #151a24; border: 1px solid rgba(255,255,255,.08); color: #fff; }
+.ux-row::before { content: ""; position: absolute; inset: 0; z-index: -2; background: var(--bd, none) center/cover no-repeat;
+  filter: blur(18px) saturate(1.3); transform: scale(1.25); opacity: .7; }
+.ux-row::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(10,12,18,.6), rgba(10,12,18,.42) 60%, rgba(10,12,18,.3)); }
+.ux-row .thumb { width: 64px; height: auto; min-height: 96px; align-self: stretch; border-radius: 9px; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+.ux-row .mr-body { padding: 4px 0; display: flex; flex-direction: column; gap: 3px; justify-content: center; }
+.ux-row .mr-body strong { font-size: 15.5px; }
+.ux-row .meta { color: rgba(255,255,255,.75); }
+.ux-row .bar { margin-top: 4px; }
+.ux-row .row-link { color: #fff; }
+.ux-dl { align-items: center; padding: 10px 12px; background: linear-gradient(135deg, rgba(31,41,55,.9), rgba(17,24,39,.9)); }
+.ux-dl::before, .ux-dl::after { display: none; }
+.ux-dl-ico .svc-logo { width: 40px; height: 40px; border-radius: 11px; }
+@media (min-width: 1000px) { .ux-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 12px; } }

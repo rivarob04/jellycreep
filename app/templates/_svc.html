@@ -1,0 +1,2 @@
+{# a service's logo, or its first letter when there's no logo for it #}
+{% macro svc_logo(svc, size='') %}{% set ic = svc_icon(svc.kind, svc.name) %}<span class="svc-logo k-svc-{{ svc.kind }}{{ ' has-img' if ic }}{{ ' ' ~ size if size }}">{% if ic %}<img src="{{ ic }}" alt="" loading="lazy">{% else %}{{ svc.kind_label[:1] }}{% endif %}</span>{% endmacro %}
