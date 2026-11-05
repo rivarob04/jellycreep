@@ -433,16 +433,55 @@ def history_query(user_name: str | None, item_type: str | None, q: str | None, m
 
 @app.get("/history", response_class=HTMLResponse)
 async def page_history(request: Request, user_name: str | None = None, type: str | None = None, q: str | None = None,
-                       method: str | None = None, page: int = 1, user: User = Depends(staff_user)):
+                       method: str | None = None, when: str = "all", status: str = "all", device: str = "",
+                       group: str = "1", page: int = 1, user: User = Depends(staff_user)):
     per = 50
-    page = max(1, page)
+    page = max(1, min(page, 1000))
+    q = (q or "").strip()[:100]
+    legacy = {"Movie": "movie", "Episode": "tv", "Audio": "music"}
+    type = legacy.get(type or "", type or "all")
+    type = type if type in HIST_TYPES else "all"
+    method = method if method in HIST_METHODS else ""
+    when = when if when in HIST_WHEN else "all"
+    status = status if status in HIST_STATUS else "all"
+    grouped = group != "0"
     with SessionLocal() as db:
-        stmt = history_query(user_name, type, q, method)
-        total = db.scalar(select(func.count()).select_from(stmt.subquery()))
-        rows = list(db.scalars(stmt.order_by(Play.started_at.desc()).offset((page - 1) * per).limit(per)))
         users = [u for (u,) in db.execute(select(Play.user_name).distinct().order_by(Play.user_name))]
-    return render(request, "history.html", user, rows=rows, total=total, page=page, pages=max(1, math.ceil(total / per)),
-                  users=users, f={"user_name": user_name or "", "type": type or "", "q": q or "", "method": method or ""})
+        devices = sorted({c for c in db.scalars(select(Play.client).distinct()) if c})
+        user_name = user_name if user_name in users else ""
+        device = device if device in devices else ""
+        stmt = history_query(user_name or None, HIST_TYPES[type][1], q or None, method or None)
+        if when != "all":
+            stmt = stmt.where(Play.started_at >= utcnow() - timedelta(days=int(when)))
+        if status == "finished":
+            stmt = stmt.where(Play.completed.is_(True))
+        elif status == "partial":
+            stmt = stmt.where(Play.completed.is_(False))
+        if device:
+            stmt = stmt.where(Play.client == device)
+        sub = stmt.subquery()
+        total, secs, done, people = db.execute(select(
+            func.count(), func.coalesce(func.sum(sub.c.watched_seconds), 0),
+            func.coalesce(func.sum(case((sub.c.completed.is_(True), 1), else_=0)), 0),
+            func.count(func.distinct(sub.c.user_name)))).one()
+        rows = list(db.scalars(stmt.order_by(Play.started_at.desc()).offset((page - 1) * per).limit(per)))
+    days = _history_days(rows, grouped)
+    params = {"q": q, "user_name": user_name, "type": type, "method": method, "when": when, "status": status,
+              "device": device, "group": "1" if grouped else "0"}
+    active = [(k, v) for k, v in (("user_name", user_name or None), ("type", HIST_TYPES[type][0] if type != "all" else None),
+                                  ("method", HIST_METHODS.get(method) if method else None),
+                                  ("when", HIST_WHEN[when] if when != "all" else None),
+                                  ("status", HIST_STATUS[status] if status != "all" else None), ("device", device or None)) if v]
+
+    def link(**kw):
+        return "?" + urlencode({k: v for k, v in {**params, **kw}.items() if v not in ("", None, "all")})
+    return render(request, "history.html", user, days=days, total=total, secs=secs, done=done, people=people, page=page,
+                  pages=max(1, math.ceil(total / per)), q=q, user_name=user_name, type=type, method=method, when=when,
+                  status=status, device=device, grouped=grouped, users=users, devices=devices, active=active, link=link,
+                  types=HIST_TYPES, whens=HIST_WHEN, statuses=HIST_STATUS, methods=HIST_METHODS)
+
+
+HIST_METHODS = {"DirectPlay": "Direct play", "DirectStream": "Direct stream", "Transcode": "Transcode"}
 
 
 @app.get("/users", response_class=HTMLResponse)
@@ -1259,14 +1298,15 @@ def _history_days(rows: list[Play], grouped: bool) -> list[dict]:
         day["plays"] += 1
         last = day["entries"][-1] if day["entries"] else None
         if (grouped and p.item_type == "Episode" and p.series_name and last
-                and last["kind"] in ("tv", "binge") and last["series"] == p.series_name):
+                and last["kind"] in ("tv", "binge") and last["series"] == p.series_name and last["who"] == p.user_name):
             if last["kind"] == "tv":
                 last.update(kind="binge", plays=[last["play"]])
             last["plays"].append(p)
             last["secs"] += p.watched_seconds or 0
             continue
         kind = "tv" if p.item_type == "Episode" else ("music" if p.item_type == "Audio" else "movie")
-        day["entries"].append({"kind": kind, "play": p, "series": p.series_name, "secs": p.watched_seconds or 0})
+        day["entries"].append({"kind": kind, "play": p, "series": p.series_name, "secs": p.watched_seconds or 0,
+                               "who": p.user_name})
     for day in out:
         for e in day["entries"]:
             if e["kind"] == "binge":

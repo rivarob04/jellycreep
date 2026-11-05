@@ -1572,3 +1572,12 @@ a.hi-card:hover { text-decoration: none; color: var(--text); background: rgba(31
   .hi-poster { width: 56px; }
 }
 .hi-opt, .hi-switch { position: relative; } .hi-opt input, .hi-switch input[type=checkbox] { left: 0; top: 0; width: 1px; height: 1px; }
+
+/* v0.18.36 — admin History, same look as the Jellyfin users' one */
+.hi-stats.four { grid-template-columns: repeat(2, 1fr); }
+@media (min-width: 760px) { .hi-stats.four { grid-template-columns: repeat(4, minmax(0, 180px)); } }
+.hi-who { display: inline-flex; align-items: center; gap: 5px; font-weight: 650; color: #fff; }
+.hi-who .avatar.xs { width: 18px; height: 18px; font-size: 10px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+.hi-state { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.hi-ep-time .badge { font-size: 10px; padding: 0 6px; margin-left: 4px; }
+.hi-meta .mono { font-size: 11px; }
