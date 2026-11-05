@@ -1966,3 +1966,22 @@ a.mcal-item:hover { background: rgba(255,255,255,.13); transform: translateX(1px
   .title-hero { padding: 120px 32px 28px; }
   .title-hero .th-info h1 { font-size: 40px; letter-spacing: -.02em; line-height: 1.05; }
 }
+
+/* v0.18.53 — Discover title pages on desktop, same layout as the library pages */
+@media (min-width: 1000px) {
+  .ti-detail .ld-side .release-card { padding: 14px 16px; }
+  .ti-detail .ld-side .req-card h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .ti-detail .ld-side .req-buttons { flex-direction: column; }
+  .ti-detail .ld-side .req-buttons .btn, .ti-detail .ld-side .req-buttons form { width: 100%; }
+  .ti-detail .lib-tagline { font-style: italic; }
+  .ti-actions .lib-links-top { margin-left: 0; }
+  .ti-actions .watch-bar + .lib-links-top { margin-left: auto; }
+}
+/* phones: keep Request near the top (before the cast) */
+@media (max-width: 999px) {
+  .ti-detail { display: flex; flex-direction: column; }
+  .ti-detail .ld-main { display: contents; }
+  .ti-detail .ti-summary { order: 1; }
+  .ti-detail .ld-side { order: 2; }
+  .ti-detail .ld-main > :not(.ti-summary) { order: 3; }
+}

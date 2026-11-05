@@ -27,11 +27,25 @@
   </div>
 </section>
 
+<div class="lib-actions ti-actions">
 {% if watch %}
 {{ watch_bar(watch, lib, sid, here, csrf) }}
-<p class="small watch-more"><a href="{{ watch.page }}">{{ 'Seasons, episodes & details' if t.type == 'tv' else 'Details & your history' }} →</a></p>
 {% endif %}
+<div class="lib-links lib-links-top mb">
+  {% if t.trailer %}<a class="btn sm" href="{{ t.trailer }}" target="_blank" rel="noopener">▶ Watch trailer</a>{% endif %}
+  {% if watch %}<a class="btn sm" href="{{ watch.page }}">{{ 'Seasons & episodes' if t.type == 'tv' else 'Details & your history' }} →</a>{% endif %}
+</div>
+</div>
 
+<div class="lib-detail ti-detail">
+<div class="ld-main">
+{% if t.tagline or t.overview %}<div class="card mb lib-summary ti-summary">
+  {% if t.tagline %}<h2 class="lib-tagline">“{{ t.tagline }}”</h2>{% endif %}
+  {% if t.overview %}<p class="lib-overview">{{ t.overview }}</p>{% endif %}
+</div>{% endif %}
+{{ seerr_cast(t.cast) }}
+</div>
+<div class="ld-side">
 {% if t.release and (t.release.rows or t.release.status) %}
 <div class="card mb up-when release-card">
   {% for r in t.release.rows %}
@@ -41,10 +55,6 @@
   {% if t.release.status %}<div class="spread"><span class="muted">Status</span><b>{{ t.release.status }}</b></div>{% endif %}
 </div>
 {% endif %}
-{% if t.tagline %}<p class="tagline">“{{ t.tagline }}”</p>{% endif %}
-{% if t.overview %}<p class="overview">{{ t.overview }}</p>{% endif %}
-{% if t.trailer %}<p><a class="btn sm" href="{{ t.trailer }}" target="_blank" rel="noopener">▶ Watch trailer</a></p>{% endif %}
-
 <div class="card mb req-card">
   <h2>Request</h2>
   {{ not_linked(seerr) }}
@@ -92,6 +102,7 @@
   {% endif %}
 </div>
 
+
 {% if t.requests or t.hidden_requests %}
 <div class="card mb">
   <h2>Who Requested It</h2>
@@ -100,7 +111,9 @@
 </div>
 {% endif %}
 
-{{ seerr_cast(t.cast) }}
+</div>
+</div>
+
 
 {% if similar %}
 <div class="spread section-title"><h2 style="margin:0">More Like This</h2></div>
