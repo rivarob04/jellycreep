@@ -139,7 +139,7 @@ def user_profile(db, name: str, tz) -> dict | None:
         if bcount >= 2:
             best_binge = {"day": bday, "series": bseries, "count": bcount}
     shows, movies, devices = Counter(), Counter(), {}
-    show_secs, show_poster, movie_poster = defaultdict(float), {}, {}
+    show_secs, show_poster, movie_poster, movie_secs = defaultdict(float), {}, {}, defaultdict(float)
     for p in plays:
         if p.item_type == "Episode" and p.series_name:
             shows[p.series_name] += 1
@@ -148,6 +148,7 @@ def user_profile(db, name: str, tz) -> dict | None:
         elif p.item_type == "Movie":
             key = f"{p.title} ({p.year})" if p.year else p.title
             movies[key] += 1
+            movie_secs[key] += p.watched_seconds or 0
             movie_poster[key] = (p.server_id, p.poster_id)
         dk = (p.client or "?", p.device or "?")
         d = devices.setdefault(dk, {"client": dk[0], "device": dk[1], "plays": 0, "last": p.stopped_at, "ip": p.ip})
@@ -170,7 +171,7 @@ def user_profile(db, name: str, tz) -> dict | None:
         "active_days": len(days), "streak_current": current, "streak_longest": longest if days else 0,
         "binge": best_binge, "completed": sum(1 for p in plays if p.completed),
         "top_shows": [{"title": t, "plays": n, "seconds": int(show_secs[t]), "poster": show_poster[t]} for t, n in shows.most_common(8)],
-        "top_movies": [{"title": t, "plays": n, "poster": movie_poster[t]} for t, n in movies.most_common(8)],
+        "top_movies": [{"title": t, "plays": n, "seconds": int(movie_secs[t]), "poster": movie_poster[t]} for t, n in movies.most_common(8)],
         "devices": sorted(devices.values(), key=lambda d: d["last"], reverse=True),
         "last30": last30, "heat": grid, "heat_peak": max(max(r) for r in grid),
         "methods": [{"label": k, "plays": v, "seconds": 0} for k, v in methods.most_common()],

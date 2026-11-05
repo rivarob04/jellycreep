@@ -1629,3 +1629,9 @@ a.uc-card:active { transform: scale(.99); }
 .uc-icon svg { width: 20px; height: 20px; fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; display: block; }
 @media (min-width: 760px) { .uc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; } }
 @media (min-width: 1000px) { .uc-poster { width: 76px; min-height: 114px; } .uc-title { font-size: 17px; } }
+
+/* v0.18.39 — user page: favourites and recent plays as Recently Added–style cards */
+.uc-rank { position: absolute; left: 4px; top: 4px; z-index: 1; font-style: normal; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
+  display: grid; place-items: center; font-size: 11px; font-weight: 800; color: #fff; background: rgba(10,12,18,.8); border: 1px solid rgba(255,255,255,.25); }
+.dev-row { color: var(--text); padding: 6px 4px; border-radius: 8px; }
+.dev-row:hover { background: rgba(255,255,255,.05); text-decoration: none; color: var(--text); }

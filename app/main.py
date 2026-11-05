@@ -990,8 +990,10 @@ async def do_add(sid: int, request: Request, user: User = Depends(admin_user)):
 # --- user pages -------------------------------------------------------------------------
 @app.get("/users/{name}", response_class=HTMLResponse)
 async def page_user(name: str, request: Request, user: User = Depends(staff_user)):
-    with SessionLocal() as db:
-        prof = stats.user_profile(db, name, TZ)
+    def build():
+        with SessionLocal() as db:
+            return stats.user_profile(db, name, TZ)
+    prof = await ttl_cached(("uprof", name), 60, lambda: asyncio.to_thread(build), stale=900)
     if not prof:
         raise HTTPException(404, "No plays recorded for that user")
     return render(request, "user.html", user, u=prof)
@@ -1691,9 +1693,13 @@ def _item_history(d: dict, user: User, limit: int = 60) -> list[Play]:
 async def _watch_ctx(client, svc: Service, uid: str, user: User, d: dict) -> dict | None:
     """'Watch on Jellyfin' link (title page in Jellyfin web) and the person's Jellyfin apps it can start on."""
     resume_ok = user.is_viewer           # staff browse as the admin account, whose resume points aren't theirs
+    only = user.jf_id if user.is_viewer else None
     target, jf_sid, devs = await asyncio.gather(
-        library.play_target(client, uid, d, resume_ok=resume_ok), library.server_id(client, svc.id),
-        library.devices(client, uid, only_user=user.jf_id if user.is_viewer else None) if (user.is_viewer or user.is_admin) else asyncio.sleep(0, []))
+        ttl_cached(("ptarget", svc.id, uid, d.get("id"), resume_ok), 20,
+                   lambda: library.play_target(client, uid, d, resume_ok=resume_ok), stale=900),
+        library.server_id(client, svc.id),
+        ttl_cached(("devs", svc.id, uid, only), 10, lambda: library.devices(client, uid, only_user=only), stale=120)
+        if (user.is_viewer or user.is_admin) else asyncio.sleep(0, []))
     if not target:
         return None
     return {**target, "sid": svc.id, "devices": devs, "internal": not svc.public_url,
@@ -1708,7 +1714,10 @@ async def _item_page(request: Request, user: User, sid: int, item_id: str, tab: 
         raise HTTPException(404)
     client = await client_for(svc)
     uid, err = await safe(library.browse_as(client, svc.id, user))
-    d, err = (await safe(library.item(client, uid, item_id, show_paths=not user.is_viewer))) if uid else (None, err)
+    paths = not user.is_viewer
+    # details barely change, so show the last copy at once and refresh it in the background
+    d, err = (await safe(ttl_cached(("libitem", svc.id, uid, item_id, paths), 30,
+                                    lambda: library.item(client, uid, item_id, show_paths=paths), stale=1800))) if uid else (None, err)
     if err or not d or not d.get("id"):
         raise HTTPException(404, "That title isn't available, or your account can't access it.")
     tabs = [("details", "Details")]
@@ -1722,17 +1731,22 @@ async def _item_page(request: Request, user: User, sid: int, item_id: str, tab: 
     ctx: dict[str, Any] = {"d": d, "tab": tab, "tabs": tabs, "sid": svc.id, "lib": _lib_base(user),
                            "rows": [], "history": [], "parent": None, "watch": None,
                            "flash": request.session.pop("flash", None)}
-    if tab == "seasons":
-        ctx["rows"], ctx["err"] = await safe(library.seasons(client, uid, d["id"]))
-    elif tab == "episodes":
-        ctx["rows"], ctx["err"] = await safe(library.episodes(client, uid, d["series_id"], d["id"]))
-    elif tab == "history":
+    async def rows():
+        if tab == "seasons":
+            return await safe(ttl_cached(("libseasons", svc.id, uid, d["id"]), 30,
+                                         lambda: library.seasons(client, uid, d["id"]), stale=1800))
+        if tab == "episodes":
+            return await safe(ttl_cached(("libeps", svc.id, uid, d["id"]), 30,
+                                         lambda: library.episodes(client, uid, d["series_id"], d["id"]), stale=1800))
+        return [], None
+    if tab == "history":
         ctx["history"] = _item_history(d, user)
     if d["type"] == "Episode" and d.get("season_id"):
         ctx["parent"] = (d["season_id"], f"Season {d['season_index']}" if d.get("season_index") is not None else "Season")
     elif d["type"] == "Season" and d.get("series_id"):
         ctx["parent"] = (d["series_id"], d["title"] or "Series")
-    ctx["watch"] = await _watch_ctx(client, svc, uid, user, d)
+    (ctx["rows"], ctx["err"]), ctx["watch"] = await asyncio.gather(rows(), _watch_ctx(client, svc, uid, user, d))
+    ctx["rows"] = ctx["rows"] or []
     imgp = "/me/img" if user.is_viewer else "/img"
     if d.get("backdrop_id"):
         ctx["ambient"] = f"{imgp}/{svc.id}/{d['backdrop_id']}?t=Backdrop&h=720"

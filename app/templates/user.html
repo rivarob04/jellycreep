@@ -32,24 +32,38 @@
   <div class="legend"><span>{{ u.last30[0].day.strftime('%b %-d') }}</span><span style="margin-left:auto">Today</span></div>
 </div>
 
-<div class="grid g2 mb">
-  <div class="card"><h2>Favourite Shows</h2>
-    {% for s in u.top_shows %}
-    <div class="rank"><img class="mini-poster" loading="lazy" src="/img/{{ s.poster[0] }}/{{ s.poster[1] }}?h=100" alt="" onerror="this.style.visibility='hidden'"><span>{{ s.title }}</span><span class="muted small">{{ s.plays }} eps · {{ s.seconds|duration }}</span></div>
-    {% else %}<div class="muted small">No shows yet</div>{% endfor %}
-  </div>
-  <div class="card"><h2>Favourite Movies</h2>
-    {% for m in u.top_movies %}
-    <div class="rank"><img class="mini-poster" loading="lazy" src="/img/{{ m.poster[0] }}/{{ m.poster[1] }}?h=100" alt="" onerror="this.style.visibility='hidden'"><span>{{ m.title }}</span><span class="muted small">{{ m.plays }}×</span></div>
-    {% else %}<div class="muted small">No movies yet</div>{% endfor %}
-  </div>
+{% macro tv_icon() %}<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>{% endmacro %}
+{% macro film_icon() %}<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></svg>{% endmacro %}
+{% macro fav(x, kind, sub, rank) %}
+  {% set has = x.poster and x.poster[1] %}
+  <{{ 'a' if has else 'div' }} class="uc-card k-{{ kind }}"{% if has %} href="/library/{{ x.poster[0] }}/{{ x.poster[1] }}" style="--bd:url('/img/{{ x.poster[0] }}/{{ x.poster[1] }}?t=Backdrop&h=360')"{% endif %}>
+    <span class="uc-poster k-bg-{{ kind }}"><b>{{ x.title[:1] }}</b>{% if has %}<img loading="lazy" src="/img/{{ x.poster[0] }}/{{ x.poster[1] }}?h=300" alt="" onerror="this.remove()">{% endif %}<i class="uc-rank">{{ rank }}</i></span>
+    <span class="uc-body">
+      <span class="uc-title">{{ x.title }}</span>
+      <span class="uc-sub">{{ sub }}</span>
+      <span class="uc-when">{{ x.seconds|duration }} watched</span>
+    </span>
+    <span class="uc-icon" aria-hidden="true">{{ tv_icon() if kind == 'tv' else film_icon() }}</span>
+  </{{ 'a' if has else 'div' }}>
+{% endmacro %}
+
+<div class="spread section-title"><h2 style="margin:0">Favourite Shows</h2>{% if u.top_shows %}<span class="small muted">by episodes watched</span>{% endif %}</div>
+<div class="uc-list mb">
+  {% for s in u.top_shows %}{{ fav(s, 'tv', s.plays ~ (' episode' if s.plays == 1 else ' episodes'), loop.index) }}
+  {% else %}<div class="card muted small">No shows yet.</div>{% endfor %}
+</div>
+
+<div class="spread section-title"><h2 style="margin:0">Favourite Movies</h2></div>
+<div class="uc-list mb">
+  {% for m in u.top_movies %}{{ fav(m, 'movie', ('Watched ' ~ m.plays ~ ' time' ~ ('s' if m.plays != 1 else '')), loop.index) }}
+  {% else %}<div class="card muted small">No movies yet.</div>{% endfor %}
 </div>
 
 <div class="grid g2 mb">
   <div class="card"><h2>Devices</h2>
     <div class="list">
     {% for d in u.devices[:8] %}
-      <div class="spread"><span style="min-width:0;flex:1"><span class="ellip" style="display:block"><strong>{{ d.client }}</strong> · {{ d.device }}</span><span class="meta">{{ d.plays }} plays · last {{ d.last|ago }}{% if d.ip %} · {{ d.ip }}{% endif %}</span></span></div>
+      <a class="spread dev-row" href="/history?user_name={{ u.name|urlencode }}&device={{ d.client|urlencode }}"><span style="min-width:0;flex:1"><span class="ellip" style="display:block"><strong>{{ d.client }}</strong> · {{ d.device }}</span><span class="meta">{{ d.plays }} plays · last {{ d.last|ago }}{% if d.ip and user.is_admin %} · {{ d.ip }}{% endif %}</span></span><span class="rank-go">›</span></a>
     {% endfor %}
     </div>
   </div>
@@ -67,14 +81,20 @@
 </div>
 
 <div class="spread section-title"><h2 style="margin:0">Recent Plays</h2><a class="small" href="/history?user_name={{ u.name|urlencode }}">Full history →</a></div>
-<div class="card flush">
+<div class="uc-list mb">
   {% for p in u.recent %}
-  <div class="agenda-item k-{{ 'tv' if p.item_type == 'Episode' else 'movie' }}">
-    <span class="thumb k-bg-{{ 'tv' if p.item_type == 'Episode' else 'movie' }}">{% if p.poster_id %}<img loading="lazy" src="/img/{{ p.server_id }}/{{ p.poster_id }}?h=120" alt="" onerror="this.remove()">{% endif %}<b>{{ (p.series_name or p.title)[:1] }}</b></span>
-    <span class="ai-body"><span class="ai-title">{{ p.display_title }}</span>
-      <span class="ai-meta">{{ p.started_at|local('%b %-d, %-I:%M %p') }} · {{ p.watched_seconds|duration }} · {{ p.client or '?' }}</span></span>
-    <span class="ai-status">{% if p.completed %}<span class="badge b-ok">✓</span>{% elif p.percent is not none %}<span class="badge">{{ p.percent|round|int }}%</span>{% endif %}</span>
-  </div>
+  {% set kind = 'tv' if p.item_type == 'Episode' else ('music' if p.item_type == 'Audio' else 'movie') %}
+  <a class="uc-card k-{{ kind }}" href="/history/{{ p.id }}"{% if p.poster_id %} style="--bd:url('/img/{{ p.server_id }}/{{ p.poster_id }}?t=Backdrop&h=360')"{% endif %}>
+    <span class="uc-poster k-bg-{{ kind }}"><b>{{ (p.series_name or p.title)[:1] }}</b>{% if p.poster_id %}<img loading="lazy" src="/img/{{ p.server_id }}/{{ p.poster_id }}?h=300" alt="" onerror="this.remove()">{% endif %}</span>
+    <span class="uc-body">
+      <span class="uc-title">{{ p.series_name if p.item_type == 'Episode' and p.series_name else p.title }}</span>
+      {% if p.item_type == 'Episode' %}<span class="uc-sub">{{ p.title }}</span>{% if p.season is not none %}<span class="uc-sub">S{{ p.season }} • E{{ p.episode or '?' }}</span>{% endif %}
+      {% elif p.year %}<span class="uc-sub">{{ p.year }}</span>{% endif %}
+      <span class="uc-tags">{% if p.completed %}<span class="badge b-ok">✓ Finished</span>{% elif p.percent is not none %}<span class="badge">{{ p.percent|round|int }}%</span>{% endif %}{% if p.play_method == 'Transcode' %}<span class="badge b-warn">Transcode</span>{% endif %}</span>
+      <span class="uc-when">{{ p.started_at|local('%b %-d, %-I:%M %p') }} · {{ p.watched_seconds|duration }} · {{ p.client or '?' }}</span>
+    </span>
+    <span class="uc-icon" aria-hidden="true">{{ tv_icon() if kind == 'tv' else film_icon() }}</span>
+  </a>
   {% endfor %}
 </div>
 {% endblock %}
