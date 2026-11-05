@@ -31,6 +31,13 @@
     {% else %}<span class="badge">Not yet{{ ' — the show is' if jf and u.kind == 'tv' }}{{ ' in your library' if jf and u.kind == 'tv' }}</span>{% endif %}</div>
 </div>
 
+{% if jf or u.links %}
+<div class="lib-links lib-links-top mb">
+  {% if jf %}<a class="btn sm" href="{{ lib }}/{{ jf.sid }}/{{ jf.id }}">Open in library</a>{% endif %}
+  {% for name, url in u.links %}<a class="btn sm" href="{{ url }}" target="_blank" rel="noopener">{{ name }} ↗</a>{% endfor %}
+</div>
+{% endif %}
+
 {% if watch %}
   {% if u.kind == 'tv' and not on_jellyfin %}<p class="small muted" style="margin:0 0 8px">This episode isn't out yet. Catch up on the show meanwhile:</p>{% endif %}
   {{ watch_bar(watch, lib, watch.sid, request.url.path, csrf, show_user=not user.is_viewer) }}
@@ -58,8 +65,4 @@
 
 {% if d and d.cast %}{% set cast_sid = jf.sid %}{% include "_cast.html" %}{% endif %}
 
-<div class="lib-links mb">
-  {% if jf %}<a class="btn sm" href="{{ lib }}/{{ jf.sid }}/{{ jf.id }}">Open in library</a>{% endif %}
-  {% for name, url in u.links %}<a class="btn sm" href="{{ url }}" target="_blank" rel="noopener">{{ name }} ↗</a>{% endfor %}
-</div>
 {% endblock %}

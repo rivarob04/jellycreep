@@ -32,6 +32,10 @@
 {% if not watch.devices and (user.is_viewer or user.is_admin) %}<p class="hint" style="margin:-6px 0 12px">Have Jellyfin open on your TV or phone? It'll show up here under <b>Play on…</b> so you can start it in one tap.</p>{% endif %}
 {% endif %}
 
+{% if d.links %}
+<div class="lib-links lib-links-top mb">{% for name, url in d.links %}<a class="btn sm" href="{{ url }}" target="_blank" rel="noopener">{{ name }} ↗</a>{% endfor %}</div>
+{% endif %}
+
 <nav class="lib-tabs" aria-label="Sections">
   {% for k, label in tabs %}<a href="?tab={{ k }}" class="{{ 'on' if tab == k }}">{{ label }}</a>{% endfor %}
 </nav>
@@ -82,9 +86,7 @@
   </div>
   {% endfor %}
 
-  {% if d.links %}
-  <div class="lib-links mb">{% for name, url in d.links %}<a class="btn sm" href="{{ url }}" target="_blank" rel="noopener">{{ name }} ↗</a>{% endfor %}</div>
-  {% endif %}
+
 
 {% elif tab == 'seasons' %}
   {% if err %}<div class="notice bad small">{{ err }}</div>{% endif %}
