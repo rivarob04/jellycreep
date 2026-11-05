@@ -69,29 +69,31 @@
           <span class="hi-title">{{ p.series_name }}</span>
           <span class="hi-sub"><b class="hi-count">{{ e.plays|length }} episodes</b>{% if e.first and e.last %} · {{ ep(e.first) }} – {{ ep(e.last) }}{% endif %}</span>
           <span class="hi-meta">{{ who(p.user_name) }} · {{ e.plays[-1].started_at|local('%-I:%M %p') }} – {{ p.stopped_at|local('%-I:%M %p') }} · {{ e.secs|duration }}{% if p.client %} · {{ p.client }}{% endif %}</span>
+          {% if p.ip and user.is_admin %}{% set g = geo.get(p.ip) %}<span class="hi-meta hi-loc"><span class="mono">{{ p.ip }}</span>{% if g %} · {{ g.icon }} {{ g.label }}{% endif %}</span>{% endif %}
         </span>
         <span class="hi-more" aria-hidden="true">▾</span>
       </summary>
       <div class="hi-eps">
         {% for x in e.plays|reverse %}
-        <a class="hi-ep" href="{{ '/library/' ~ x.server_id ~ '/' ~ x.item_id if x.item_id else '#' }}">
+        <a class="hi-ep" href="/history/{{ x.id }}">
           <span class="hi-ep-code">{{ ep(x) or '—' }}</span><span class="hi-ep-name">{{ x.title }}</span>
           <span class="hi-ep-time">{{ x.started_at|local('%-I:%M %p') }} {{ method(x) }}</span>{{ bar(x) }}</a>
         {% endfor %}
       </div>
     </details>
     {% else %}
-    <{{ 'a' if p.item_id else 'div' }} class="hi-card k-{{ e.kind }}"{% if p.item_id %} href="/library/{{ p.server_id }}/{{ p.item_id }}"{% endif %}>
+    <a class="hi-card k-{{ e.kind }}" href="/history/{{ p.id }}">
       {{ thumb(p, e.kind) }}
       <span class="hi-body">
         <span class="hi-title">{{ p.series_name if p.item_type == 'Episode' and p.series_name else p.title }}</span>
         <span class="hi-sub">{% if p.item_type == 'Episode' %}{{ ep(p) }}{{ ' · ' if p.season is not none }}{{ p.title }}{% else %}{{ p.year or ('Movie' if e.kind == 'movie' else '') }}{% endif %}</span>
         <span class="hi-meta">{{ who(p.user_name) }} · {{ p.started_at|local('%-I:%M %p') }} · {{ p.watched_seconds|duration }}{% if p.paused_seconds and p.paused_seconds > 60 %} (paused {{ p.paused_seconds|duration }}){% endif %}</span>
-        <span class="hi-meta">{{ p.client or '?' }}{% if p.device %} · {{ p.device }}{% endif %}{% if p.ip and user.is_admin %} · <span class="mono">{{ p.ip }}</span>{% endif %}</span>
+        <span class="hi-meta">{{ p.client or '?' }}{% if p.device %} · {{ p.device }}{% endif %}</span>
+        {% if p.ip and user.is_admin %}{% set g = geo.get(p.ip) %}<span class="hi-meta hi-loc"><span class="mono">{{ p.ip }}</span>{% if g %} · {{ g.icon }} {{ g.label }}{% if g.isp %} · {{ g.isp }}{% endif %}{% endif %}</span>{% endif %}
         {{ bar(p) }}
       </span>
       <span class="hi-state">{{ method(p) }}{% if p.completed %}<span class="badge b-ok">✓</span>{% elif p.percent is not none %}<span class="badge">{{ p.percent|round|int }}%</span>{% endif %}</span>
-    </{{ 'a' if p.item_id else 'div' }}>
+    </a>
     {% endif %}
   {% endfor %}
   </div>

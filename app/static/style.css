@@ -1581,3 +1581,27 @@ a.hi-card:hover { text-decoration: none; color: var(--text); background: rgba(31
 .hi-state { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .hi-ep-time .badge { font-size: 10px; padding: 0 6px; margin-left: 4px; }
 .hi-meta .mono { font-size: 11px; }
+
+/* v0.18.37 — History: tap a play for its full details; IP + location on cards */
+.hi-loc { color: rgba(255,255,255,.7); }
+.hi-loc .mono { font-size: 11.5px; }
+.pl-hero .th-poster { aspect-ratio: 2/3; }
+.pl-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.pl-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 18px; }
+@media (min-width: 900px) { .pl-grid { grid-template-columns: repeat(3, 1fr); align-items: start; } }
+.pl-card h2 { margin: 0 0 10px; font-size: 16px; }
+.pl-dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; margin: 0; font-size: 14px; }
+.pl-dl dt { color: var(--muted); font-weight: 600; }
+.pl-dl dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.pl-prog { display: flex; flex-direction: column; gap: 4px; }
+.pl-prog .hi-bar { max-width: none; margin: 4px 0 0; }
+.pl-prog span:last-child { font-size: 12.5px; color: var(--muted); }
+.pl-why { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: rgba(224,164,58,.1); border: 1px solid rgba(224,164,58,.35); display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; }
+.pl-why-item { display: flex; flex-direction: column; gap: 2px; }
+.pl-why-item small { color: var(--muted); }
+.pl-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); color: var(--text); font-size: 13.5px; }
+.pl-row:last-child { border-bottom: 0; }
+.pl-row:hover { background: rgba(255,255,255,.04); text-decoration: none; color: var(--text); }
+@media (max-width: 600px) { .pl-row { grid-template-columns: 1fr auto; } .pl-row > span:nth-child(2) { grid-column: 1; grid-row: 2; font-size: 12px; } }
+.pl-nav { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+a.hist-row.tap { color: var(--text); } a.hist-row.tap:hover { background: rgba(255,255,255,.04); text-decoration: none; color: var(--text); }

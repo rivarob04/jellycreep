@@ -113,17 +113,17 @@
 {% elif tab == 'history' %}
   <div class="card flush">
     {% for p in history %}
-    <div class="hist-row">
+    <{{ 'div' if user.is_viewer else 'a' }} class="hist-row{{ ' tap' if not user.is_viewer }}"{% if not user.is_viewer %} href="/history/{{ p.id }}" title="See everything about this play"{% endif %}>
       <span class="hr-main">
         <b>{% if d.type in ('Series', 'Season') and p.season is not none %}S{{ p.season }} • E{{ p.episode or '?' }} · {% endif %}{{ p.title }}</b>
         <span class="small muted">{{ p.started_at|local('%a %b %-d, %Y · %-I:%M %p') }} · {{ p.watched_seconds|duration }}{% if p.client %} · {{ p.client }}{% endif %}</span>
       </span>
       <span class="hr-side">
         {% if user.is_viewer %}{% if p.completed %}<span class="badge b-ok">Finished</span>{% elif p.percent %}<span class="badge">{{ p.percent|round|int }}%</span>{% endif %}
-        {% else %}<a class="badge b-acc" href="/users/{{ p.user_name|urlencode }}">{{ p.user_name }}</a>{% endif %}
+        {% else %}<span class="badge b-acc">{{ p.user_name }}</span>{% endif %}
         {% if p.play_method %}<span class="badge {{ 'b-warn' if p.play_method == 'Transcode' else '' }}">{{ p.play_method }}</span>{% endif %}
       </span>
-    </div>
+    </{{ 'div' if user.is_viewer else 'a' }}>
     {% else %}
     <div class="empty"><div class="empty-icon">🕒</div>{{ 'You haven\'t watched this yet.' if user.is_viewer else 'Nobody has watched this yet.' }}</div>
     {% endfor %}

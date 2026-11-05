@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 import copy
 import json
 import logging
@@ -23,7 +23,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import case, func, or_, select
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import __version__, calendar_view, explain, importer, library, notify, quality, seerr_portal, webpush, stats, storage, tracker, webhooks
+from . import __version__, calendar_view, explain, geoip, importer, library, notify, quality, seerr_portal, webpush, stats, storage, tracker, webhooks
 from .auth import (CSRF_COOKIE, LoginRequired, User, ViewerOnly, admin_user, api_user, bust_login_cache, client_ip,
                    csrf_token, current_user, jellyfin_login_enabled, limiter, login_settings, oauth, staff_user,
                    user_from_claims, verify_csrf)
@@ -466,6 +466,7 @@ async def page_history(request: Request, user_name: str | None = None, type: str
             func.count(func.distinct(sub.c.user_name)))).one()
         rows = list(db.scalars(stmt.order_by(Play.started_at.desc()).offset((page - 1) * per).limit(per)))
     days = _history_days(rows, grouped)
+    geo = await geoip.lookup([r.ip for r in rows], wait=False) if user.is_admin else {}
     params = {"q": q, "user_name": user_name, "type": type, "method": method, "when": when, "status": status,
               "device": device, "group": "1" if grouped else "0"}
     active = [(k, v) for k, v in (("user_name", user_name or None), ("type", HIST_TYPES[type][0] if type != "all" else None),
@@ -478,7 +479,29 @@ async def page_history(request: Request, user_name: str | None = None, type: str
     return render(request, "history.html", user, days=days, total=total, secs=secs, done=done, people=people, page=page,
                   pages=max(1, math.ceil(total / per)), q=q, user_name=user_name, type=type, method=method, when=when,
                   status=status, device=device, grouped=grouped, users=users, devices=devices, active=active, link=link,
-                  types=HIST_TYPES, whens=HIST_WHEN, statuses=HIST_STATUS, methods=HIST_METHODS)
+                  types=HIST_TYPES, whens=HIST_WHEN, statuses=HIST_STATUS, methods=HIST_METHODS, geo=geo)
+
+
+@app.get("/history/{play_id}", response_class=HTMLResponse)
+async def page_play(request: Request, play_id: int, user: User = Depends(staff_user)):
+    """Everything recorded about one play: who, when, where from, which app and how it was streamed."""
+    with SessionLocal() as db:
+        p = db.get(Play, play_id)
+        if not p:
+            raise HTTPException(404, "That play isn't in the history.")
+        same = list(db.scalars(select(Play).where(Play.user_name == p.user_name, Play.id != p.id,
+                                                  Play.item_id == p.item_id if p.item_id else Play.title == p.title)
+                               .order_by(Play.started_at.desc()).limit(8)))
+        prev_p = db.scalar(select(Play).where(Play.user_name == p.user_name, Play.started_at < p.started_at).order_by(Play.started_at.desc()))
+        next_p = db.scalar(select(Play).where(Play.user_name == p.user_name, Play.started_at > p.started_at).order_by(Play.started_at))
+        ip_uses = db.scalar(select(func.count()).select_from(Play).where(Play.ip == p.ip)) if p.ip else 0
+        ip_users = sorted({u for u in db.scalars(select(Play.user_name).where(Play.ip == p.ip).distinct())}) if p.ip else []
+    loc = (await geoip.lookup([p.ip])).get(p.ip) if (user.is_admin and p.ip) else None
+    back = request.headers.get("referer") or ""
+    back = back if "/history" in back and "/history/" not in back else "/history"
+    return render(request, "play.html", user, p=p, same=same, prev_p=prev_p, next_p=next_p, loc=loc, ip_uses=ip_uses,
+                  ip_users=ip_users, why=explain.explain(p.transcode_reasons, p.video_codec, p.audio_codec, p.resolution) if p.play_method == "Transcode" else [],
+                  methods=HIST_METHODS, back=urlsplit(back).path + (("?" + urlsplit(back).query) if urlsplit(back).query else ""))
 
 
 HIST_METHODS = {"DirectPlay": "Direct play", "DirectStream": "Direct stream", "Transcode": "Transcode"}

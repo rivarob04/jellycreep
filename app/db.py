@@ -312,5 +312,21 @@ class PushSub(Base):
     failures: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class GeoIP(Base):
+    """Where a public IP address is (city / country / ISP), looked up once and kept."""
+    __tablename__ = "geoip"
+
+    ip: Mapped[str] = mapped_column(String(64), primary_key=True)
+    ok: Mapped[bool] = mapped_column(Boolean, default=False)
+    city: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    region: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    country_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    isp: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lon: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: utcnow())
+
+
 def init_db() -> None:
     Base.metadata.create_all(engine)

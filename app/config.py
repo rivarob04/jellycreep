@@ -56,6 +56,8 @@ class Settings:
         # Members of this group get admin rights (settings, stopping streams).
         # Leave empty to make every authenticated user an admin.
         self.admin_group = _env("ADMIN_GROUP", "jellycreep-admins") or ""
+        # where to look up the city/country of public IPs in History ("ipwhois" = ipwho.is over HTTPS, or "off")
+        self.geoip = (_env("GEOIP", "ipwhois") or "ipwhois").lower()
 
         # Jellyfin sign-in for regular users (can also be switched on in Settings)
         self.jellyfin_login_default = _env("JELLYFIN_LOGIN", "false")
