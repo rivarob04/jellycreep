@@ -72,24 +72,53 @@
   {% else %}<div class="card muted small">No movies yet.</div>{% endfor %}
 </div>
 
-<div class="grid g2 mb">
-  <div class="card"><h2>Devices</h2>
-    <div class="list">
+{% set dicons = {
+  'tv': '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  'desktop': '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/>',
+  'phone': '<rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/>',
+  'web': '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  'other': '<path d="M7 4.5v15l12-7.5z"/>'} %}
+<div class="pop-grid mb">
+  <div class="card pop-card">
+    <div class="pop-head"><span class="pop-ico">📱</span><div><h2>Devices</h2><small>{{ u.devices|length }} app{{ 's' if u.devices|length != 1 }} used · tap to see their history</small></div></div>
+    {% set dmx = (u.devices|map(attribute='plays')|max) or 1 %}
+    <div class="dv-list">
     {% for d in u.devices[:8] %}
-      <a class="spread dev-row" href="/history?user_name={{ u.name|urlencode }}&device={{ d.client|urlencode }}"><span style="min-width:0;flex:1"><span class="ellip" style="display:block"><strong>{{ d.client }}</strong> · {{ d.device }}</span><span class="meta">{{ d.plays }} plays · last {{ d.last|ago }}{% if d.ip and user.is_admin %} · {{ d.ip }}{% endif %}</span></span><span class="rank-go">›</span></a>
+      {% set dk = device_kind(d.client, d.device) %}
+      <a class="dv-row" href="/history?user_name={{ u.name|urlencode }}&device={{ d.client|urlencode }}">
+        <span class="dv-ico dv-{{ dk }}"><svg viewBox="0 0 24 24">{{ dicons[dk]|safe }}</svg>{% set lg = svc_icon('jellyfin') if 'jellyfin' in (d.client or '')|lower else None %}{% if lg %}<img class="dv-badge" src="{{ lg }}" alt="">{% endif %}</span>
+        <span class="dv-body">
+          <span class="dv-name"><b>{{ d.client }}</b>{% if d.device and d.device != '?' %}<span> · {{ d.device }}</span>{% endif %}</span>
+          <span class="dv-meta">{{ d.plays }} play{{ 's' if d.plays != 1 }} · last {{ d.last|ago }}</span>
+          {% if d.ip and user.is_admin %}{% set g = geo.get(d.ip) %}<span class="dv-meta dv-ip"><span class="mono">{{ d.ip }}</span>{% if g %} · {{ g.icon }} {{ g.label }}{% endif %}</span>{% endif %}
+          <span class="dv-bar"><i style="width:{{ (d.plays / dmx * 100)|round(1) }}%"></i></span>
+        </span>
+        <span class="dv-go" aria-hidden="true">›</span>
+      </a>
     {% endfor %}
     </div>
   </div>
-  <div class="card"><h2>When They Watch</h2>
-    <div class="heat">
+
+  <div class="card pop-card">
+    {% set ns = namespace(best=0, bd=0, bh=0) %}
+    {% for row in u.heat %}{% set di = loop.index0 %}{% for n in row %}{% if n > ns.best %}{% set ns.best = n %}{% set ns.bd = di %}{% set ns.bh = loop.index0 %}{% endif %}{% endfor %}{% endfor %}
+    {% set days_full = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'] %}
+    <div class="pop-head"><span class="pop-ico">🕒</span><div><h2>When They Watch</h2>
+      <small>{% if ns.best %}Peak: <b>{{ days_full[ns.bd] }}s around {{ hour12(ns.bh, False) }}</b>{% else %}No plays yet{% endif %}</small></div></div>
+    <div class="heat heat-pop">
       <span></span>{% for h in range(24) %}<span class="hr">{{ hour12(h) if h % 6 == 0 else '' }}</span>{% endfor %}
       {% for row in u.heat %}
       {% set wd = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][loop.index0] %}
       <span class="lbl">{{ wd }}</span>
-      {% for n in row %}<span class="c" title="{{ wd }} {{ hour12(loop.index0, False) }} – {{ n }} play{{ 's' if n != 1 }}"{% if n and u.heat_peak %} style="background: rgba(0,164,220,{{ (0.2 + 0.8 * n / u.heat_peak)|round(2) }})"{% endif %}></span>{% endfor %}
+      {% for n in row %}{% set lvl = ((n / u.heat_peak * 4)|round(0, 'ceil')|int) if (n and u.heat_peak) else 0 %}<span class="c l{{ lvl }}{{ ' peak' if n and n == ns.best }}" title="{{ wd }} {{ hour12(loop.index0, False) }} – {{ n }} play{{ 's' if n != 1 }}"></span>{% endfor %}
       {% endfor %}
     </div>
-    <div class="mt">{% for m in u.methods %}<span class="badge {{ 'b-warn' if m.label == 'Transcode' else 'b-ok' }}" style="margin:0 4px 4px 0">{{ m.label }} · {{ m.plays }}</span>{% endfor %}</div>
+    <div class="heat-legend"><span>Less</span><i class="c l0"></i><i class="c l1"></i><i class="c l2"></i><i class="c l3"></i><i class="c l4"></i><span>More</span></div>
+    {% set tot = u.methods|map(attribute='plays')|sum %}
+    <div class="pm-split">
+      {% for m in u.methods %}<i class="pm-{{ 'tc' if m.label == 'Transcode' else ('dp' if m.label in ('DirectPlay', 'DirectStream') else 'un') }}" style="flex:{{ m.plays }}" title="{{ m.label }} · {{ m.plays }}"></i>{% endfor %}
+    </div>
+    <div class="pm-legend">{% for m in u.methods %}<span><i class="pm-{{ 'tc' if m.label == 'Transcode' else ('dp' if m.label in ('DirectPlay', 'DirectStream') else 'un') }}"></i>{{ {'DirectPlay': 'Direct play', 'DirectStream': 'Direct stream'}.get(m.label, m.label) }} <b>{{ m.plays }}</b> <small>{{ ((m.plays / tot * 100) if tot else 0)|round|int }}%</small></span>{% endfor %}</div>
   </div>
 </div>
 

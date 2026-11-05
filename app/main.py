@@ -315,7 +315,23 @@ def _svc_icon(kind: str | None, name: str | None = None) -> str | None:
     return None
 
 
-templates.env.globals.update(svc_icon=_svc_icon)
+def _device_kind(client: str | None, device: str | None = None) -> str:
+    """tv / desktop / phone / web / other — from the app and device names Jellyfin reports."""
+    c, d = (client or "").lower(), (device or "").lower()
+    both = c + " " + d
+    if any(x in both for x in ("android tv", "shield", "fire tv", "firetv", "roku", "apple tv", "tvos", "webos", "tizen", "kodi",
+                               "wholphin", "chromecast", " tv", "bravia", "xbox", "playstation")):
+        return "tv"
+    if any(x in c for x in ("web", "chrome", "firefox", "safari", "edge")) and "desktop" not in c:
+        return "web"
+    if any(x in both for x in ("desktop", "theater", "media player", "windows", "macos", "linux", "mpv")):
+        return "desktop"
+    if any(x in both for x in ("android", "ios", "iphone", "ipad", "mobile", "findroid", "swiftfin", "streamyfin", "pixel", "galaxy")):
+        return "phone"
+    return "other"
+
+
+templates.env.globals.update(svc_icon=_svc_icon, device_kind=_device_kind)
 templates.env.globals.update(day_label=_day_label, ep_pretty=_ep_pretty, nice_ticks=_nice_ticks, hour12=_hour12, axis_hours=_hours)
 
 
@@ -1122,7 +1138,8 @@ async def page_user(name: str, request: Request, user: User = Depends(staff_user
     prof = await ttl_cached(("uprof", name), 60, lambda: asyncio.to_thread(build), stale=900)
     if not prof:
         raise HTTPException(404, "No plays recorded for that user")
-    return render(request, "user.html", user, u=prof)
+    geo = await geoip.lookup([d.get("ip") for d in prof["devices"][:8]], wait=False) if user.is_admin else {}
+    return render(request, "user.html", user, u=prof, geo=geo)
 
 
 # --- viewer (Jellyfin user) dashboard ----------------------------------------------------
