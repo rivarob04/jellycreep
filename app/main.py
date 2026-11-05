@@ -1546,15 +1546,41 @@ def _month_grid(items: list[dict], ym: str | None) -> dict:
     while d <= end:
         week = []
         for _ in range(7):
-            week.append({"date": d, "items": by_day.get(d, []), "in_month": d.month == pick.month,
-                         "today": d == today, "past": d < today})
+            raw = by_day.get(d, [])
+            week.append({"date": d, "items": _cal_groups(raw), "n": len(raw), "in_month": d.month == pick.month,
+                         "today": d == today, "past": d < today, "weekend": d.weekday() >= 5})
             d += timedelta(days=1)
         weeks.append(week)
     idx = months.index(pick)
     return {"label": f"{pick:%B %Y}", "weeks": weeks,
             "prev": f"{months[idx - 1]:%Y-%m}" if idx > 0 else None,
             "next": f"{months[idx + 1]:%Y-%m}" if idx + 1 < len(months) else None,
-            "count": sum(len(c["items"]) for w in weeks for c in w if c["in_month"])}
+            "count": sum(c["n"] for w in weeks for c in w if c["in_month"]),
+            "eps": sum(1 for w in weeks for c in w if c["in_month"] for g in c["items"] for _ in g["all"] if g["kind"] == "tv"),
+            "movies": sum(1 for w in weeks for c in w if c["in_month"] for g in c["items"] if g["kind"] == "movie"),
+            "have": sum(1 for w in weeks for c in w if c["in_month"] for g in c["items"] for x in g["all"] if x.get("has_file"))}
+
+
+def _cal_groups(items: list[dict]) -> list[dict]:
+    """Several episodes of one show on one day (a season drop) become a single calendar entry."""
+    out: list[dict] = []
+    for i in items:
+        last = next((g for g in out if g["kind"] == "tv" and i["kind"] == "tv" and g["title"] == i["title"]), None)
+        if last:
+            last["all"].append(i)
+            continue
+        out.append({**i, "all": [i]})
+    for g in out:
+        if len(g["all"]) > 1:
+            codes = [x["sub"].split(" · ")[0] for x in g["all"]]
+            m1, m2 = re.fullmatch(r"S(\d+)E(\d+)", codes[0]), re.fullmatch(r"S(\d+)E(\d+)", codes[-1])
+            if m1 and m2 and m1.group(1) == m2.group(1):
+                g["range"] = f"S{int(m1.group(1))} · E{int(m1.group(2))}–{int(m2.group(2))}"
+            else:
+                g["range"] = f"{codes[0]} – {codes[-1]}"
+            g["has_file"] = all(x.get("has_file") for x in g["all"])
+            g["premiere"] = any(x.get("premiere") for x in g["all"])
+    return out
 
 
 UPCOMING_RANGES = {"7": "1 week", "14": "2 weeks", "30": "1 month", "90": "3 months"}
