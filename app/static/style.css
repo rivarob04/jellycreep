@@ -1480,3 +1480,8 @@ a.mcal-item:hover { background: rgba(255,255,255,.12); text-decoration: none; co
   .cal-head h2 { min-width: 0; font-size: 19px; }
 }
 .cal-head h2 { flex: 0 0 auto; width: auto; }
+
+/* v0.18.34 — Play on…: apps that can't be started remotely, and a busy state */
+.dev-btn.dev-off { opacity: .55; cursor: not-allowed; }
+.dev-btn.dev-off small { white-space: normal; }
+.dev-btn.busy { opacity: .7; cursor: progress; }

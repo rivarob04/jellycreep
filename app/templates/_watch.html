@@ -11,11 +11,15 @@
     <div class="play-sheet card">
       <p class="small muted" style="margin:0 0 8px">Starts {{ what or 'it' }} right away on:</p>
       {% for dev in watch.devices %}
-      <form method="post" action="{{ lib }}/{{ sid }}/{{ watch.id }}/play">
+      {% if dev.can_play is defined and not dev.can_play %}
+      <div class="dev-btn dev-off" title="This app ignores requests from other devices"><b>{{ dev.name }}</b><small>{{ dev.client }} · can't be started remotely — open it on the device, or use the official Jellyfin app</small></div>
+      {% else %}
+      <form method="post" action="{{ lib }}/{{ sid }}/{{ watch.id }}/play" onsubmit="var b=this.querySelector('button');b.disabled=true;b.classList.add('busy');b.querySelector('small').textContent='Starting… checking it began playing'">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="session" value="{{ dev.id }}">
         <input type="hidden" name="back" value="{{ back }}">{% if watch.resume %}<input type="hidden" name="resume" value="1">{% endif %}
         <button class="dev-btn"><b>{{ dev.name }}</b><small>{{ dev.client }}{% if show_user and dev.user %} · {{ dev.user }}{% endif %}{% if dev.playing %} · now: {{ dev.playing }}{% endif %}</small></button>
       </form>
+      {% endif %}
       {% endfor %}
       {% if watch.resume %}<p class="hint" style="margin:6px 0 0">Resumes from {{ watch.resume }}.</p>{% endif %}
     </div>

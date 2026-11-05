@@ -347,6 +347,25 @@ async def play_target(client, uid: str, d: dict, *, resume_ok: bool) -> dict | N
     return _target(items[0], resume_ok) if items else None
 
 
+# Jellyfin apps that report remote control but ignore "play this" requests (they only take messages/keys)
+NO_REMOTE_PLAY = ("wholphin",)
+
+
+def remote_play_ok(client_name: str | None) -> bool:
+    c = (client_name or "").lower()
+    return not any(x in c for x in NO_REMOTE_PLAY)
+
+
+async def now_playing(client, session_id: str) -> str | None:
+    """The item a Jellyfin session is playing right now (its id), if any."""
+    try:
+        data = await client.get("/Sessions") or []
+    except UpstreamError:
+        return None
+    s = next((x for x in data if x.get("Id") == session_id), None)
+    return _norm_id(((s or {}).get("NowPlayingItem") or {}).get("Id")) or None
+
+
 async def devices(client, uid: str, *, only_user: str | None) -> list[dict]:
     """Jellyfin apps that can be told to start playing (TV apps, phone apps, browsers)."""
     try:
@@ -361,7 +380,8 @@ async def devices(client, uid: str, *, only_user: str | None) -> list[dict]:
             continue
         playing = (s.get("NowPlayingItem") or {}).get("Name")
         out.append({"id": s.get("Id"), "name": s.get("DeviceName") or s.get("Client") or "Jellyfin",
-                    "client": s.get("Client"), "user": s.get("UserName"), "playing": playing})
+                    "client": s.get("Client"), "user": s.get("UserName"), "playing": playing,
+                    "can_play": remote_play_ok(s.get("Client"))})
     return out
 
 

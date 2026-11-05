@@ -1623,11 +1623,28 @@ async def _play_item(request: Request, user: User, sid: int, item_id: str):
     if not dev:
         request.session["flash"] = {"ok": False, "msg": "That device isn't available any more — open Jellyfin on it and try again."}
         return RedirectResponse(back, status_code=303)
+    if not dev.get("can_play", True):
+        request.session["flash"] = {"ok": False, "msg": f"{dev['client']} on {dev['name']} can't be started from another device. "
+                                    "Open it there, or use the official Jellyfin app on that device."}
+        return RedirectResponse(back, status_code=303)
     start = int(d.get("resume_ticks") or 0) if (form.get("resume") == "1" and user.is_viewer) else 0
+    before = await library.now_playing(client, session_id)
     _, err = await safe(library.play_on(client, session_id, item_id, start))
     log.info("%s started %s on %s (%s)", user.name, item_id, dev["name"], dev["client"])
-    request.session["flash"] = ({"ok": False, "msg": f"Couldn't start playback: {err}"} if err else
-                                {"ok": True, "msg": f"▶ Playing on {dev['name']}."})
+    if err:
+        request.session["flash"] = {"ok": False, "msg": f"Couldn't start playback: {err}"}
+        return RedirectResponse(back, status_code=303)
+    # Jellyfin accepts the request even when the app ignores it, so check it really started
+    started = False
+    for _ in range(8):
+        await asyncio.sleep(1)
+        now = await library.now_playing(client, session_id)
+        if now and (now == library._norm_id(item_id) or now != before):
+            started = True
+            break
+    request.session["flash"] = ({"ok": True, "msg": f"▶ Playing on {dev['name']}."} if started else
+                                {"ok": False, "msg": f"Sent to {dev['name']}, but {dev['client'] or 'the app'} hasn't started it. "
+                                 "Some Jellyfin apps ignore requests from other devices — the official Jellyfin app does support it."})
     return RedirectResponse(back, status_code=303)
 
 
