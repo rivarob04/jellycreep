@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from urllib.parse import urlencode, urlsplit
 import copy
 import json
@@ -200,7 +201,13 @@ def _day_label(d) -> str:
     return f"{d:%a, %b} {d.day}"
 
 
-templates.env.globals.update(day_label=_day_label)
+def _ep_pretty(code: str) -> str:
+    """'S02E05' -> 'S2 • E5' (anything else is left alone)."""
+    m = re.fullmatch(r"S(\d+)E(\d+)", (code or "").strip())
+    return f"S{int(m.group(1))} • E{int(m.group(2))}" if m else code
+
+
+templates.env.globals.update(day_label=_day_label, ep_pretty=_ep_pretty)
 
 
 _AMBIENT: dict[str, Any] = {}

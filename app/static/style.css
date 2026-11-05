@@ -1605,3 +1605,27 @@ a.hi-card:hover { text-decoration: none; color: var(--text); background: rgba(31
 @media (max-width: 600px) { .pl-row { grid-template-columns: 1fr auto; } .pl-row > span:nth-child(2) { grid-column: 1; grid-row: 2; font-size: 12px; } }
 .pl-nav { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 a.hist-row.tap { color: var(--text); } a.hist-row.tap:hover { background: rgba(255,255,255,.04); text-decoration: none; color: var(--text); }
+
+/* v0.18.38 — Coming Up cards in the Recently Added style (blurred art, big poster, icon) */
+.uc-list { display: flex; flex-direction: column; gap: 9px; }
+.uc-card { position: relative; display: flex; gap: 12px; padding: 5px; border-radius: 14px; overflow: hidden; color: #fff; isolation: isolate;
+  background: #151a24; border: 1px solid rgba(255,255,255,.07); text-decoration: none !important; }
+.uc-card::before { content: ""; position: absolute; inset: 0; z-index: -2; background: var(--bd, none) center/cover no-repeat;
+  filter: blur(18px) saturate(1.3); transform: scale(1.25); opacity: .75; }
+.uc-card::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(10,12,18,.55), rgba(10,12,18,.35) 60%, rgba(10,12,18,.2)); }
+a.uc-card:hover, a.uc-card:active { color: #fff; border-color: rgba(255,255,255,.2); }
+a.uc-card:active { transform: scale(.99); }
+.uc-poster { position: relative; flex: none; width: 70px; min-height: 105px; align-self: stretch; border-radius: 9px; overflow: hidden; display: grid; place-items: center;
+  box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+.uc-poster img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.uc-poster b { font-size: 22px; font-weight: 800; color: rgba(255,255,255,.75); }
+.uc-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; padding: 3px 28px 3px 0; }
+.uc-title { font-size: 16.5px; font-weight: 600; line-height: 1.22; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.uc-sub { font-size: 13.5px; color: rgba(255,255,255,.82); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uc-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.uc-tags .badge { font-size: 10.5px; padding: 1px 8px; }
+.uc-when { margin-top: auto; padding-top: 4px; font-size: 13px; color: rgba(255,255,255,.88); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uc-icon { position: absolute; right: 10px; bottom: 9px; }
+.uc-icon svg { width: 20px; height: 20px; fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; display: block; }
+@media (min-width: 760px) { .uc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; } }
+@media (min-width: 1000px) { .uc-poster { width: 76px; min-height: 114px; } .uc-title { font-size: 17px; } }
