@@ -1,0 +1,13 @@
+{% if items %}
+<div class="spread section-title"><h2 style="margin:0">Next Up</h2><span class="small muted">{{ items|length }} {{ 'title' if items|length == 1 else 'titles' }}</span></div>
+<div class="posters one-row cw-row mb">
+  {% for i in items %}
+  <a href="/me/library/{{ user.server_id }}/{{ i.id }}" title="{{ i.title }}{{ ' – ' ~ i.sub if i.sub }}"><figure>
+    <span class="cw-img"><img loading="lazy" src="{{ imgp }}/{{ user.server_id }}/{{ i.poster }}?h=300" alt="" onerror="this.remove()"><b>{{ i.title[:1] }}</b>
+      {% if i.code %}<i class="cw-code">{{ i.code }}</i>{% endif %}
+      {% if i.pct %}<span class="cw-bar"><i style="width:{{ [3, i.pct]|max }}%"></i></span>{% endif %}</span>
+    <figcaption>{{ i.title }}<br><span class="muted">{% if i.left %}{{ i.left }} left{% elif i.sub %}{{ i.sub }}{% endif %}</span></figcaption>
+  </figure></a>
+  {% endfor %}
+</div>
+{% endif %}

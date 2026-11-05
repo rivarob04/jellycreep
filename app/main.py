@@ -1345,8 +1345,8 @@ async def page_me(request: Request, user: User = Depends(current_user)):
     svc = next((x for x in services(("jellyfin",)) if x.id == user.server_id), None)
     # The rows that need Sonarr/Radarr/Seerr/Jellyfin library calls load after the page (see /partials/me/…),
     # unless they're already cached — then they're drawn straight away.
-    sections = {k: (ttl_peek(_section_key(user, k)) if cfg[flag] else []) for k, flag in
-                (("upcoming", "upcoming"), ("added", "recent"), ("requests", "requests"))}
+    sections = {k: (ttl_peek(_section_key(user, k)) if (flag is None or cfg[flag]) else []) for k, flag in
+                (("upcoming", "upcoming"), ("added", "recent"), ("requests", "requests"), ("resume", None), ("nextup", None))}
     return render(request, "me.html", user, streams=streams, others=others if cfg["server_activity"] else None, anon=anon,
                   last=last, recent=recent, u=prof, sections=sections, everyone=cfg["seerr_everyone"],
                   server_ok=bool(svc and svc.last_ok is not False), server_name=svc.name if svc else "Jellyfin",
@@ -1362,10 +1362,60 @@ async def _profile(user: User):
 
 def _section_key(user: User, name: str) -> tuple:
     return {"upcoming": ("upcoming", 14), "added": ("added", user.server_id, user.jf_id),
-            "requests": ("homereq", user.server_id, user.jf_id)}[name]
+            "requests": ("homereq", user.server_id, user.jf_id),
+            "resume": ("resume", user.server_id, user.jf_id), "nextup": ("nextup", user.server_id, user.jf_id)}[name]
+
+
+_JF_FIELDS = "UserData,RunTimeTicks,ProductionYear,ParentIndexNumber,IndexNumber,SeriesId,SeriesName,PrimaryImageAspectRatio"
+
+
+async def _jf_watch_rows(user: User, name: str) -> list[dict]:
+    """Jellyfin's own Continue Watching / Next Up for this person (their account, their libraries)."""
+    svc = next((x for x in services(("jellyfin",)) if x.id == user.server_id), None)
+    if not svc or not user.jf_id:
+        return []
+    c = await client_for(svc)
+    params = {"userId": user.jf_id, "Limit": "16", "Fields": _JF_FIELDS, "EnableImageTypes": "Primary,Backdrop,Thumb",
+              "ImageTypeLimit": "1"}
+    if name == "resume":
+        params["MediaTypes"] = "Video"
+        try:
+            data = await c.get("/UserItems/Resume", params=params)
+        except UpstreamError:                  # Jellyfin before 10.9
+            params.pop("userId")
+            data = await c.get(f"/Users/{user.jf_id}/Items/Resume", params=params)
+    else:
+        params.update(EnableResumable="false", EnableRewatching="false")   # resumable ones are in Continue Watching
+        data = await c.get("/Shows/NextUp", params=params)
+    out = []
+    for i in (data or {}).get("Items") or []:
+        ud = i.get("UserData") or {}
+        ep = i.get("Type") == "Episode"
+        pct = ud.get("PlayedPercentage")
+        rt = i.get("RunTimeTicks") or 0
+        left = (rt - (ud.get("PlaybackPositionTicks") or 0)) / 10_000_000 if rt and name == "resume" else None
+        out.append({"id": i.get("Id"), "type": i.get("Type"), "title": (i.get("SeriesName") if ep else i.get("Name")) or "?",
+                    "sub": i.get("Name") if ep else (str(i.get("ProductionYear")) if i.get("ProductionYear") else "Movie"),
+                    "code": f"S{i.get('ParentIndexNumber') or 0} • E{i.get('IndexNumber') or 0}" if ep else None,
+                    "poster": i.get("SeriesId") if ep else i.get("Id"), "pct": round(pct) if pct else None,
+                    "left": fmt_duration(left) if left and left > 60 else None})
+    return out
+
+
+def _warm_home(user: User) -> None:
+    """Fetch Continue Watching / Next Up in the background (at sign-in) so Home draws them instantly."""
+    async def go():
+        for n in ("resume", "nextup"):
+            try:
+                await asyncio.wait_for(_section_data(user, n), timeout=15)
+            except Exception:  # noqa: BLE001
+                pass
+    asyncio.get_running_loop().create_task(go())
 
 
 async def _section_data(user: User, name: str):
+    if name in ("resume", "nextup"):
+        return await ttl_cached(_section_key(user, name), 30, lambda: _jf_watch_rows(user, name), stale=900)
     if name == "upcoming":
         return await _upcoming(14)
     if name == "added":
@@ -1380,7 +1430,7 @@ async def _section_data(user: User, name: str):
     return await ttl_cached(_section_key(user, "requests"), 60, lambda: _home_requests(user), stale=1800)
 
 
-SECTION_FLAGS = {"upcoming": "upcoming", "added": "recent", "requests": "requests"}
+SECTION_FLAGS = {"upcoming": "upcoming", "added": "recent", "requests": "requests", "resume": None, "nextup": None}
 
 
 @app.get("/partials/me/{name}", response_class=HTMLResponse)
@@ -1389,7 +1439,7 @@ async def partial_me_section(request: Request, name: str, user: User = Depends(c
         raise HTTPException(404)
     cfg = login_settings()
     data = []
-    if cfg[SECTION_FLAGS[name]]:
+    if SECTION_FLAGS[name] is None or cfg[SECTION_FLAGS[name]]:
         try:   # a slow or unreachable app must never hold up the page
             data = await asyncio.wait_for(_section_data(user, name), timeout=8)
         except (asyncio.TimeoutError, Exception):  # noqa: BLE001
@@ -2780,8 +2830,9 @@ async def do_login(request: Request):
     log.info("Jellyfin user %s signed in from %s", ju.get("Name"), ip)
     su = request.session["user"]
     try:                                   # get their Discover / Requests ready while Home loads
-        warm_discover(User(name=su["name"], is_admin=False, via="jellyfin", role="viewer",
-                           jf_id=su["jf_id"], server_id=su["server_id"]))
+        vu = User(name=su["name"], is_admin=False, via="jellyfin", role="viewer", jf_id=su["jf_id"], server_id=su["server_id"])
+        warm_discover(vu)
+        _warm_home(vu)
     except Exception:  # noqa: BLE001
         pass
     return RedirectResponse(nxt, status_code=303)

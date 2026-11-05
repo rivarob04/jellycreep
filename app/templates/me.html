@@ -47,6 +47,12 @@
 <div class="card mb tip-card ok"><div class="tip-ico">✅</div><div><strong>Everything you watched lately played in original quality.</strong><div class="small muted">No converting needed on your devices.</div></div></div>
 {% endif %}
 
+{% if sections.resume is not none %}{% with items=sections.resume %}{% include "_me_resume.html" %}{% endwith %}
+{% else %}<div class="lazy-sec" data-lazy="/partials/me/resume" aria-busy="true"><div class="spread section-title"><h2 style="margin:0">Continue Watching</h2></div><div class="skel-row"><i></i><i></i><i></i><i></i></div></div>{% endif %}
+
+{% if sections.nextup is not none %}{% with items=sections.nextup %}{% include "_me_nextup.html" %}{% endwith %}
+{% else %}<div class="lazy-sec" data-lazy="/partials/me/nextup" aria-busy="true"><div class="spread section-title"><h2 style="margin:0">Next Up</h2></div><div class="skel-row"><i></i><i></i><i></i><i></i></div></div>{% endif %}
+
 {% if recent %}
 <div class="spread section-title"><h2 style="margin:0">Your Recently Watched</h2><a class="small" href="/me/history">All →</a></div>
 <div class="posters one-row mb">
