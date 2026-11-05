@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.gzip import GZipMiddleware
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import case, func, or_, select
 from starlette.middleware.sessions import SessionMiddleware
@@ -159,6 +160,7 @@ app = FastAPI(title="JellyCreep", version=__version__, lifespan=lifespan, docs_u
               openapi_url="/api/openapi.json")
 app.add_middleware(SessionMiddleware, secret_key=settings.secret_key, session_cookie="jc_session",
                    same_site="lax", https_only=settings.cookie_secure, max_age=60 * 60 * 24 * 14)
+app.add_middleware(GZipMiddleware, minimum_size=1200, compresslevel=6)
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 templates = Jinja2Templates(directory=BASE / "templates")
 
@@ -170,6 +172,11 @@ async def security_headers(request: Request, call_next):
     if new:
         response.set_cookie(CSRF_COOKIE, new, httponly=False, samesite="strict", secure=settings.cookie_secure)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    p = request.url.path
+    if p.startswith("/static/"):
+        # versioned files (?v=…) never change; the rest (icons, manifest) for a day
+        response.headers["Cache-Control"] = ("public, max-age=31536000, immutable" if request.query_params.get("v")
+                                             else "public, max-age=86400")
     response.headers.setdefault("Referrer-Policy", "same-origin")
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     return response

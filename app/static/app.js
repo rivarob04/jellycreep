@@ -460,3 +460,34 @@ document.querySelectorAll('form[data-autosubmit] select').forEach((s) => {
     if (android && a.dataset.android) a.href = a.dataset.android;
   });
 })();
+
+// v0.18.56 — instant navigation: start loading a page as soon as you hover (or touch) its link
+(function () {
+  if (!('IntersectionObserver' in window) || navigator.connection && navigator.connection.saveData) return;
+  const done = new Set();
+  const skip = /\/(logout|auth\/|act\/|login|push\/|api\/)|\/play$|\/request$/;
+  function ok(a) {
+    if (!a || !a.href || a.target === '_blank' || a.hasAttribute('download') || a.dataset.noprefetch !== undefined) return false;
+    let u; try { u = new URL(a.href, location.href); } catch (_) { return false; }
+    if (u.origin !== location.origin || skip.test(u.pathname)) return false;
+    if (/[?&](view|days)=/.test(u.search)) return false;   // these links also remember a choice
+    if (u.pathname === location.pathname && u.search === location.search) return false;
+    return u.href.split('#')[0];
+  }
+  function go(a) {
+    const href = ok(a);
+    if (!href || done.has(href) || done.size > 40) return;
+    done.add(href);
+    const l = document.createElement('link');
+    l.rel = 'prefetch'; l.href = href; l.as = 'document';
+    document.head.appendChild(l);
+  }
+  let t;
+  document.addEventListener('mouseover', (e) => {
+    const a = e.target.closest && e.target.closest('a[href]');
+    if (!a) return;
+    clearTimeout(t); t = setTimeout(() => go(a), 70);
+  }, { passive: true });
+  document.addEventListener('mouseout', () => clearTimeout(t), { passive: true });
+  document.addEventListener('touchstart', (e) => { const a = e.target.closest && e.target.closest('a[href]'); if (a) go(a); }, { passive: true });
+})();

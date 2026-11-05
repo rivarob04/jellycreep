@@ -2001,3 +2001,36 @@ a.mcal-item:hover { background: rgba(255,255,255,.13); transform: translateX(1px
 .oi-moonfin img { width: 100%; height: 100%; object-fit: contain; border-radius: 50%; }
 .oi-play { position: absolute; right: -4px; bottom: -4px; width: 17px; height: 17px; border-radius: 50%; display: grid; place-items: center;
   font-style: normal; font-size: 8px; color: #fff; background: #16a34a; border: 2px solid #171822; padding-left: 1px; box-sizing: border-box; }
+
+/* ===================== v0.18.56 final polish ===================== */
+/* one heading style for every page */
+main h1 { font-size: 26px; font-weight: 800; letter-spacing: -.015em; line-height: 1.15; }
+@media (min-width: 1000px) { main h1 { font-size: 30px; } }
+.rq-head h1 { background: none; -webkit-background-clip: initial; background-clip: initial; color: var(--text); }
+.section-title h2 { font-weight: 800; letter-spacing: -.01em; }
+/* pages fade in instead of popping */
+main { animation: jc-in .22s ease-out both; }
+@keyframes jc-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { main { animation: none; } * { scroll-behavior: auto !important; } }
+/* clear keyboard focus everywhere */
+a:focus-visible, button:focus-visible, summary:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid #7fdcff; outline-offset: 2px; border-radius: 8px; }
+/* cards: one consistent hover lift */
+.uc-card, .hi-card, .ra-card, .us-card, .pcard-in, .fav-card, .st-user, .dv-row { will-change: transform; }
+a.uc-card:hover, a.hi-card:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(0,0,0,.4); }
+.uc-card, .hi-card { transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+/* tidy scrollbars on desktop */
+@media (hover: hover) and (pointer: fine) {
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background-color: rgba(255,255,255,.22); }
+  ::-webkit-scrollbar-track { background: transparent; }
+}
+/* images fade in rather than flash */
+.uc-poster img, .hi-poster img, .ra-poster img, .pimg img, .us-poster img, .cast-img img, .fav-poster img { animation: jc-img .3s ease-out both; }
+@keyframes jc-img { from { opacity: 0; } to { opacity: 1; } }
+/* empty states */
+.card.empty { text-align: center; padding: 34px 20px; color: var(--muted); }
+.card.empty .empty-icon { font-size: 34px; margin-bottom: 8px; opacity: .85; }
+/* badges: consistent pill shape */
+.badge { border-radius: 999px; font-weight: 700; letter-spacing: .01em; }

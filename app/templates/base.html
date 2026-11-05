@@ -12,7 +12,7 @@
   <meta name="csrf" content="{{ csrf }}">
   <title>{% block title %}JellyCreep{% endblock %} · JellyCreep</title>
   <link rel="manifest" href="{{ '/me/manifest.webmanifest' if user.is_viewer else '/static/manifest.webmanifest' }}" crossorigin="use-credentials">
-  <link rel="icon" href="/static/favicon.ico" sizes="any">
+  <link rel="icon" href="/static/favicon.ico?v={{ version }}" sizes="any">
   <link rel="icon" href="/static/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="icon" href="/static/favicon-64.png" type="image/png" sizes="64x64">
   <link rel="apple-touch-icon" href="/static/icon-180.png">
@@ -121,6 +121,6 @@
   </nav>
   <div class="drawer-foot">JellyCreep v{{ version }}</div>
 </aside>
-<script src="/static/app.js?v={{ version }}"></script>
+<script src="/static/app.js?v={{ version }}" defer></script>
 </body>
 </html>
