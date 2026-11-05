@@ -1,26 +1,63 @@
 {% extends "base.html" %}
 {% block title %}Users{% endblock %}
 {% block content %}
-<h1>Users</h1>
-<div class="card flush table-wrap">
-{% if rows %}
-<table class="stack">
-  <thead><tr><th>User</th><th>Last seen</th><th>Last played</th><th>Player</th><th>IP</th><th class="num">Plays</th><th class="num">Watch time</th><th>Since</th></tr></thead>
-  <tbody>
-  {% for r in rows %}
-  <tr>
-    <td class="lead"><a href="/users/{{ r.user|urlencode }}">{{ r.user }}</a></td>
-    <td data-label="Last seen" title="{{ r.last|local }}">{{ r.last|ago }}</td>
-    <td data-label="Played" class="ellip">{{ r.last_title or '' }}</td>
-    <td data-label="Player">{{ r.last_client or '' }}</td>
-    <td data-label="IP" class="mono small">{{ r.last_ip or '' }}</td>
-    <td data-label="Plays" class="num">{{ r.plays }}</td>
-    <td data-label="Watched" class="num">{{ r.seconds|duration }}</td>
-    <td data-label="Since" class="muted">{{ r.first|local('%Y-%m-%d') }}</td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
-{% else %}<div class="empty">No one has played anything yet.</div>{% endif %}
+<div class="us-head">
+  <h1>Users</h1>
+  <div class="us-sort">
+    <span class="small muted">Sort</span>
+    {% for k, v in sorts.items() %}<a class="fchip{{ ' on' if sort == k }}" href="?sort={{ k }}">{{ v[0] }}</a>{% endfor %}
+  </div>
 </div>
+
+<div class="us-totals">
+  <div><b>{{ totals.people }}</b><span>people</span></div>
+  <div><b>{{ totals.active30 }}</b><span>active this month</span></div>
+  <div><b>{% if totals.live %}<i class="live-dot"></i> {% endif %}{{ totals.live }}</b><span>watching now</span></div>
+  <div><b>{{ totals.secs|duration }}</b><span>watched in total</span></div>
+</div>
+
+{% if rows %}
+{% set top = (rows|map(attribute='seconds')|max) or 1 %}
+<div class="us-grid">
+  {% for r in rows %}
+  {% set now = live.get(r.user) %}
+  {% set mx = (r.spark|max) or 1 %}
+  <a class="us-card{{ ' is-live' if now }}" href="/users/{{ r.user|urlencode }}"{% if r.poster %} style="--bd:url('/img/{{ r.poster[0] }}/{{ r.poster[1] }}?t=Backdrop&h=480')"{% endif %}>
+    <div class="us-top">
+      <span class="us-avatar" style="background:{{ r.colour }}">{{ r.user[:1]|upper }}{% if now %}<i class="us-live" title="Watching now"></i>{% endif %}</span>
+      <span class="us-who">
+        <b>{{ r.user }}</b>
+        <small>{% if now %}<span class="us-now">● Watching now</span>{% else %}Last seen {{ r.last|ago }}{% endif %} · since {{ r.first|local('%b %Y') }}</small>
+      </span>
+      <span class="us-rank" title="Share of all watch time">{{ ((r.seconds / totals.secs * 100) if totals.secs else 0)|round|int }}%</span>
+    </div>
+
+    <div class="us-playing">
+      <span class="us-poster k-bg-{{ r.last_kind }}">{% if r.poster %}<img loading="lazy" src="/img/{{ r.poster[0] }}/{{ r.poster[1] }}?h=200" alt="" onerror="this.remove()">{% endif %}<b>{{ (r.last_name or '?')[:1] }}</b></span>
+      <span class="us-pbody">
+        <small>{{ 'Now playing' if now else 'Last played' }}</small>
+        <strong>{{ (now.series_name or now.title) if now else (r.last_name or '—') }}</strong>
+        <span>{% if now %}{{ now.display or now.title }}{% else %}{{ r.last_sub or '' }}{% endif %}</span>
+        <span class="us-dev">{{ (now.client if now else r.last_client) or '?' }}{% if (now.device if now else r.last_device) %} · {{ now.device if now else r.last_device }}{% endif %}</span>
+      </span>
+    </div>
+
+    <div class="us-stats">
+      <div><b>{{ r.plays }}</b><span>plays</span></div>
+      <div><b>{{ r.seconds|duration }}</b><span>watched</span></div>
+      <div><b>{{ r.secs30|duration if r.secs30 else '—' }}</b><span>last 30 days</span></div>
+    </div>
+
+    <div class="us-spark" title="Watch time, last 14 days">
+      {% for v in r.spark %}<i style="height:{{ [6, (v / mx * 100)|round|int]|max if v else 3 }}%"{% if v %} class="on"{% endif %}></i>{% endfor %}
+    </div>
+    <div class="us-share"><i style="width:{{ (r.seconds / top * 100)|round(1) }}%"></i></div>
+
+    {% if user.is_admin and r.last_ip %}{% set g = geo.get(r.last_ip) %}
+    <div class="us-ip"><span class="mono">{{ r.last_ip }}</span>{% if g %}<span>{{ g.icon }} {{ g.label }}</span>{% endif %}</div>
+    {% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% else %}<div class="card empty"><div class="empty-icon">👥</div>No one has played anything yet.</div>{% endif %}
 {% endblock %}

@@ -109,17 +109,38 @@ def plays_by_hour(db, days: int) -> list[int]:
     return [rows.get(f"{h:02d}", 0) for h in range(24)]
 
 
-def users_table(db) -> list[dict]:
+def users_table(db, tz=None) -> list[dict]:
+    from collections import defaultdict
+    from datetime import timedelta as _td
     q = (select(Play.user_name, func.count(Play.id), func.sum(Play.watched_seconds), func.min(Play.started_at),
                 func.max(Play.stopped_at), func.max(Play.id))
          .group_by(Play.user_name).order_by(func.max(Play.stopped_at).desc()))
+    # last 14 days of watch time per person (local days), for the little sparkline
+    today = (_local(utcnow(), tz) if tz else utcnow()).date()
+    spark = defaultdict(lambda: [0.0] * 14)
+    recent30 = defaultdict(lambda: [0, 0.0])
+    for name, st, secs in db.execute(select(Play.user_name, Play.started_at, Play.watched_seconds)
+                                     .where(Play.started_at >= _since(31))):
+        d = (_local(st, tz) if tz else st).date()
+        age = (today - d).days
+        if 0 <= age < 14:
+            spark[name][13 - age] += secs or 0
+        if age < 30:
+            recent30[name][0] += 1
+            recent30[name][1] += secs or 0
     out = []
     for name, plays, secs, first, last, last_id in db.execute(q):
-        last_play = db.get(Play, last_id)
+        lp = db.get(Play, last_id)
         out.append({"user": name, "plays": plays, "seconds": int(secs or 0), "first": first, "last": last,
-                    "last_title": last_play.display_title if last_play else None,
-                    "last_client": last_play.client if last_play else None,
-                    "last_ip": last_play.ip if last_play else None})
+                    "last_title": lp.display_title if lp else None,
+                    "last_client": lp.client if lp else None, "last_device": lp.device if lp else None,
+                    "last_ip": lp.ip if lp else None, "last_id": lp.id if lp else None,
+                    "last_name": (lp.series_name or lp.title) if lp else None,
+                    "last_sub": ((f"S{lp.season} • E{lp.episode} · " if lp.season is not None else "") + lp.title) if lp and lp.item_type == "Episode"
+                                else ((str(lp.year) if lp.year else "Movie") if lp else None),
+                    "last_kind": ("tv" if lp.item_type == "Episode" else "movie") if lp else "movie",
+                    "poster": (lp.server_id, lp.poster_id) if lp and lp.poster_id else None,
+                    "spark": spark[name], "plays30": recent30[name][0], "secs30": int(recent30[name][1])})
     return out
 
 

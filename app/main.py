@@ -608,9 +608,26 @@ HIST_METHODS = {"DirectPlay": "Direct play", "DirectStream": "Direct stream", "T
 
 @app.get("/users", response_class=HTMLResponse)
 async def page_users(request: Request, user: User = Depends(staff_user)):
-    with SessionLocal() as db:
-        rows = stats.users_table(db)
-    return render(request, "users.html", user, rows=rows)
+    def build():
+        with SessionLocal() as db:
+            return stats.users_table(db, TZ)
+    rows = await ttl_cached(("users",), 30, lambda: asyncio.to_thread(build), stale=600)
+    sort = request.query_params.get("sort") or "recent"
+    sort = sort if sort in USER_SORTS else "recent"
+    rows = [{**r, "colour": seerr_portal.colour(r["user"] or "?")} for r in sorted(rows, key=USER_SORTS[sort][1], reverse=sort != "name")]
+    streams, _ = await current_activity()
+    live = {}
+    for x in streams:
+        live.setdefault(x.get("user_name"), x)
+    geo = await geoip.lookup([r["last_ip"] for r in rows], wait=False) if user.is_admin else {}
+    return render(request, "users.html", user, rows=rows, live=live, geo=geo, sort=sort, sorts=USER_SORTS,
+                  totals={"people": len(rows), "plays": sum(r["plays"] for r in rows), "secs": sum(r["seconds"] for r in rows),
+                          "active30": sum(1 for r in rows if r["plays30"]), "live": sum(1 for r in rows if r["user"] in live)})
+
+
+USER_SORTS = {"recent": ("Last seen", lambda r: r["last"] or datetime.min), "time": ("Watch time", lambda r: r["seconds"]),
+              "plays": ("Plays", lambda r: r["plays"]), "month": ("Last 30 days", lambda r: r["secs30"]),
+              "name": ("Name", lambda r: (r["user"] or "").lower())}
 
 
 @app.get("/stats", response_class=HTMLResponse)
