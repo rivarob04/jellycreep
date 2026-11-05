@@ -1873,7 +1873,8 @@ async def _watch_ctx(client, svc: Service, uid: str, user: User, d: dict) -> dic
     if not target:
         return None
     return {**target, "sid": svc.id, "devices": devs, "internal": not svc.public_url,
-            "url": f"{svc.link}/web/#/details?id={target['id']}" + (f"&serverId={jf_sid}" if jf_sid else "")}
+            "url": f"{svc.link}/web/#/details?id={target['id']}" + (f"&serverId={jf_sid}" if jf_sid else ""),
+            "apps": _app_links(target["id"], jf_sid)}
 
 
 async def _item_page(request: Request, user: User, sid: int, item_id: str, tab: str | None):
@@ -2060,6 +2061,29 @@ async def _jf_lookup(user: User) -> dict | None:
     return {"svc": svc, "client": client, "idx": idx, "jf_sid": jf_sid}
 
 
+MOONFIN_PKG = "org.moonfin.androidtv"
+JELLYFIN_PKG = "org.jellyfin.mobile"
+
+
+def _app_links(item_id: str, server_id: str | None) -> dict:
+    """Links that open a title in the phone apps.
+
+    Moonfin understands moonfin://item?id=…&serverId=… (and play?…), so it lands right on the title.
+    The official Jellyfin app has no such link, so on Android we can only open the app itself."""
+    from urllib.parse import quote
+    q = f"id={item_id}" + (f"&serverId={server_id}" if server_id else "")
+    store_m = quote(f"https://play.google.com/store/apps/details?id={MOONFIN_PKG}", safe="")
+    store_j = quote(f"https://play.google.com/store/apps/details?id={JELLYFIN_PKG}", safe="")
+    return {
+        "moonfin": f"moonfin://item?{q}",
+        "moonfin_play": f"moonfin://play?{q}",
+        "moonfin_android": f"intent://item?{q}#Intent;scheme=moonfin;package={MOONFIN_PKG};S.browser_fallback_url={store_m};end",
+        "moonfin_android_play": f"intent://play?{q}#Intent;scheme=moonfin;package={MOONFIN_PKG};S.browser_fallback_url={store_m};end",
+        "jellyfin_android": f"intent://#Intent;package={JELLYFIN_PKG};action=android.intent.action.MAIN;"
+                            f"category=android.intent.category.LAUNCHER;S.browser_fallback_url={store_j};end",
+    }
+
+
 def _jf_url(jf: dict, item_id: str) -> str:
     return f"{jf['svc'].link}/web/#/details?id={item_id}" + (f"&serverId={jf['jf_sid']}" if jf["jf_sid"] else "")
 
@@ -2220,7 +2244,8 @@ async def _title_watch(user: User, jf: dict | None, t: dict) -> dict | None:
                                         library.devices(client, uid, only_user=user.jf_id))
     if not target:
         return None
-    return {**target, "url": _jf_url(jf, target["id"]), "devices": devs, "internal": not jf["svc"].public_url,
+    return {**target, "url": _jf_url(jf, target["id"]), "apps": _app_links(target["id"], jf["jf_sid"]),
+            "devices": devs, "internal": not jf["svc"].public_url,
             "page": f"/me/library/{jf['svc'].id}/{d['id']}"}
 
 

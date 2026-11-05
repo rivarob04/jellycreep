@@ -5,6 +5,23 @@
   <a class="btn primary watch-btn" href="{{ watch.url }}" target="_blank" rel="noopener">
     <svg viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></svg>
     <span><b>{{ 'Resume' if watch.resume else 'Watch' }} on Jellyfin</b>{% if what or watch.resume %}<small>{{ what }}{{ ' · ' if what and watch.resume }}{{ ('from ' ~ watch.resume) if watch.resume }}</small>{% endif %}</span></a>
+  {% if watch.apps %}
+  <details class="play-on open-in" data-open-in>
+    <summary class="btn"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></svg> Open in app</summary>
+    <div class="play-sheet card">
+      <p class="small muted" style="margin:0 0 8px">Open {{ what or 'it' }} in:</p>
+      <a class="dev-btn oi-app" href="{{ watch.apps.moonfin }}" data-android="{{ watch.apps.moonfin_android }}"><span class="oi-ico oi-moonfin">M</span>
+        <span><b>Moonfin</b><small>Opens this title in the Moonfin app</small></span></a>
+      <a class="dev-btn oi-app" href="{{ watch.apps.moonfin_play }}" data-android="{{ watch.apps.moonfin_android_play }}"><span class="oi-ico oi-moonfin">▶</span>
+        <span><b>Play in Moonfin</b><small>Starts playing straight away</small></span></a>
+      <a class="dev-btn oi-app" href="{{ watch.apps.jellyfin_android }}" data-only="android"><span class="oi-ico oi-jf"><img src="{{ svc_icon('jellyfin') or '' }}" alt=""></span>
+        <span><b>Jellyfin app</b><small>Opens the app — it can't jump to this title, so search for it there</small></span></a>
+      <a class="dev-btn oi-app" href="{{ watch.url }}" target="_blank" rel="noopener"><span class="oi-ico oi-web">🌐</span>
+        <span><b>Browser</b><small>Jellyfin in your web browser</small></span></a>
+      <p class="hint" style="margin:6px 0 0">If nothing happens, that app isn't installed on this device{{ ' (on Android you\'ll be sent to the Play Store)' }}.</p>
+    </div>
+  </details>
+  {% endif %}
   {% if watch.devices %}
   <details class="play-on">
     <summary class="btn"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg> Play on…</summary>

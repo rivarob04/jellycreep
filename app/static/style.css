@@ -1985,3 +1985,15 @@ a.mcal-item:hover { background: rgba(255,255,255,.13); transform: translateX(1px
   .ti-detail .ld-side { order: 2; }
   .ti-detail .ld-main > :not(.ti-summary) { order: 3; }
 }
+
+/* v0.18.54 — Open in app */
+.oi-app { display: flex; align-items: center; gap: 12px; text-align: left; text-decoration: none !important; color: var(--text); }
+.oi-app span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.oi-app small { white-space: normal; }
+.oi-ico { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-weight: 900; color: #fff; overflow: hidden; }
+.oi-moonfin { background: linear-gradient(135deg, #6d28d9, #22d3ee); }
+.oi-jf { background: #101826; padding: 5px; box-sizing: border-box; }
+.oi-jf img { width: 100%; height: 100%; object-fit: contain; }
+.oi-web { background: rgba(255,255,255,.08); font-size: 17px; }
+.play-sheet .dev-btn.oi-app { display: flex !important; flex-direction: row !important; align-items: center !important; justify-content: flex-start !important; text-align: left !important; gap: 12px; }
+.play-sheet .dev-btn.oi-app > span:last-child { align-items: flex-start; }

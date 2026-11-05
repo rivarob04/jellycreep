@@ -450,3 +450,13 @@ document.querySelectorAll('form[data-autosubmit] select').forEach((s) => {
   new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => { if (n.nodeType === 1) { if (n.matches && n.matches(SEL)) setup(n); scan(n); } })))
     .observe(document.body, { childList: true, subtree: true });
 })();
+
+// v0.18.54 — "Open in app": Android gets intent:// links (fall back to the Play Store); the Jellyfin-app entry is Android only
+(function () {
+  const ua = navigator.userAgent || '';
+  const android = /Android/i.test(ua);
+  document.querySelectorAll('[data-open-in] .oi-app').forEach((a) => {
+    if (a.dataset.only === 'android' && !android) { a.remove(); return; }
+    if (android && a.dataset.android) a.href = a.dataset.android;
+  });
+})();
