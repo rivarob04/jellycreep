@@ -48,7 +48,7 @@
 {% endif %}
 
 {% if recent %}
-<div class="spread section-title"><h2 style="margin:0">Your recently watched</h2><a class="small" href="/me/history">All →</a></div>
+<div class="spread section-title"><h2 style="margin:0">Your Recently Watched</h2><a class="small" href="/me/history">All →</a></div>
 <div class="posters one-row mb">
   {% for p in recent %}
   <a href="{{ '/me/library/' ~ p.server_id ~ '/' ~ p.item_id if p.item_id else '#' }}"><figure title="{{ p.display_title }}">
@@ -60,7 +60,7 @@
 {% endif %}
 
 {% if sections.upcoming is not none %}{% with items=sections.upcoming %}{% include "_me_upcoming.html" %}{% endwith %}
-{% else %}<div class="lazy-sec" data-lazy="/partials/me/upcoming" aria-busy="true"><div class="spread section-title"><h2 style="margin:0">Coming up</h2></div><div class="skel-row"><i></i><i></i><i></i><i></i></div></div>{% endif %}
+{% else %}<div class="lazy-sec" data-lazy="/partials/me/upcoming" aria-busy="true"><div class="spread section-title"><h2 style="margin:0">Coming Up</h2></div><div class="skel-row"><i></i><i></i><i></i><i></i></div></div>{% endif %}
 
 {% if sections.added is not none %}{% with items=sections.added %}{% include "_me_added.html" %}{% endwith %}
 {% else %}<div class="lazy-sec" data-lazy="/partials/me/added" aria-busy="true"><div class="spread section-title"><h2 style="margin:0">New on {{ server_name }}</h2></div><div class="skel-row"><i></i><i></i><i></i><i></i></div></div>{% endif %}
@@ -69,7 +69,7 @@
 {% else %}<div class="lazy-sec" data-lazy="/partials/me/requests" aria-busy="true"><div class="spread section-title"><h2 style="margin:0">Requests</h2></div><div class="skel-row"><i></i><i></i><i></i><i></i></div></div>{% endif %}
 
 {% if u %}
-<div class="spread section-title"><h2 style="margin:0">Your favourite shows</h2>{% if u.top_shows %}<span class="small muted">by time watched</span>{% endif %}</div>
+<div class="spread section-title"><h2 style="margin:0">Your Favourite Shows</h2>{% if u.top_shows %}<span class="small muted">by time watched</span>{% endif %}</div>
 {% set top = (u.top_shows[:6]|map(attribute='seconds')|max) if u.top_shows else 0 %}
 <div class="fav-grid mb">
   {% for s in u.top_shows[:6] %}

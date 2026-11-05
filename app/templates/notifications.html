@@ -29,7 +29,7 @@
 
 <form method="post" action="{{ base }}/notifications" class="card mb">
   <input type="hidden" name="csrf" value="{{ csrf }}">
-  <h2>Tell me when…</h2>
+  <h2>Tell Me When…</h2>
   <p class="small muted" style="margin-top:-4px">These apply to all your devices.</p>
   <div class="push-prefs">
     {% for k, label in labels.items() %}
@@ -42,7 +42,7 @@
 
 {% if devices %}
 <div class="card mb">
-  <h2>Your devices</h2>
+  <h2>Your Devices</h2>
   <div class="list">
     {% for d in devices %}
     <div class="spread device-row" data-device-endpoint="{{ d.endpoint }}">
@@ -58,7 +58,7 @@
 {% if user.is_admin %}
 <form method="post" action="/push/announce" class="card mb">
   <input type="hidden" name="csrf" value="{{ csrf }}">
-  <h2>📣 Send an announcement</h2>
+  <h2>📣 Send an Announcement</h2>
   <p class="small muted" style="margin-top:-4px">
     {{ totals.viewers }} Jellyfin user{{ 's' if totals.viewers != 1 }} and {{ totals.staff }} admin/member{{ 's' if totals.staff != 1 }} have notifications on.</p>
   <div class="form">

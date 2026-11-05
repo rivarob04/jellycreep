@@ -1758,7 +1758,7 @@ async def page_discover(request: Request, q: str = "", row: str = "", page: int 
             if gl and not name:
                 return RedirectResponse("/me/discover", status_code=303)
             ctx["results"], ctx["error"] = await safe(seerr_portal.browse_genre(c, sid, gk, genre, ctx["page"]))
-            ctx.update(row_title=f"{name or 'Genre'} {'movies' if gk == 'movie' else 'series'}", row=f"kind={gk}&genre={genre}")
+            ctx.update(row_title=f"{name or 'Genre'} {'Movies' if gk == 'movie' else 'Series'}", row=f"kind={gk}&genre={genre}")
         elif co:
             kind, cid = co
             ctx["results"], ctx["error"] = await safe(seerr_portal.browse_company(c, sid, kind, cid, ctx["page"]))

@@ -94,7 +94,7 @@
 
 {% if t.requests or t.hidden_requests %}
 <div class="card mb">
-  <h2>Who requested it</h2>
+  <h2>Who Requested It</h2>
   {% for r in t.requests %}{{ req_item(r, csrf, here, show_title=False) }}{% endfor %}
   {% if t.hidden_requests %}<p class="muted small">{{ t.hidden_requests }} request{{ 's' if t.hidden_requests != 1 }} by other people.</p>{% endif %}
 </div>
@@ -103,7 +103,7 @@
 {{ seerr_cast(t.cast) }}
 
 {% if similar %}
-<div class="spread section-title"><h2 style="margin:0">More like this</h2></div>
+<div class="spread section-title"><h2 style="margin:0">More Like This</h2></div>
 <div class="prow mb">{% for c in similar %}{{ pcard(c) }}{% endfor %}</div>
 {% endif %}
 {% endblock %}

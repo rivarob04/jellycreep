@@ -85,14 +85,14 @@
     {% endfor %}
   </div>
   {% else %}<p class="muted">Nothing connected yet. Start with Jellyfin.</p>{% endif %}
-  <h2 class="mt">Add a service</h2>
+  <h2 class="mt">Add a Service</h2>
   <div class="grid g4">
     {% for k, label in kinds.items() %}<a class="btn" href="/settings?new={{ k }}#edit">+ {{ label }}</a>{% endfor %}
   </div>
 </div>
 
 <div class="card mb" id="signin">
-  <h2>Jellyfin user sign-in</h2>
+  <h2>Jellyfin User Sign-In</h2>
   <p class="muted small">Let people sign in with their Jellyfin username and password. They get a personal dashboard — their own watching, stats, history and requests — and nothing else: no other users, no IP addresses, no settings or downloads. Jellyfin admins who sign in this way are viewers too; admin access always goes through Authentik.</p>
   <form method="post" action="/settings/signin" class="form">
     <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -157,7 +157,7 @@
 
 {% if jellystats %}
 <div class="card mb" id="import">
-  <h2>Import history from Jellystat</h2>
+  <h2>Import History from Jellystat</h2>
   <p class="muted small">Copies past plays from Jellystat so your stats go back further than JellyCreep's install date. Safe to run more than once — plays already imported are skipped. By default only history from <em>before</em> JellyCreep started tracking is imported, so nothing is counted twice.</p>
   <div id="import-status" class="notice small"{% if not import_status.message %} hidden{% endif %}>{{ import_status.message }}{% if import_status.imported %} ({{ import_status.imported }} imported){% endif %}</div>
   {% for js in jellystats %}
@@ -171,7 +171,7 @@
 {% endif %}
 
 <div class="card mb" id="tokens">
-  <h2>API tokens</h2>
+  <h2>API Tokens</h2>
   <p class="muted small">For apps that read JellyCreep's data (Homepage, scripts, mobile apps) and for webhooks. Send as <code>X-Api-Key</code> or <code>?apikey=</code>. Tokens are read-only.</p>
   {% if new_token %}
   <div class="notice ok">New token <strong>{{ new_token.name }}</strong> — copy it now, it won't be shown again.

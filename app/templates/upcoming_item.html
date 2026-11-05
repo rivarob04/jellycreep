@@ -2,7 +2,7 @@
 {% from "_watch.html" import watch_bar %}
 {% block title %}{{ u.title }}{% endblock %}
 {% block content %}
-<a class="small back-link" href="{{ '/me/upcoming' if user.is_viewer else '/automation' }}">← Coming up</a>
+<a class="small back-link" href="{{ '/me/upcoming' if user.is_viewer else '/automation' }}">← Coming Up</a>
 
 <section class="title-hero lib-hero" style="--bd:url('{{ u.fanart }}')">
   <div class="th-inner">

@@ -73,7 +73,7 @@
 {% if user.is_viewer and anon is defined %}
 {% set hidden_n = (others or 0) - (anon|length) %}
 {% if anon or hidden_n > 0 %}
-<div class="spread section-title"><h2 style="margin:0">Also playing on the server</h2>
+<div class="spread section-title"><h2 style="margin:0">Also Playing on the Server</h2>
   <span class="small muted">{{ others or anon|length }} stream{{ 's' if (others or anon|length) != 1 }}</span></div>
 <div class="anon-list mb">
   {% for a in anon %}
@@ -90,7 +90,7 @@
   {% if hidden_n > 0 %}<div class="anon-more small muted">{{ '+ ' if anon }}{{ hidden_n }} {{ 'more ' if anon }}stream{{ 's' if hidden_n != 1 }} from libraries you don't have.</div>{% endif %}
 </div>
 {% elif others is not none %}
-<div class="spread section-title"><h2 style="margin:0">Also playing on the server</h2></div>
+<div class="spread section-title"><h2 style="margin:0">Also Playing on the Server</h2></div>
 <div class="card mb anon-empty"><span class="anon-empty-ico">🛋️</span><div><strong>Nobody else is watching right now.</strong>
   <div class="small muted">The server's all yours — this updates live when someone starts something.</div></div></div>
 {% endif %}

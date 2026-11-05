@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}My history{% endblock %}
+{% block title %}My History{% endblock %}
 {% block content %}
-<div class="spread"><h1>Your history</h1><span class="muted small">{{ total }} play{{ 's' if total != 1 }}</span></div>
+<div class="spread"><h1>Your History</h1><span class="muted small">{{ total }} play{{ 's' if total != 1 }}</span></div>
 <form method="get" class="search-bar mb">
   <input type="search" name="q" value="{{ q }}" placeholder="Search your history" enterkeyhint="search">
   <button class="btn primary">Search</button>

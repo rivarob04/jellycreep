@@ -1,3 +1,3 @@
 {% include "_hero.html" %}
-<div class="spread mb" style="margin-top:4px"><h1 style="margin:0">Now playing</h1><span class="muted small">{% if streams %}{{ streams|length }} stream{{ 's' if streams|length != 1 }} · {% endif %}Live</span></div>
+<div class="spread mb" style="margin-top:4px"><h1 style="margin:0">Now Playing</h1><span class="muted small">{% if streams %}{{ streams|length }} stream{{ 's' if streams|length != 1 }} · {% endif %}Live</span></div>
 {% include "_streams.html" %}

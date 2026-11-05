@@ -7,7 +7,7 @@
 
 {% if new_invite %}
 <div class="card mb" style="border-color: var(--ok)">
-  <h2>✅ Invite ready{% if new_invite.server %} · {{ new_invite.server }}{% endif %}</h2>
+  <h2>✅ Invite Ready{% if new_invite.server %} · {{ new_invite.server }}{% endif %}</h2>
   <div class="copy-box"><code class="break">{{ new_invite.url or new_invite.code }}</code></div>
   {% if new_invite.no_public %}<p class="hint" style="margin:6px 0 0">This uses Wizarr's internal address, so it only works on your home network. <a href="/settings?edit={{ new_invite.sid }}#edit">Set Wizarr's Link URL →</a> to the address people open from the internet (e.g. https://wizarr.example.com).</p>{% endif %}
   <div class="actions" style="margin-top:10px">

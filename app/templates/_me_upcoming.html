@@ -1,5 +1,5 @@
 {% if items %}
-<div class="spread section-title"><h2 style="margin:0">Coming up</h2><a class="small" href="/me/upcoming">See more →</a></div>
+<div class="spread section-title"><h2 style="margin:0">Coming Up</h2><a class="small" href="/me/upcoming">See more →</a></div>
 <div class="card flush mb up-list">
   {% for i in items[:6] %}
   <{{ 'a' if i.ref else 'div' }} class="agenda-item k-{{ i.kind }}{{ ' tap' if i.ref }}"{% if i.ref %} href="/me/upcoming/{{ i.sid }}/{{ i.ref }}"{% endif %}>

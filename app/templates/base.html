@@ -30,9 +30,9 @@
     <a href="/me" class="{{ 'on' if path == '/me' }}">Home</a>
     {% if portal_seerr %}<a href="/me/discover" class="{{ 'on' if path.startswith('/me/discover') }}">Discover</a>
     <a href="/me/requests" class="{{ 'on' if path.startswith('/me/requests') }}">Requests</a>{% endif %}
-    <a href="/me/library" class="{{ 'on' if path.startswith('/me/library') }}">Recently added</a>
+    <a href="/me/library" class="{{ 'on' if path.startswith('/me/library') }}">Recently Added</a>
     <a href="/me/history" class="{{ 'on' if path.startswith('/me/history') }}">History</a>
-    <a href="/me/upcoming" class="{{ 'on' if path.startswith('/me/upcoming') }}">Coming up</a>
+    <a href="/me/upcoming" class="{{ 'on' if path.startswith('/me/upcoming') }}">Coming Up</a>
   </nav>
   {% else %}
   <nav class="nav-desktop">
@@ -40,7 +40,7 @@
     <a href="/history" class="{{ 'on' if path.startswith('/history') }}">History</a>
     <a href="/users" class="{{ 'on' if path.startswith('/users') }}">Users</a>
     <a href="/stats" class="{{ 'on' if path.startswith('/stats') }}">Stats</a>
-    <a href="/library" class="{{ 'on' if path.startswith('/library') }}">Recently added</a>
+    <a href="/library" class="{{ 'on' if path.startswith('/library') }}">Recently Added</a>
     <a href="/media" class="{{ 'on' if path.startswith('/media') }}">Media</a>
     <a href="/automation" class="{{ 'on' if path.startswith('/automation') }}">Automation</a>
     <a href="/events" class="{{ 'on' if path.startswith('/events') }}">Events</a>
@@ -59,7 +59,7 @@
      aria-label="{{ 'Close notification settings' if on_notif else 'Notifications' }}"{% if on_notif %} data-bell-close{% endif %}>
     <svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></a>
   <div class="who">{{ user.name }}{% if user.is_admin %} · admin{% endif %}</div>
-  {% if user.is_viewer %}<a class="theme-btn fx-desk" href="/logout">Sign out</a>{% endif %}
+  {% if user.is_viewer %}<a class="theme-btn fx-desk" href="/logout">Sign Out</a>{% endif %}
 </header>
 
 <main>
@@ -91,15 +91,15 @@
 {% if user.is_viewer %}
   {% set nav_main = [('/me', 'Home', 'home', True)]
      + ([('/me/discover', 'Discover', 'discover', False), ('/me/requests', 'Requests', 'requests', False)] if portal_seerr else [])
-     + [('/me/library', 'Recently added', 'recent', False), ('/me/history', 'History', 'history', False), ('/me/upcoming', 'Coming up', 'upcoming', False),
+     + [('/me/library', 'Recently Added', 'recent', False), ('/me/history', 'History', 'history', False), ('/me/upcoming', 'Coming Up', 'upcoming', False),
         ('/me/notifications', 'Notifications', 'bell', False)] %}
   {% set nav_extra = [] %}
 {% else %}
-  {% set nav_main = [('/', 'Activity', 'activity', True), ('/history', 'History', 'history', False), ('/library', 'Recently added', 'recent', False),
+  {% set nav_main = [('/', 'Activity', 'activity', True), ('/history', 'History', 'history', False), ('/library', 'Recently Added', 'recent', False),
                      ('/media', 'Libraries', 'media', False), ('/users', 'Users', 'users', False), ('/stats', 'Statistics', 'stats', False),
                      ('/automation', 'Automation', 'automation', False), ('/events', 'Events', 'events', False),
                      ('/notifications', 'Notifications', 'bell', False)] %}
-  {% set nav_extra = ([('/add', 'Add a show or movie', 'add', False), ('/invites', 'Invite a user', 'invites', False), ('/settings', 'Settings', 'settings', False)] if user.is_admin else []) %}
+  {% set nav_extra = ([('/add', 'Add a Show or Movie', 'add', False), ('/invites', 'Invite a User', 'invites', False), ('/settings', 'Settings', 'settings', False)] if user.is_admin else []) %}
 {% endif %}
 <div class="drawer-scrim" data-drawer-close></div>
 <aside class="drawer" id="drawer" aria-label="Menu" aria-hidden="true">
@@ -116,8 +116,8 @@
     <a href="{{ href }}" class="{{ 'on' if path.startswith(href) }}"><svg viewBox="0 0 24 24">{{ ico[icon]|safe }}</svg>{{ label }}</a>
     {% endfor %}{% endif %}
     <hr>
-    {% if user.is_viewer %}<a href="/logout"><svg viewBox="0 0 24 24">{{ ico.logout|safe }}</svg>Sign out</a>
-    {% elif auth_mode != 'none' %}<a href="/auth/logout"><svg viewBox="0 0 24 24">{{ ico.logout|safe }}</svg>Sign out</a>{% endif %}
+    {% if user.is_viewer %}<a href="/logout"><svg viewBox="0 0 24 24">{{ ico.logout|safe }}</svg>Sign Out</a>
+    {% elif auth_mode != 'none' %}<a href="/auth/logout"><svg viewBox="0 0 24 24">{{ ico.logout|safe }}</svg>Sign Out</a>{% endif %}
   </nav>
   <div class="drawer-foot">JellyCreep v{{ version }}</div>
 </aside>

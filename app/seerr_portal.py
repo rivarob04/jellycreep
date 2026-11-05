@@ -35,10 +35,10 @@ REQ_STATUS = {1: ("Waiting for approval", "b-warn"), 2: ("Approved", "b-acc"), 3
 
 ROWS = [
     ("trending", "Trending", "/api/v1/discover/trending"),
-    ("movies", "Popular movies", "/api/v1/discover/movies"),
-    ("tv", "Popular series", "/api/v1/discover/tv"),
-    ("upcoming-movies", "Upcoming movies", "/api/v1/discover/movies/upcoming"),
-    ("upcoming-tv", "Upcoming series", "/api/v1/discover/tv/upcoming"),
+    ("movies", "Popular Movies", "/api/v1/discover/movies"),
+    ("tv", "Popular Series", "/api/v1/discover/tv"),
+    ("upcoming-movies", "Upcoming Movies", "/api/v1/discover/movies/upcoming"),
+    ("upcoming-tv", "Upcoming Series", "/api/v1/discover/tv/upcoming"),
 ]
 ROW_BY_KEY = {k: (t, p) for k, t, p in ROWS}
 

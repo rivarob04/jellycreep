@@ -46,7 +46,7 @@
 {% if p.movies %}<h2 id="movies" class="section-title">Movies</h2>{{ tiles(p.movies) }}{% endif %}
 {% if p.shows %}<h2 id="shows" class="section-title">Shows</h2>{{ tiles(p.shows) }}{% endif %}
 {% if p.guest %}
-<h2 id="guest" class="section-title">Guest appearances</h2>
+<h2 id="guest" class="section-title">Guest Appearances</h2>
 <div class="card flush mb">
   {% for e in p.guest %}
   <a class="hist-row plain" href="{{ base }}/{{ e.id }}">

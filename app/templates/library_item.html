@@ -7,7 +7,7 @@
 {% set wide = d.type == 'Episode' and d.thumb_id %}
 
 {% if parent %}<a class="small back-link" href="{{ base }}/{{ parent[0] }}">← {{ parent[1] }}</a>
-{% else %}<a class="small back-link" href="{{ lib }}">← Recently added</a>{% endif %}
+{% else %}<a class="small back-link" href="{{ lib }}">← Recently Added</a>{% endif %}
 
 <section class="title-hero lib-hero"{% if d.backdrop_id %} style="--bd:url('{{ img }}/{{ d.backdrop_id }}?t=Backdrop&h=720')"{% endif %}>
   <div class="th-inner{{ ' wide' if wide }}">

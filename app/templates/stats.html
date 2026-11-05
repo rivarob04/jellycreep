@@ -18,7 +18,7 @@
 </div>
 
 <div class="card mb">
-  <h2>Plays per day</h2>
+  <h2>Plays per Day</h2>
   {% set mx = (per_day|map(attribute='plays')|max) or 1 %}
   <div class="chart">
     {% for d in per_day %}
@@ -34,17 +34,17 @@
 </div>
 
 <div class="grid g3 mb">
-  <div class="card"><h2>Top users</h2>
+  <div class="card"><h2>Top Users</h2>
     {% for u in top_users %}
     <div class="rank"><span class="muted">#{{ loop.index }}</span><a href="/users/{{ u.user|urlencode }}">{{ u.user }}</a><span class="muted small">{{ u.seconds|duration }} · {{ u.plays }}</span></div>
     {% else %}<div class="muted small">No data</div>{% endfor %}
   </div>
-  <div class="card"><h2>Most watched movies</h2>
+  <div class="card"><h2>Most Watched Movies</h2>
     {% for m in top_movies %}
     <div class="rank"><img class="mini-poster" loading="lazy" src="/img/{{ m.server }}/{{ m.poster }}?h=100" alt=""><span>{{ m.title }}{% if m.year %} <span class="muted">({{ m.year }})</span>{% endif %}</span><span class="muted small">{{ m.plays }} plays · {{ m.users }} users</span></div>
     {% else %}<div class="muted small">No data</div>{% endfor %}
   </div>
-  <div class="card"><h2>Most watched shows</h2>
+  <div class="card"><h2>Most Watched Shows</h2>
     {% for m in top_shows %}
     <div class="rank"><img class="mini-poster" loading="lazy" src="/img/{{ m.server }}/{{ m.poster }}?h=100" alt=""><span>{{ m.title }}</span><span class="muted small">{{ m.plays }} plays · {{ m.users }} users</span></div>
     {% else %}<div class="muted small">No data</div>{% endfor %}
@@ -52,13 +52,13 @@
 </div>
 
 <div class="grid g3 mb">
-  <div class="card"><h2>Play method</h2>{{ hbars(methods) }}</div>
+  <div class="card"><h2>Play Method</h2>{{ hbars(methods) }}</div>
   <div class="card"><h2>Clients</h2>{{ hbars(clients) }}</div>
-  <div class="card"><h2>Media type</h2>{{ hbars(types) }}</div>
+  <div class="card"><h2>Media Type</h2>{{ hbars(types) }}</div>
 </div>
 
 <div class="card mb">
-  <div class="spread"><h2 style="margin:0">Concurrent streams</h2><span class="muted small">daily peak</span></div>
+  <div class="spread"><h2 style="margin:0">Concurrent Streams</h2><span class="muted small">daily peak</span></div>
   {% if conc.max %}
   <div class="grid g4 mt mb">
     <div class="tile"><div class="n">{{ conc.best.streams }}</div><div class="l">All-time peak{% if conc.best.at %} · {{ conc.best.at.strftime('%b %-d, %-I %p') }}{% endif %}</div></div>
@@ -74,7 +74,7 @@
 </div>
 
 <div class="card mb">
-  <div class="spread"><h2 style="margin:0">When people watch</h2><span class="muted small">local time</span></div>
+  <div class="spread"><h2 style="margin:0">When People Watch</h2><span class="muted small">local time</span></div>
   {% if heat_peak %}
   <div class="heat mt">
     <span></span>{% for h in range(24) %}<span class="hr">{{ h if h % 6 == 0 else '' }}</span>{% endfor %}

@@ -24,7 +24,7 @@
 {% endif %}
 
 <div class="card mb">
-  <h2>Last 30 days</h2>
+  <h2>Last 30 Days</h2>
   {% set mx = (u.last30|map(attribute='seconds')|max) or 1 %}
   <div class="chart" style="height:110px">
     {% for d in u.last30 %}<div class="col" title="{{ d.day.strftime('%a %b %-d') }}: {{ d.seconds|duration }}"><i class="c-ep" style="height: {{ (d.seconds / mx * 100)|round(2) }}%"></i></div>{% endfor %}
@@ -33,12 +33,12 @@
 </div>
 
 <div class="grid g2 mb">
-  <div class="card"><h2>Favourite shows</h2>
+  <div class="card"><h2>Favourite Shows</h2>
     {% for s in u.top_shows %}
     <div class="rank"><img class="mini-poster" loading="lazy" src="/img/{{ s.poster[0] }}/{{ s.poster[1] }}?h=100" alt="" onerror="this.style.visibility='hidden'"><span>{{ s.title }}</span><span class="muted small">{{ s.plays }} eps · {{ s.seconds|duration }}</span></div>
     {% else %}<div class="muted small">No shows yet</div>{% endfor %}
   </div>
-  <div class="card"><h2>Favourite movies</h2>
+  <div class="card"><h2>Favourite Movies</h2>
     {% for m in u.top_movies %}
     <div class="rank"><img class="mini-poster" loading="lazy" src="/img/{{ m.poster[0] }}/{{ m.poster[1] }}?h=100" alt="" onerror="this.style.visibility='hidden'"><span>{{ m.title }}</span><span class="muted small">{{ m.plays }}×</span></div>
     {% else %}<div class="muted small">No movies yet</div>{% endfor %}
@@ -53,7 +53,7 @@
     {% endfor %}
     </div>
   </div>
-  <div class="card"><h2>When they watch</h2>
+  <div class="card"><h2>When They Watch</h2>
     <div class="heat">
       <span></span>{% for h in range(24) %}<span class="hr">{{ h if h % 6 == 0 else '' }}</span>{% endfor %}
       {% for row in u.heat %}
@@ -66,7 +66,7 @@
   </div>
 </div>
 
-<div class="spread section-title"><h2 style="margin:0">Recent plays</h2><a class="small" href="/history?user_name={{ u.name|urlencode }}">Full history →</a></div>
+<div class="spread section-title"><h2 style="margin:0">Recent Plays</h2><a class="small" href="/history?user_name={{ u.name|urlencode }}">Full history →</a></div>
 <div class="card flush">
   {% for p in u.recent %}
   <div class="agenda-item k-{{ 'tv' if p.item_type == 'Episode' else 'movie' }}">

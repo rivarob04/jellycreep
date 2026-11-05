@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Coming up{% endblock %}
+{% block title %}Coming Up{% endblock %}
 {% block content %}
-<h1>Coming up</h1>
+<h1>Coming Up</h1>
 <p class="muted small" style="margin-top:-6px">New episodes and movies expected over the next {{ {'7': 'week', '14': '2 weeks', '30': 'month', '90': '3 months'}[days] }}.</p>
 <div class="seg mb" role="tablist" aria-label="How far ahead">
   {% for k, label in ranges.items() %}<a href="?days={{ k }}&kind={{ kind }}" class="{{ 'on' if days == k }}">{{ label }}</a>{% endfor %}
@@ -16,7 +16,9 @@
     {% if ns.day %}</div></section>{% endif %}
     {% set ns.day = i.day %}
     {% set delta = (i.day - upcoming[0].day).days %}
-    <section class="agenda-day"><h3 class="agenda-h">{{ i.day.strftime('%A') }}<span>{{ i.day.strftime('%b %-d') }}</span></h3><div class="card flush">
+    {% set dl = day_label(i.day) %}
+    <section class="agenda-day up-day"><h3 class="agenda-h{{ ' is-today' if dl == 'Today' }}">{{ dl if dl in ('Today', 'Tomorrow') else i.day.strftime('%A') }}<span>{{ i.day.strftime('%A, %b %-d') if dl in ('Today', 'Tomorrow') else i.day.strftime('%b %-d') }}</span>
+      <em class="up-day-n">{{ upcoming|selectattr('day', 'equalto', i.day)|list|length }}</em></h3><div class="card flush up-grid">
   {% endif %}
   <{{ 'a' if i.ref else 'div' }} class="agenda-item k-{{ i.kind }}{{ ' tap' if i.ref }}"{% if i.ref %} href="/me/upcoming/{{ i.sid }}/{{ i.ref }}"{% endif %}>
     <span class="thumb k-bg-{{ i.kind }}">{% if i.poster %}<img loading="lazy" src="{{ i.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ i.title[:1] }}</b></span>

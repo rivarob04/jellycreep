@@ -89,7 +89,7 @@
   </div>
   {% endif %}
   {% if s.recent %}
-  <h2>Recently added</h2>
+  <h2>Recently Added</h2>
   <div class="posters mb">
     {% for i in s.recent %}
     {% set pid = i.SeriesId if i.Type == 'Episode' else i.Id %}

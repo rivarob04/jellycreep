@@ -46,7 +46,7 @@
 <div class="card mb">
   <div class="spread">
     <div>
-      <h2 style="margin:0">Library quality</h2>
+      <h2 style="margin:0">Library Quality</h2>
       <div class="muted small">{{ q['items'] }} movies &amp; episodes · {{ q.bytes|bytes }} · scanned {{ q.scanned_at|replace('T', ' ')|truncate(16, True, '') }} UTC</div>
     </div>
     {% if user.is_admin %}
@@ -81,7 +81,7 @@
 {% set hit = {} %}{% for r in hist.reasons if r.risk %}{% set _ = hit.update({r.risk: (hit.get(r.risk, 0) + r.count)}) %}{% endfor %}
 <div class="card mb">
   <div class="spread">
-    <h2 style="margin:0">Transcode outlook</h2>
+    <h2 style="margin:0">Transcode Outlook</h2>
     {% if hist.plays %}<span class="badge {{ 'b-bad' if hist.transcode_pct >= 40 else ('b-warn' if hist.transcode_pct >= 15 else 'b-ok') }}">{{ hist.transcode_pct }}% of plays transcoded · 90d</span>{% endif %}
   </div>
   <p class="muted small" style="margin:6px 0 12px">What in your library is likely to force a transcode. Factors that actually caused transcodes in your history are highlighted.</p>
@@ -109,7 +109,7 @@
 {% if hist.plays %}
 <div class="grid g2 mb">
   <div class="card">
-    <h2>Why streams transcoded <span class="muted small">· 90 days</span></h2>
+    <h2>Why Streams Transcoded <span class="muted small">· 90 Days</span></h2>
     {% set mx = (hist.reasons|map(attribute='count')|max) if hist.reasons else 1 %}
     {% for r in hist.reasons %}
     <div class="qrow"><span class="ql" title="{{ r.key }}">{{ r.label }}</span><span class="qbar warn"><i style="width: {{ (r.count / mx * 100)|round(1) }}%"></i></span><span class="qn">{{ r.count }}</span><span class="qs"></span></div>
@@ -137,7 +137,7 @@
   {{ dist('Audio channels', q.channels) }}
   {{ dist('Container', q.container) }}
   <div class="card">
-    <h2>Highest bitrates</h2>
+    <h2>Highest Bitrates</h2>
     <div class="list">
       {% for h in q.heavy[:8] %}
       <div><div class="ellip">{{ h.name }}</div>
