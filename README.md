@@ -53,7 +53,7 @@ Then it grew. It picked up live Jellyfin activity like Tautulli, then watch hist
     <td width="50%"><img src="docs/screenshots/admin-automation.png" alt="Automation"><br><sub><b>Automation</b>: queue, downloads, calendar, requests, indexers</sub></td>
     <td>
       <table><tr>
-        <td><img src="docs/screenshots/mobile-home.png" alt="Home on a phone"></td>
+        <td><img src="docs/screenshots/phone-home.png" alt="Home on a phone"></td>
         <td><img src="docs/screenshots/mobile-activity.png" alt="Activity on a phone"></td>
       </tr></table>
       <sub><b>On a phone</b>: installs as an app, with push notifications</sub>
