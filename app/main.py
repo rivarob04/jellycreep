@@ -1248,7 +1248,10 @@ async def _anon_streams(user: User, rest: list[dict]) -> list[dict]:
     # what someone may open rarely changes, so remember it for a few minutes per set of titles
     visible, err = await safe(ttl_cached(("anonvis", user.jf_id, tuple(sorted(ids))), 300, check, stale=1800))
     visible = visible or set()
-    out = [{k: x.get(k) for k in ANON_FIELDS} for x in rest if x["item_id"] in visible]
+    # the kind of device (e.g. "Android TV", "Chrome") is shown, never its name, the person or where they are
+    out = [{**{k: x.get(k) for k in ANON_FIELDS},
+            "platform": {k: v for k, v in _platform(x.get("client"), x.get("device")).items() if k in ("label", "colour", "src", "mono")}}
+           for x in rest if x["item_id"] in visible]
     out.sort(key=lambda x: (x["is_paused"] is True, -(x["progress"] or 0)))
     return out[:12]
 
