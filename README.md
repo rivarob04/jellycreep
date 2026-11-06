@@ -32,8 +32,6 @@ Then it grew. It picked up live Jellyfin activity like Tautulli, then watch hist
 
 ## Screenshots
 
-> 📸 The images below are placeholders until real screenshots are added. Each one shows the path of the file it's waiting for.
-
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/admin-activity.png" alt="Activity"><br><sub><b>Activity</b>: live streams with device logos, Direct Play / Transcode, LAN/WAN bandwidth, stop and message</sub></td>
@@ -134,7 +132,7 @@ Turn on **Settings → Sign-in → Allow Jellyfin users to sign in**. Your users
 - **Coming Up**: the next episodes of the shows they watch, and upcoming movies.
 - **New on Jellyfin**, **Recently requested**, and their own stats and streaks.
 - **Also playing on the server**: what other people are watching, showing the title, progress and **device type** (TV, phone, browser…). It never shows **who** is watching, the device name, or where they are. Titles from libraries the viewer can't access just count as "N more streams".
-- An "Explain my transcodes" card that tells them in plain English why their streams were converted and what they can do about it.
+- A card that tells them in plain English why their streams were converted and what they can do about it.
 
 ### Discover and requests (needs Seerr)
 - Seerr-style rows: Trending, Popular, Upcoming, **movie genres and series genres**, **networks** and **studios**. Desktop has hover cards with the title, date and description.
