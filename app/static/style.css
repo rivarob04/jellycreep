@@ -2210,3 +2210,10 @@ details.play-on { min-width: 0; max-width: 100%; }
   .me-top .anon-empty { margin-bottom: 0; padding: 14px 16px; }
   .me-top .anon-empty .small { font-size: 12.5px; }
 }
+
+/* v0.18.65 — Discover title: details card (director, studio, language…) */
+.ti-facts { display: grid; gap: 0; padding: 6px 16px; }
+.ti-fact { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-top: 1px solid var(--glass-line, rgba(255,255,255,.08)); min-width: 0; }
+.ti-fact:first-child { border-top: 0; }
+.ti-fact .muted { flex: none; }
+.ti-fact b { text-align: right; min-width: 0; overflow-wrap: anywhere; font-weight: 650; }

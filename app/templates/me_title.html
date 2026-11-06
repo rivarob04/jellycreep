@@ -55,6 +55,11 @@
   {% if t.release.status %}<div class="spread"><span class="muted">Status</span><b>{{ t.release.status }}</b></div>{% endif %}
 </div>
 {% endif %}
+{% if t.facts %}
+<div class="card mb ti-facts">
+  {% for k, v in t.facts %}<div class="ti-fact"><span class="muted">{{ k }}</span><b>{{ v }}</b></div>{% endfor %}
+</div>
+{% endif %}
 <div class="card mb req-card">
   <h2>Request</h2>
   {{ not_linked(seerr) }}

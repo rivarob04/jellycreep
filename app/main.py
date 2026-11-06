@@ -2431,9 +2431,15 @@ async def act_request(request: Request, mt: str, tmdb: int, user: User = Depends
     except UpstreamError as e:
         request.session["flash"] = {"ok": False, "msg": seerr_portal.err_text(e)}
         return back
+    if not isinstance(res, dict) or not res.get("id"):
+        log.warning("Seerr request by %s for %s %s came back without a request: %r", user.name, mt, tmdb, res)
+        request.session["flash"] = {"ok": False, "msg": "Seerr didn't confirm the request. Try again, or ask the admin to check Seerr."}
+        return back
+    seerr_portal.just_requested(sc["svc"].id, mt, tmdb, res)
     seerr_portal.forget("row")
     seerr_portal.forget("similar")
     seerr_portal.forget("title")
+    seerr_portal.forget("genre"); seerr_portal.forget("co"); seerr_portal.forget("person")
     ttl_forget("homereq"); ttl_forget("discfeed"); ttl_forget("quota"); ttl_forget("reqfeed")
     log.info("Seerr request by %s: %s %s seasons=%s 4k=%s", user.name, mt, tmdb, seasons, is4k)
     auto = (res or {}).get("status") == 2

@@ -115,6 +115,7 @@ SORTS = {"added": "Most Recent", "modified": "Last Modified"}
 
 # --------------------------------------------------------------------------- cache
 _C: dict[Any, tuple[float, Any]] = {}
+_GEN: dict[Any, int] = {}        # bumped by forget(): a fetch that started before then must not write back
 
 
 _REFRESHING: set = set()
@@ -127,13 +128,17 @@ async def cached(key: Any, ttl: float, fn: Callable[[], Awaitable[Any]], stale: 
     now = time.time()
     if hit and hit[0] > now:
         return hit[1]
+    pre = key[0] if isinstance(key, tuple) and key else None
+    gen = _GEN.get(pre, 0)
     if hit and hit[0] + stale > now:
         if key not in _REFRESHING:
             _REFRESHING.add(key)
 
             async def refresh():
                 try:
-                    _C[key] = (time.time() + ttl, await fn())
+                    val = await fn()
+                    if _GEN.get(pre, 0) == gen:
+                        _C[key] = (time.time() + ttl, val)
                 except Exception:  # noqa: BLE001 – keep serving the old copy
                     pass
                 finally:
@@ -141,7 +146,8 @@ async def cached(key: Any, ttl: float, fn: Callable[[], Awaitable[Any]], stale: 
             asyncio.get_running_loop().create_task(refresh())
         return hit[1]
     val = await fn()
-    _C[key] = (now + ttl, val)
+    if _GEN.get(pre, 0) == gen:
+        _C[key] = (now + ttl, val)
     if len(_C) > 800:
         for k in [k for k, (exp, _) in _C.items() if exp + stale < now][:400]:
             _C.pop(k, None)
@@ -149,6 +155,7 @@ async def cached(key: Any, ttl: float, fn: Callable[[], Awaitable[Any]], stale: 
 
 
 def forget(prefix: str) -> None:
+    _GEN[prefix] = _GEN.get(prefix, 0) + 1
     for k in [k for k in _C if isinstance(k, tuple) and k and k[0] == prefix]:
         _C.pop(k, None)
 
@@ -530,6 +537,14 @@ async def raw_title(client, svc_id: int, mt: str, tmdb: int) -> dict:
 async def detail(client, svc_id: int, mt: str, tmdb: int, me: int | None, *, everyone: bool, can_manage: bool) -> dict:
     d, reg = await asyncio.gather(raw_title(client, svc_id, mt, tmdb), region(client, svc_id))
     d = d or {}
+    jr = _JUST.get((svc_id, mt, tmdb))
+    if jr and jr[0] > time.time():
+        # Seerr hasn't caught up with a request made here a moment ago: show it anyway
+        mi0 = d.get("mediaInfo") or {}
+        if not any(r.get("id") == jr[1].get("id") for r in mi0.get("requests") or []):
+            d = {**d, "mediaInfo": {**mi0, "status": mi0.get("status") if (mi0.get("status") or 1) > 1 else
+                                    (3 if jr[1].get("status") == 2 else 2),
+                                    "requests": [*(mi0.get("requests") or []), jr[1]]}}
     c = card({**d, "mediaType": mt}) or {}
     mi = d.get("mediaInfo") or {}
     reqs = [x for x in (_req_row({**r, "media": {**mi, **(r.get("media") or {})}}, me, everyone, can_manage)
@@ -540,7 +555,7 @@ async def detail(client, svc_id: int, mt: str, tmdb: int, me: int | None, *, eve
            "runtime": d.get("runtime") or ((d.get("episodeRunTime") or [None])[0]),
            "requests": reqs, "hidden_requests": max(0, hidden), "trailer": trailer,
            "network": ((d.get("networks") or [{}])[0] or {}).get("name") if mt == "tv" else None,
-           "cast": cast(d), "release": _safe_release(d, mt, reg), "seasons": []}
+           "cast": cast(d), "release": _safe_release(d, mt, reg), "facts": _safe_facts(d, mt), "seasons": []}
     if mt == "tv":
         # each season's own status from Seerr: 2 pending, 3 requested/processing, 4 partly, 5 available
         avail = {s.get("seasonNumber"): s.get("status") for s in mi.get("seasons") or []}
@@ -577,6 +592,62 @@ async def detail(client, svc_id: int, mt: str, tmdb: int, me: int | None, *, eve
                                    "year": (s.get("airDate") or "")[:4], "tag": tag, "free": tag is None})
         out["free_seasons"] = [s["n"] for s in out["seasons"] if s["free"]]
     return out
+
+
+LANGS = {"en": "English", "fr": "French", "es": "Spanish", "de": "German", "it": "Italian", "ja": "Japanese",
+         "ko": "Korean", "zh": "Chinese", "cn": "Cantonese", "hi": "Hindi", "pt": "Portuguese", "ru": "Russian",
+         "sv": "Swedish", "da": "Danish", "no": "Norwegian", "nl": "Dutch", "pl": "Polish", "tr": "Turkish",
+         "th": "Thai", "ar": "Arabic", "he": "Hebrew", "fi": "Finnish", "id": "Indonesian", "te": "Telugu",
+         "ta": "Tamil", "ml": "Malayalam", "tl": "Tagalog", "uk": "Ukrainian", "cs": "Czech", "el": "Greek"}
+
+
+def _names(xs, n=3, key="name") -> str | None:
+    out = []
+    for x in xs or []:
+        v = (x or {}).get(key)
+        if v and v not in out:
+            out.append(v)
+    return ", ".join(out[:n]) + (f" +{len(out) - n}" if len(out) > n else "") if out else None
+
+
+def _money(v) -> str | None:
+    try:
+        v = float(v or 0)
+    except (TypeError, ValueError):
+        return None
+    if v <= 0:
+        return None
+    return f"${v / 1e9:.2f}B" if v >= 1e9 else f"${v / 1e6:.0f}M" if v >= 1e6 else f"${v:,.0f}"
+
+
+def _safe_facts(d: dict, mt: str) -> list[tuple[str, str]]:
+    try:
+        return facts(d, mt)
+    except Exception:  # noqa: BLE001 – odd data from Seerr: just leave them out
+        return []
+
+
+def facts(d: dict, mt: str) -> list[tuple[str, str]]:
+    """Seerr-style details: who made it, where, in what language, and for how much."""
+    crew = (d.get("credits") or {}).get("crew") or []
+    jobs = lambda *js: _names([c for c in crew if c.get("job") in js])  # noqa: E731
+    lang = d.get("originalLanguage")
+    rows: list[tuple[str, str | None]] = []
+    if mt == "movie":
+        rows += [("Director", jobs("Director")), ("Writers", jobs("Screenplay", "Writer", "Story", "Novel")),
+                 ("Producers", jobs("Producer")), ("Music", jobs("Original Music Composer", "Music")),
+                 ("Studios", _names(d.get("productionCompanies")))]
+    else:
+        seasons = d.get("numberOfSeasons")
+        eps = d.get("numberOfEpisodes")
+        rows += [("Created by", _names(d.get("createdBy"))), ("Network", _names(d.get("networks"))),
+                 ("Studios", _names(d.get("productionCompanies"))),
+                 ("Episodes", f"{eps} across {seasons} season{'s' if seasons != 1 else ''}" if eps and seasons else None)]
+    rows += [("Language", LANGS.get(lang, (lang or "").upper() or None) if lang else None),
+             ("Country", _names(d.get("productionCountries"), key="name"))]
+    if mt == "movie":
+        rows += [("Budget", _money(d.get("budget"))), ("Box office", _money(d.get("revenue")))]
+    return [(k, v) for k, v in rows if v]
 
 
 def cast(d: dict, n: int = 24) -> list[dict]:
@@ -636,6 +707,13 @@ async def similar(client, svc_id: int, mt: str, tmdb: int) -> list[dict]:
 
 
 # --------------------------------------------------------------------------- actions (as the viewer)
+_JUST: dict[tuple, tuple[float, dict]] = {}   # (svc, type, tmdb) -> (until, request) for ~10 minutes
+
+
+def just_requested(svc_id: int, mt: str, tmdb: int, req: dict) -> None:
+    _JUST[(svc_id, mt, tmdb)] = (time.time() + 600, req)
+
+
 async def make_request(client, uid: int, mt: str, tmdb: int, seasons: list[int] | None, is4k: bool) -> dict:
     body: dict[str, Any] = {"mediaType": mt, "mediaId": tmdb, "is4k": is4k}
     if mt == "tv":
