@@ -547,8 +547,14 @@ async def detail(client, svc_id: int, mt: str, tmdb: int, me: int | None, *, eve
             d = {**d, "mediaInfo": {**mi0, "status": mi0.get("status") if (mi0.get("status") or 1) > 1 else
                                     (3 if jr[1].get("status") == 2 else 2),
                                     "requests": [*(mi0.get("requests") or []), jr[1]]}}
-    c = card({**d, "mediaType": mt}) or {}
     mi = d.get("mediaInfo") or {}
+    live = [r for r in mi.get("requests") or [] if r.get("status") != 3]
+    for k, four in (("status", False), ("status4k", True)):
+        # a request Seerr dropped can leave the title stuck on "pending" with no request behind it: requestable again
+        if (mi.get(k) or 1) in (2, 3) and not any(bool(r.get("is4k")) == four for r in live):
+            mi = {**mi, k: 1}
+    d = {**d, "mediaInfo": mi} if d.get("mediaInfo") else d
+    c = card({**d, "mediaType": mt}) or {}
     reqs = [x for x in (_req_row({**r, "media": {**mi, **(r.get("media") or {})}}, me, everyone, can_manage)
                         for r in mi.get("requests") or []) if x]
     hidden = len(mi.get("requests") or []) - len(reqs)
@@ -571,7 +577,7 @@ async def detail(client, svc_id: int, mt: str, tmdb: int, me: int | None, *, eve
                 whole_show = True
             for s in seasons:
                 asked[s.get("seasonNumber")] = r.get("status") or 1
-        if (mi.get("status") or 1) in (2, 3) and not avail and not asked:
+        if (mi.get("status") or 1) in (2, 3) and not avail and not asked and live:
             whole_show = True    # Seerr says the show is requested but gives no season detail
         for s in d.get("seasons") or []:
             n = s.get("seasonNumber")
@@ -717,9 +723,16 @@ def just_requested(svc_id: int, mt: str, tmdb: int, req: dict) -> None:
 
 
 async def make_request(client, uid: int, mt: str, tmdb: int, seasons: list[int] | None, is4k: bool) -> dict:
+    """Ask Seerr for a title as this person, the way Seerr's own request dialog does."""
     body: dict[str, Any] = {"mediaType": mt, "mediaId": tmdb, "is4k": is4k}
     if mt == "tv":
         body["seasons"] = seasons or "all"
+        # Seerr's own request dialog always sends the TVDB id. Without it, newer Seerr can create the request,
+        # fail to hand it to Sonarr and delete it again, while still answering "201 Created".
+        d = await raw_title(client, client.svc.id, mt, tmdb)
+        tvdb = ((d or {}).get("externalIds") or {}).get("tvdbId") or (d or {}).get("tvdbId")
+        if tvdb:
+            body["tvdbId"] = tvdb
     return await client.request("POST", "/api/v1/request", json=body, headers={"X-API-User": str(uid)}) or {}
 
 

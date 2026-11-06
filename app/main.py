@@ -2432,17 +2432,16 @@ async def act_request(request: Request, mt: str, tmdb: int, user: User = Depends
         request.session["flash"] = {"ok": False, "msg": seerr_portal.err_text(e)}
         return back
     if not isinstance(res, dict) or not res.get("id"):
-        # some Seerr versions answer without the request itself: check what Seerr now has for this person
-        log.warning("Seerr request by %s for %s %s answered without a request id: %r", user.name, mt, tmdb, res)
+        # Seerr answered "201 Created" but the request has no id: Seerr made it and then deleted it again,
+        # usually because sending it on to Sonarr / Radarr failed. Double-check before saying so.
+        log.warning("Seerr request by %s for %s %s came back without an id (Seerr dropped it): %r", user.name, mt, tmdb, res)
+        seerr_portal.forget("title")
         found, _ = await safe(seerr_portal.find_request(sc["client"], sc["uid"], mt, tmdb))
-        media = (res or {}).get("media") if isinstance(res, dict) else None
-        if not found and isinstance(media, dict) and media.get("tmdbId") == tmdb:
-            # newer Seerr replies "201 Created" with the request minus its id: that's still a request
-            found = {**res, "id": res.get("id") or -1, "status": res.get("status") or 1}
         if not found:
-            said = (res or {}).get("message") if isinstance(res, dict) else None
-            request.session["flash"] = {"ok": False, "msg": "Seerr didn't create the request" + (f": {str(said)[:160]}" if said else
-                                        ". Try again, or ask the admin to check Seerr.")}
+            said = res.get("message") if isinstance(res, dict) else None
+            request.session["flash"] = {"ok": False, "msg": (f"Seerr couldn't take this request: {str(said)[:160]}" if said else
+                "Seerr accepted the request but then dropped it, so nothing will download. This usually means Seerr couldn't pass it on to "
+                + ("Sonarr" if mt == "tv" else "Radarr") + ". Ask the admin to check Seerr's logs.")}
             return back
         res = found
     seerr_portal.just_requested(sc["svc"].id, mt, tmdb, res)
