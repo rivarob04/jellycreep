@@ -61,7 +61,9 @@
     <div class="rq-meta">
       <div class="rq-row"><span class="rq-k">Status</span><span class="badge {{ r.badge[1] }}">{{ r.badge[0] }}</span>{% if r.is4k %}<span class="badge">4K</span>{% endif %}
         <span class="badge rq-type {{ r.type }}">{{ 'Movie' if r.type == 'movie' else 'Series' }}</span></div>
-      {% if r.progress is not none %}<div class="mini-bar rq-bar"><i style="width:{{ r.progress }}%"></i></div>{% endif %}
+      {% if r.progress is not none %}{% set dls = r.downloads or [] %}{% set done = dls|selectattr('pct', 'ge', 100)|list %}
+      <div class="mini-bar rq-bar"><i style="width:{{ r.progress }}%"></i></div>
+      <div class="rq-row small muted">{% if dls and done|length == dls|length %}Downloaded · importing{% else %}{{ r.progress }}%{% endif %}{% if dls|length > 1 %} · {{ done|length }} of {{ dls|length }} downloads done{% endif %}{% set eps = dls|sum(attribute='eps') %}{% if eps > 1 %} · {{ eps }} episodes{% endif %}</div>{% endif %}
       <div class="rq-row"><span class="rq-k">Requested</span><span>{{ r.req_when }} by</span>
         <span class="rq-who"><span class="avatar xs" style="background:{{ r.colour }}">{{ r.initial }}</span>{{ 'You' if r.mine else r.by_name }}</span></div>
       {% if r.mod_name %}

@@ -358,10 +358,55 @@ def perms(u: dict | None) -> dict:
 
 
 def progress(media: dict | None, is4k: bool = False) -> int | None:
+    """Overall download progress. Sonarr lists a season pack once per episode (each with the whole pack's size),
+    so count each download once and weigh it by how many episodes it brings."""
+    dls = downloads(media, is4k)
+    if not dls:
+        return None
+    w = [(max(1, d["eps"]), d["pct"]) for d in dls]
+    return round(sum(n * p for n, p in w) / sum(n for n, _ in w))
+
+
+def downloads(media: dict | None, is4k: bool = False) -> list[dict]:
+    """What's in the download queue for a title, one row per download (a season pack covers many episodes)."""
     ds = (media or {}).get("downloadStatus4k" if is4k else "downloadStatus") or []
-    size = sum(float(d.get("size") or 0) for d in ds)
-    left = sum(float(d.get("sizeLeft") or 0) for d in ds)
-    return max(0, min(100, round(100 * (1 - left / size)))) if size else None
+    groups: dict[str, dict] = {}
+    for d in ds:
+        key = str(d.get("downloadId") or d.get("externalId") or d.get("title") or len(groups))
+        g = groups.setdefault(key, {"size": float(d.get("size") or 0), "left": float(d.get("sizeLeft") or 0),
+                                    "status": (d.get("status") or "").lower(), "time": d.get("timeLeft") or None,
+                                    "eta": d.get("estimatedCompletionTime"), "eps": [], "name": d.get("title") or ""})
+        ep = d.get("episode") or {}
+        if ep.get("episodeNumber") is not None:
+            g["eps"].append((ep.get("seasonNumber") or 0, ep.get("episodeNumber"), ep.get("title") or ""))
+    out = []
+    for g in groups.values():
+        pct = max(0, min(100, round(100 * (1 - g["left"] / g["size"])))) if g["size"] else 0
+        eps = sorted(set(g["eps"]))
+        if not eps:
+            label = "Movie" if (media or {}).get("mediaType") == "movie" else (g["name"] or "Download")
+        elif len(eps) == 1:
+            label = f"S{eps[0][0]:02d}E{eps[0][1]:02d}" + (f" · {eps[0][2]}" if eps[0][2] else "")
+        else:
+            seasons = sorted({e[0] for e in eps})
+            label = (f"Season {seasons[0]}" if len(seasons) == 1 else "Seasons " + ", ".join(map(str, seasons))) + \
+                f" · {len(eps)} episodes (E{eps[0][1]:02d}–E{eps[-1][1]:02d})"
+        st = g["status"]
+        if pct >= 100 or st in ("completed", "importpending", "importing"):
+            state = "Downloaded · importing"
+        elif st in ("queued", "delay"):
+            state = "Queued"
+        elif st == "paused":
+            state = "Paused"
+        elif st in ("warning", "failed"):
+            state = "Problem"
+        else:
+            state = f"{pct}%" + (f" · {g['time']} left" if g["time"] and g["time"] not in ("00:00:00", "0:00:00") else "")
+        out.append({"label": label, "pct": 100 if state.startswith("Downloaded") else pct, "state": state,
+                    "eps": len(eps), "season": eps[0][0] if eps else None, "first": eps[0][1] if eps else 0,
+                    "bad": state == "Problem"})
+    out.sort(key=lambda x: (x["season"] or 0, x["first"]))
+    return out
 
 
 # --------------------------------------------------------------------------- Seerr account
@@ -498,6 +543,7 @@ def _req_row(r: dict, me: int | None, everyone: bool, can_manage: bool) -> dict 
             "mine": mine, "is4k": bool(r.get("is4k")), "badge": badge, "pending": st == 1,
             "seasons": sorted(s.get("seasonNumber") for s in r.get("seasons") or [] if s.get("seasonNumber") is not None),
             "created": created, "ago": ago(created), "progress": progress(media, r.get("is4k")) if st == 2 else None,
+            "downloads": downloads(media, r.get("is4k")) if st == 2 else [],
             "can_cancel": mine and st == 1, "can_manage": can_manage and st == 1,
             "modified_by": who(r.get("modifiedBy")) if r.get("modifiedBy") and st in (2, 3) else None,
             "req_when": ago_long(created), "mod_when": ago_long(_when(r.get("updatedAt"))),

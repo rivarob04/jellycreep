@@ -27,6 +27,27 @@
 </a>{{ jf_play(r) }}</div>
 {% endmacro %}
 
+{# download progress for a request: overall, then each download (episode or season pack) #}
+{% macro dl_detail(r) %}
+{% set dls = r.downloads or [] %}
+{% set eps = dls|sum(attribute='eps') %}
+{% set done = dls|selectattr('pct', 'ge', 100)|list %}
+<div class="mini-bar"><i style="width:{{ r.progress }}%"></i></div>
+<div class="small muted">{% if dls and done|length == dls|length %}Downloaded · importing to Jellyfin{% else %}Downloading · {{ r.progress }}%{% endif %}
+  {% if dls|length > 1 or eps > 1 %} · {{ dls|length }} download{{ 's' if dls|length != 1 }}{% if eps %}, {{ eps }} episode{{ 's' if eps != 1 }}{% endif %}{% if done and done|length < dls|length %} · {{ done|length }} done{% endif %}{% endif %}</div>
+{% if dls|length > 1 or (dls and dls[0].eps > 1) %}
+<details class="dl-list"{{ ' open' if dls|length <= 4 }}>
+  <summary class="small">{{ 'Hide' if dls|length <= 4 else 'Show' }} downloads</summary>
+  {% for d in dls %}
+  <div class="dl-row{{ ' bad' if d.bad }}">
+    <span class="dl-name">{{ d.label }}</span><span class="dl-state">{{ d.state }}</span>
+    <span class="dl-bar"><i style="width:{{ d.pct }}%"></i></span>
+  </div>
+  {% endfor %}
+</details>
+{% endif %}
+{% endmacro %}
+
 {# a request as a list row #}
 {% macro req_item(r, csrf, nxt, show_title=True) %}
 <div class="req-item">
@@ -43,7 +64,7 @@
       {% if r.seasons %}<span class="badge">{{ 'Season' if r.seasons|length == 1 else 'Seasons' }} {{ r.seasons|join(', ') }}</span>{% elif r.type == 'tv' %}<span class="badge">Series</span>{% else %}<span class="badge">Movie</span>{% endif %}
       {% if r.modified_by %}<span class="muted small">by {{ r.modified_by }}</span>{% endif %}
     </div>
-    {% if r.progress is not none %}<div class="mini-bar"><i style="width:{{ r.progress }}%"></i></div><div class="small muted">Downloading · {{ r.progress }}%</div>{% endif %}
+    {% if r.progress is not none %}{{ dl_detail(r) }}{% endif %}
     {% if r.can_cancel or r.can_manage %}
     <div class="req-actions">
       {% if r.can_manage %}
