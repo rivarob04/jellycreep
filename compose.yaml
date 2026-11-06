@@ -26,6 +26,7 @@ services:
       AUTH_MODE: ${AUTH_MODE:-authentik_forward}
       # Only requests coming *from* these addresses may set X-authentik-* headers.
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1/32,172.16.0.0/12}
+      TRUSTED_PROXY_SECRET: ${TRUSTED_PROXY_SECRET:-}
       ADMIN_GROUP: ${ADMIN_GROUP:-jellycreep-admins}
       # Let Jellyfin users sign in with their Jellyfin password (can also be toggled in Settings → Sign-in)
       JELLYFIN_LOGIN: ${JELLYFIN_LOGIN:-false}

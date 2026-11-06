@@ -70,6 +70,22 @@ def _peer_trusted(request: Request) -> bool:
 
 _from_trusted_proxy = _peer_trusted
 
+# Paths that are meant to skip Authentik (API tokens, Jellyfin sign-in). Identity headers are never
+# believed here, even if a misconfigured proxy passes them through.
+NO_FORWARD_AUTH = ("/api/", "/login", "/logout", "/me", "/partials/me", "/healthz")
+
+
+def _forward_ok(request: Request) -> bool:
+    if not _peer_trusted(request):
+        return False
+    path = request.url.path
+    if any(path.startswith(p) if p.endswith("/") else (path == p or path.startswith(p + "/")) for p in NO_FORWARD_AUTH):
+        return False
+    if settings.proxy_secret:
+        sent = request.headers.get("x-jellycreep-proxy-secret") or ""
+        return hmac.compare_digest(sent.encode(), settings.proxy_secret.encode())
+    return True
+
 
 def client_ip(request: Request) -> str:
     """Best guess at the visitor's IP (for rate limiting only)."""
@@ -131,7 +147,7 @@ def browser_user(request: Request) -> User | None:
         return User(name="admin", is_admin=True, via="none", role="admin")
     if mode == "authentik_forward":
         name = request.headers.get(settings.user_header)
-        if name and _peer_trusted(request):
+        if name and _forward_ok(request):
             groups = [g for g in (request.headers.get(settings.groups_header) or "").split("|") if g]
             admin = _is_admin(groups)
             return User(name=name, is_admin=admin, via="forward", email=request.headers.get(settings.email_header),
@@ -286,7 +302,8 @@ limiter = Limiter()
 
 
 # --- CSRF (double-submit cookie) ------------------------------------------------
-CSRF_COOKIE = "jc_csrf"
+# "__Host-" cookies can't be set or overwritten by other subdomains of your domain (needs https)
+CSRF_COOKIE = "__Host-jc_csrf" if settings.cookie_secure else "jc_csrf"
 
 
 def csrf_token(request: Request) -> str:

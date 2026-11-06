@@ -291,6 +291,7 @@ Everything except the first few variables can also be set in the UI. The full li
 | `PROXY_NETWORK` | `proxy` | Existing Docker network shared with your proxy and apps |
 | `AUTH_MODE` | `authentik_forward` | `authentik_forward`, `oidc` or `none` |
 | `TRUSTED_PROXIES` | localhost + Docker | Who may send `X-authentik-*` headers |
+| `TRUSTED_PROXY_SECRET` | – | Recommended. A long random string your proxy also sends as `X-JellyCreep-Proxy-Secret`. When set, Authentik headers that arrive without it are ignored |
 | `ADMIN_GROUP` | `jellycreep-admins` | Authentik group with admin rights |
 | `JELLYFIN_LOGIN` | `false` | Let Jellyfin users sign in at `/login` |
 | `ADMIN_LOGIN_URL` | – | Optional "admin sign-in" link on the login page |
@@ -316,7 +317,7 @@ https://jellycreep.example.com/api/v1/webhook/<source>?apikey=<token>
 
 `<source>` is `sonarr`, `radarr`, `lidarr`, `prowlarr`, `jellyseerr` or `jellyfin` (Jellyfin needs the Webhook plugin, using a *Generic* destination). Settings shows every URL with a copy button.
 
-**Read-only REST API.** Send `X-Api-Key: <token>` with each request. It works well with Homepage and scripts. Interactive docs are at `/api/docs`.
+**Read-only REST API.** Send `X-Api-Key: <token>` with each request. It works well with Homepage and scripts. Interactive docs are at `/api-docs` (for signed-in admins and members).
 
 | Endpoint | |
 |---|---|

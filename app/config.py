@@ -50,6 +50,9 @@ class Settings:
             except ValueError:
                 print(f"[jellycreep] WARNING: ignoring invalid TRUSTED_PROXIES entry {n.strip()!r} "
                       "(use an IP or CIDR like 192.168.0.85/32)", flush=True)
+        # Optional shared secret your reverse proxy adds (X-JellyCreep-Proxy-Secret). When set, Authentik headers
+        # are only believed if it's present: other containers on the same Docker network can't pretend to be the proxy.
+        self.proxy_secret = _env("TRUSTED_PROXY_SECRET", "") or ""
         self.user_header = _env("AUTHENTIK_USER_HEADER", "X-authentik-username")
         self.groups_header = _env("AUTHENTIK_GROUPS_HEADER", "X-authentik-groups")
         self.email_header = _env("AUTHENTIK_EMAIL_HEADER", "X-authentik-email")

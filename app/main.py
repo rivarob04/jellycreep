@@ -36,6 +36,29 @@ from .services import client_for
 from .upstream import UpstreamError, pool
 
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+# Keep secrets out of the logs: SABnzbd and webhooks put keys in URLs (?apikey=…), and httpx / uvicorn log URLs.
+_SECRET_QS = re.compile(r"(?i)([?&](?:apikey|api_key|token|access_token|password|pass|secret|x-api-key)=)(?!\*\*\*)[^&\s\"']+")
+_make_record = logging.getLogRecordFactory()
+
+
+def _redacting_record(*args, **kwargs):
+    rec = _make_record(*args, **kwargs)
+    try:
+        if isinstance(rec.args, tuple) and rec.args:
+            # keep the args shape (uvicorn's access formatter unpacks them); just clean each one
+            rec.args = tuple(_SECRET_QS.sub(r"\1***", a) if isinstance(a, str) else a for a in rec.args)
+            if rec.name.startswith("uvicorn"):
+                return rec
+        msg = rec.getMessage()
+        if "=" in msg and _SECRET_QS.search(msg):
+            rec.msg, rec.args = _SECRET_QS.sub(r"\1***", msg), None
+    except Exception:  # noqa: BLE001 – never let logging break a request
+        pass
+    return rec
+
+
+logging.setLogRecordFactory(_redacting_record)
 log = logging.getLogger("jellycreep")
 BASE = Path(__file__).parent
 def _load_tz(name: str | None):
@@ -156,8 +179,8 @@ async def lifespan(app: FastAPI):
     await pool.close()
 
 
-app = FastAPI(title="JellyCreep", version=__version__, lifespan=lifespan, docs_url="/api/docs", redoc_url=None,
-              openapi_url="/api/openapi.json")
+app = FastAPI(title="JellyCreep", version=__version__, lifespan=lifespan, docs_url=None, redoc_url=None,
+              openapi_url=None)   # API docs are served below, for signed-in staff only
 app.add_middleware(SessionMiddleware, secret_key=settings.secret_key, session_cookie="jc_session",
                    same_site="lax", https_only=settings.cookie_secure, max_age=60 * 60 * 24 * 14)
 app.add_middleware(GZipMiddleware, minimum_size=1200, compresslevel=6)
@@ -179,6 +202,9 @@ async def security_headers(request: Request, call_next):
                                              else "public, max-age=86400")
     response.headers.setdefault("Referrer-Policy", "same-origin")
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault("Content-Security-Policy",
+                                "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     return response
 
 
@@ -592,6 +618,8 @@ async def _session_caps(client, session_id: str) -> tuple[dict | None, bool]:
 
 async def _stream_action(request: Request, server_id: int, session_id: str, user: User, stop: bool):
     await verify_csrf(request)
+    if not session_id.replace("-", "").isalnum():
+        raise HTTPException(400)
     form = await request.form()
     with SessionLocal() as db:
         svc = db.get(Service, server_id)
@@ -2879,7 +2907,7 @@ async def delete_token(tid: int, request: Request, user: User = Depends(admin_us
 async def login(request: Request, next: str = "/"):
     if settings.auth_mode != "oidc" or oauth is None:
         return RedirectResponse("/")
-    request.session["next"] = next if next.startswith("/") and not next.startswith("//") else "/"
+    request.session["next"] = next if _local_path(next) else "/"
     redirect_uri = (settings.base_url or str(request.base_url).rstrip("/")) + "/auth/callback"
     return await oauth.authentik.authorize_redirect(request, redirect_uri)
 
@@ -2906,8 +2934,14 @@ async def logout(request: Request):
 
 
 # --- Jellyfin sign-in -------------------------------------------------------------------
+def _local_path(nxt: str | None) -> bool:
+    """A same-site path we can redirect to (no //host, no backslashes or control characters browsers might bend)."""
+    return bool(nxt) and nxt.startswith("/") and not nxt.startswith("//") and "\\" not in nxt \
+        and not any(ord(ch) < 32 or ord(ch) == 127 for ch in nxt)
+
+
 def _safe_next(nxt: str | None) -> str:
-    return nxt if nxt and nxt.startswith("/") and not nxt.startswith("//") and not nxt.startswith("/login") else "/me"
+    return nxt if _local_path(nxt) and not nxt.startswith("/login") else "/me"
 
 
 def _login_page(request: Request, error: str | None = None, status: int = 200, username: str = "", nxt: str = "/me"):
@@ -2996,12 +3030,22 @@ def _play_dict(p: Play) -> dict:
     return d
 
 
+@app.get("/api-docs", include_in_schema=False)
+async def api_docs(user: User = Depends(staff_user)):
+    from fastapi.openapi.docs import get_swagger_ui_html
+    return get_swagger_ui_html(openapi_url="/api-docs/openapi.json", title="JellyCreep API")
+
+
+@app.get("/api-docs/openapi.json", include_in_schema=False)
+async def api_schema(user: User = Depends(staff_user)):
+    return JSONResponse(app.openapi())
+
+
 @app.get("/api/v1/activity", tags=["data"])
 async def api_activity(user: User = Depends(api_user)):
     streams, errors = await current_activity()
-    for s in streams:
-        if s.get("started"):
-            s["started"] = s["started"].replace(tzinfo=timezone.utc).isoformat()
+    streams = [{**s, "started": s["started"].replace(tzinfo=timezone.utc).isoformat()} if s.get("started") else dict(s)
+               for s in streams]   # copies: the list is shared with the pages' cache
     return {"stream_count": len(streams), "streams": streams, "errors": errors}
 
 
