@@ -1,96 +1,232 @@
-# 🪼 JellyCreep
+<p align="center">
+  <img src="docs/images/logo.png" alt="JellyCreep" width="320">
+</p>
 
-**Tautulli-style monitoring for Jellyfin**, built for homelabs where everything sits behind **Authentik MFA**, and designed first for your **phone**.
+<h1 align="center">JellyCreep</h1>
 
-- **Live activity:** who's watching what, direct play vs transcode (with codecs, resolution, bitrate and the transcode reason), progress, IP and device. Admins can stop a stream and send the user a message.
-- **Watch history it records itself.** It polls Jellyfin's sessions like Tautulli does, counting play time minus pauses. It survives restarts and supports several Jellyfin servers.
-- **Users and stats:** top users, movies and shows, plays per day, peak hours, play methods and clients.
-- **Automation in one place:** Sonarr/Radarr/Lidarr queues, upcoming calendar, health and disk space; SABnzbd and qBittorrent downloads (failed jobs flagged); Prowlarr indexers; Seerr requests.
-- **Invite and manage users with Wizarr:** create an invite on your phone (server, libraries, expiry, access length, downloads/Live TV), then send it through your phone's share sheet. You can also extend, disable or delete Wizarr users.
-- **Events timeline:** grabs, imports, requests and health alerts pushed in by webhooks from the *arrs, Seerr and Jellyfin.
-- **Connects to your existing Jellystat.** Its stats show up inside JellyCreep, with a link to open its own UI.
-- **Every app is a connection, not a container.** Jellyfin, Jellystat, Wizarr, Sonarr, Radarr, Lidarr, Prowlarr, SABnzbd, qBittorrent and Seerr are your existing installs. You add each one by URL and API key, from Settings or from stack variables.
-- **Works with apps behind Authentik.** Each upstream app can be reached through Authentik with a service account (app password or OAuth2 client credentials), or with custom headers for Cloudflare Access and similar.
-- **Phone-first UI:** bottom tab bar, card layouts, large tap targets, dark theme. *Add to Home Screen* makes it open full-screen like an app.
-- **Act from your phone:** approve or decline Seerr requests, pause/resume SABnzbd and qBittorrent (all or per item), retry or remove stuck queue items, and search & add shows/movies to Sonarr/Radarr.
-- **Push notifications** to ntfy, Pushover, Discord or any webhook — transcodes, failed downloads, apps going down, new requests, new users.
-- **Per-user pages** with favourite shows/movies, devices, watch-time chart, heatmap, streaks and biggest binge.
-- **Concurrent-stream stats** (daily peak streams and transcodes) and a local-time viewing heatmap.
-- **Import history from Jellystat** so stats go back before JellyCreep was installed.
-- **Jellyfin-style glass UI**: frosted panels over a blurred backdrop of what's playing (or last watched), Jellyfin's purple→blue palette, light/dark/auto theme, a per-device "Glass effects" switch for slower phones, and pull-to-refresh.
-- **Jellyfin user sign-in** with a personal, privacy-safe dashboard (their own watching, stats, history, upcoming and requests — no other users, no IPs, no admin pages).
-- **Jellyfin-style hero on Activity**: full-width backdrop of what's playing with the title logo, poster, progress and "ends at" time — swipe between streams; shows the last thing watched when idle.
-- **Library quality report** (Media → Quality): how much is 4K/1080p/720p, HDR10/HDR10+/Dolby Vision, video and audio codecs, channels, containers, image subtitles and bitrates — plus a transcode outlook that ties those to the real reasons your streams transcoded and each client's direct-play rate.
-- **Storage on the Media tab**: every drive Jellyfin (10.11+) and Sonarr/Radarr/Lidarr can see, merged per physical disk, with free space, which libraries live where, and a "full in ~N days" estimate from daily readings.
-- **Read-only REST API** with tokens, for Homepage, scripts or other apps. Docs are at `/api/docs`.
+<p align="center">
+  <b>A Tautulli-style dashboard for Jellyfin, with your whole *arr stack, Seerr requests and a personal page for every viewer, in one place.</b><br>
+  Phone-first, quick to load, and built to sit behind Authentik MFA.
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#screenshots">Screenshots</a> ·
+  <a href="#what-admins-get">Admin features</a> ·
+  <a href="#what-jellyfin-users-get">Viewer features</a> ·
+  <a href="#authentik">Authentik</a> ·
+  <a href="#configuration">Configuration</a>
+</p>
 
 ---
 
-## Deploy with Dockhand
+## The story (and a heads-up)
 
-1. **Create the shared network** (once per host) that your reverse proxy / Authentik outpost uses:
+JellyCreep started out small. I wanted one page that showed my Sonarr, Radarr, SABnzbd and qBittorrent at a glance, and every one of those apps sits behind **Authentik with MFA**. Normal dashboards can't get past an MFA prompt, so I built one that logs in through Authentik with a service account.
+
+Then it grew. It picked up live Jellyfin activity like Tautulli, then watch history, then stats, then Seerr requests. After that came Wizarr invites, push notifications, and a full, privacy-safe dashboard that my Jellyfin users can sign in to. It's now the main way my household and friends find, request and keep track of what's on the server.
+
+> **🤖 This project is vibe-coded.** Almost all of the code was written by an AI (Claude) from my prompts, screenshots and feedback, then tested on my own homelab. It works well for me and I've tried to keep it safe: it's default-deny for viewers, passwords are never stored, and secrets are encrypted at rest. Even so, **read the code before you expose it to the internet**, keep it behind your reverse proxy, and please open an issue if you spot something.
+
+---
+
+## Screenshots
+
+> 📸 The images below are placeholders until real screenshots are added. Each one shows the path of the file it's waiting for.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/admin-activity.png" alt="Activity"><br><sub><b>Activity</b>: live streams with device logos, Direct Play / Transcode, LAN/WAN bandwidth, stop and message</sub></td>
+    <td width="50%"><img src="docs/screenshots/user-home.png" alt="Home"><br><sub><b>Home</b> (Jellyfin user): Continue Watching, Next Up, Coming Up and what else is playing</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/user-discover.png" alt="Discover"><br><sub><b>Discover</b>: Seerr rows, genres, networks and studios, with hover cards</sub></td>
+    <td><img src="docs/screenshots/user-title.png" alt="Title page"><br><sub><b>Title page</b>: request, watch on Jellyfin, open in app, or play on a TV</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/user-requests.png" alt="Requests"><br><sub><b>Requests</b>: Seerr-style filters by type and status</sub></td>
+    <td><img src="docs/screenshots/user-recently-added.png" alt="Recently Added"><br><sub><b>Recently Added</b>: one row per day</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/user-coming-up.png" alt="Coming Up"><br><sub><b>Coming Up</b>: list or monthly calendar</sub></td>
+    <td><img src="docs/screenshots/admin-history.png" alt="History"><br><sub><b>History</b>: filters, binge grouping, IP and location per play</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/admin-users.png" alt="Users"><br><sub><b>Users</b>: who's active, sparklines and share of watch time</sub></td>
+    <td><img src="docs/screenshots/admin-statistics.png" alt="Statistics"><br><sub><b>Statistics</b>: plays per day, peak hours, weekdays, top titles</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/admin-automation.png" alt="Automation"><br><sub><b>Automation</b>: queue, downloads, calendar, requests, indexers</sub></td>
+    <td>
+      <table><tr>
+        <td><img src="docs/screenshots/mobile-home.png" alt="Home on a phone"></td>
+        <td><img src="docs/screenshots/mobile-activity.png" alt="Activity on a phone"></td>
+      </tr></table>
+      <sub><b>On a phone</b>: installs as an app, with push notifications</sub>
+    </td>
+  </tr>
+</table>
+
+---
+
+## Highlights
+
+- **Live activity like Tautulli.** See who's watching what, on which device (with real app logos), Direct Play, Direct Stream or Transcode and the reason why, progress, time left, and LAN/WAN bandwidth. Stop a stream or pop a message up on someone's screen.
+- **Its own watch history.** JellyCreep polls Jellyfin's sessions and records every play, minus paused time. You can import older history from Jellystat.
+- **Your whole *arr stack on one page.** Sonarr, Radarr, Lidarr, Prowlarr, SABnzbd, qBittorrent and Seerr, even when every one of them is behind Authentik MFA.
+- **A real app for your Jellyfin users.** They sign in with their Jellyfin account to discover and request titles, see what's coming, keep track of their history and get push notifications. They never see other people's names, IPs or anything admin.
+- **Fast.** Pages are cached with stale-while-revalidate and warmed in the background, so most pages render in a few milliseconds and a slow or offline app never holds a page up.
+- **Phone-first, desktop-polished.** It installs to the home screen and has swipeable rows on phones. Desktop gets a Seerr-style sidebar layout with arrow-scrolling rows.
+
+---
+
+## What admins get
+
+Admins and members sign in through **Authentik** (forward auth or OIDC). Members of the `jellycreep-admins` group can also change settings, stop streams and send invites.
+
+### Activity
+- A Tautulli Remote-style card for each stream: poster, title, episode, the person, a **platform logo** (Android TV, Shield, Apple TV, iOS, Android, Roku, Fire TV, web browsers, Moonfin, Wholphin, Infuse, Kodi and more), type and play-method icons, and time left.
+- A summary line, e.g. *"3 streams (1 Direct Stream, 1 Direct Play, 1 Transcode) · 29.1 Mbps (LAN 15.1, WAN 14.0)"*.
+- Expand a card for the player, the source → transcoded codecs and resolution, the bitrate, the **transcode reason in plain English**, the IP address with **location and ISP**, and the server.
+- **Send message** pops a note up on the player. **Stop stream** ends it, with your message if you typed one.
+- A full-width Jellyfin-style **hero** of what's playing (or what was watched last). Tap it to open that play's details.
+
+### History
+- Grouped by day, with search and a filter sheet: user, type, when, playback method, finished or not, and app. You can also group back-to-back episodes into a single "binge" card.
+- Every play opens a **play details** page: timeline, progress, paused time, device, play method and transcode reason, IP, location and ISP.
+
+### Users and profiles
+- **Users** shows a card per person: live status, what they're watching now or watched last, plays, total and 30-day watch time, a 14-day sparkline, their share of all watching and their last IP and location. Sort by recent, most watched and more.
+- Each **user profile** has a 30-day chart split by movies and TV, a month summary, favourite shows and movies, devices, an hour-of-day heatmap, streaks and their biggest binge.
+
+### Statistics
+Plays and watch time per day (movies vs TV, with hover tooltips), this period vs the last, busiest hours (12-hour clock) and weekdays, top users, movies and shows, play methods, clients, and peak concurrent streams and transcodes.
+
+### Library and media
+- **Recently Added**, laid out as one row per day.
+- Movie, show, season and episode pages with cast, Rotten Tomatoes and audience scores, IMDb/TMDB/TVDB links, file info (container, size, bitrate, every audio and subtitle track) and who has watched it.
+- **Media → Quality** shows how much of your library is 4K, 1080p or HDR/Dolby Vision, which codecs and containers you have, image-based subtitles, and a *transcode outlook* that ties those to the real reasons your streams transcode.
+- **Media → Storage** shows every drive that Jellyfin and the *arrs can see, merged per disk, with free space, which libraries live where and a "full in ~N days" estimate.
+
+### Automation
+- The **Queue** across Sonarr, Radarr and Lidarr: retry or remove stuck items.
+- **Downloads** from SABnzbd and qBittorrent: pause or resume everything or a single item. Failed jobs are flagged.
+- A **Calendar** of upcoming episodes and movies, plus health checks and Prowlarr indexer status.
+- **Seerr requests**: approve or decline from your phone.
+- **Search & add** shows and movies straight to Sonarr or Radarr.
+- Each service is shown with its real logo, from [homarr-labs/dashboard-icons](https://github.com/homarr-labs/dashboard-icons).
+
+### Invites (Wizarr)
+Create an invite on your phone (server, libraries, expiry, access length, downloads and Live TV), then share it with your phone's share sheet. You can extend, disable, enable or delete Wizarr users.
+
+### Events and notifications
+- An **Events** timeline of grabs, imports, requests and health alerts, pushed in by webhooks from the *arrs, Seerr and Jellyfin.
+- Alerts can go to **ntfy, Pushover, Discord** or any webhook: transcodes, failed downloads, apps going down or coming back, new requests and new users.
+- **Web Push** sends notifications straight to phones and computers with no extra app. Admins can also send an **announcement** to everyone, viewers only or staff only.
+
+### Settings
+Add each app by URL and API key, with **Save & test**. You can also manage sign-in options, notifications and API tokens, and import from Jellystat. Secrets are stored encrypted.
+
+---
+
+## What Jellyfin users get
+
+Turn on **Settings → Sign-in → Allow Jellyfin users to sign in**. Your users then go to `https://<your-jellycreep>/me` and sign in with their **Jellyfin username and password**. JellyCreep checks the password with Jellyfin and never stores it.
+
+### Home
+- **Continue Watching** and **Next Up**, straight from their Jellyfin account.
+- **Coming Up**: the next episodes of the shows they watch, and upcoming movies.
+- **New on Jellyfin**, **Recently requested**, and their own stats and streaks.
+- **Also playing on the server**: what other people are watching, showing the title, progress and **device type** (TV, phone, browser…). It never shows **who** is watching, the device name, or where they are. Titles from libraries the viewer can't access just count as "N more streams".
+- An "Explain my transcodes" card that tells them in plain English why their streams were converted and what they can do about it.
+
+### Discover and requests (needs Seerr)
+- Seerr-style rows: Trending, Popular, Upcoming, **movie genres and series genres**, **networks** and **studios**. Desktop has hover cards with the title, date and description.
+- A **title page** for each movie or show with backdrop, trailer, cast (tap an actor for their filmography), ratings, "More like this", and **Request** / **Request in 4K** with a season picker.
+- **Requests** with Seerr's filters (movies or shows, plus every status). People can cancel their own pending requests, and Seerr managers can approve or decline.
+- Requests go through each person's own Seerr account, so their permissions, quotas and auto-approve rules all apply. JellyCreep can create those accounts automatically.
+
+### Watching
+- **▶ Watch on Jellyfin** (or **Resume from 12:34**, or the next episode of a show).
+- **Open in app**: opens the title straight in **Moonfin** on Android. The official Jellyfin app can only be launched, not taken to a specific title.
+- **Play on…** starts the title on one of their open Jellyfin apps (TV, phone or browser), resuming where they left off.
+
+### The rest
+- **Recently Added**, **Coming Up** (as a list or a monthly calendar), **Your History** (with filters and binge grouping) and library browsing. They only ever see libraries their Jellyfin account can access.
+- **Push notifications**: when a request is approved or available, and when a new episode of a show they watch is added. Admin announcements always come through. Tap the 🔔 to turn them on.
+
+### Privacy model
+Viewers are **default-deny**. They're redirected to `/me`, and admin pages and APIs return 403. They never see other users' names, IP addresses, locations, device names, *arr URLs, file paths, downloads, storage or settings. A Jellyfin *administrator* who signs in this way is still only a viewer: admin access always goes through Authentik.
+
+---
+
+## Quick start
+
+### Dockhand (what I use)
+
+1. Create the shared Docker network once per host (skip this if you already have one, and set `PROXY_NETWORK` to its name):
    ```sh
    docker network create proxy
    ```
-   If you already have one, set `PROXY_NETWORK` to its name.
-2. In Dockhand: **Stacks → Add from Git**
+2. In Dockhand, go to **Stacks → Add from Git**:
    - Repository: `https://github.com/rivarob04/jellycreep`
    - Branch: `main`
    - Compose file: `compose.yaml`
-3. Add the **stack variables**, marking the secrets as *secret*:
+3. Add the stack variables (mark secrets as *secret*). Only these are needed to start:
 
    | Variable | Value |
    |---|---|
-   | `JELLYCREEP_SECRET_KEY` | optional: `openssl rand -base64 48`. If you leave it out, one is generated and saved in the data volume |
    | `JELLYCREEP_BASE_URL` | `https://jellycreep.example.com` |
-   | `JELLYFIN_URL` / `JELLYFIN_API_KEY` | e.g. `http://jellyfin:8096` / key from Dashboard → API Keys |
+   | `JELLYFIN_URL` / `JELLYFIN_API_KEY` | e.g. `http://jellyfin:8096` / Dashboard → API Keys |
+   | `JELLYCREEP_SECRET_KEY` | optional (`openssl rand -base64 48`). It's generated and saved in the data volume if you leave it out |
 
-   Every other app is optional, and the full list is in [`.env.example`](.env.example). The easiest route is to deploy first and then add apps from **Settings → Add a service** on your phone. Each one has a **Save & test** button.
-4. **Deploy.** The stack runs one container, `jellycreep` (port 8484). It reaches your other containers by name over the shared `proxy` network, or by any URL you give it.
+4. **Deploy**, then add your other apps from **Settings → Add a service**.
+
+To update, use **Pull and Redeploy**. Every push to `main` builds a new image at `ghcr.io/rivarob04/jellycreep` with GitHub Actions. If the GHCR package is private, either make it public or let Dockhand build it (the compose file has `build: .` as a fallback).
+
+### Plain Docker
+
+```sh
+git clone https://github.com/rivarob04/jellycreep && cd jellycreep
+cp .env.example .env    # then edit it
+docker compose up -d
+```
+
+By default the container listens on `127.0.0.1:8484`, so only your reverse proxy can reach it. Change `JELLYCREEP_PORT` / `JELLYCREEP_BIND` if you need something different.
 
 ### Connecting your apps
+
+Every app is an existing install that you connect to, not a container JellyCreep runs. Add them in **Settings** or with `<APP>_URL` / `<APP>_API_KEY` variables.
 
 | App | URL example | Credential |
 |---|---|---|
 | Jellyfin | `http://jellyfin:8096` | Dashboard → API Keys |
-| Jellystat | `http://jellystat:3000` | Jellystat → Settings → API Keys |
-| Wizarr | `http://wizarr:5690` | Wizarr → Settings → API Keys |
+| Jellystat | `http://jellystat:3000` | Settings → API Keys |
+| Wizarr | `http://wizarr:5690` | Settings → API Keys |
 | Sonarr / Radarr / Lidarr / Prowlarr | `http://sonarr:8989` or `https://sonarr.example.com` | Settings → General → API Key |
 | SABnzbd | `http://sabnzbd:8080` | Config → General → **API Key** (not the NZB key) |
 | qBittorrent | `http://qbittorrent:8080` | Web UI username + password |
-| Seerr | `http://jellyseerr:5055` | Settings → General → API Key |
+| Seerr / Jellyseerr | `http://jellyseerr:5055` | Settings → General → API Key |
 
-Any of these can also sit behind Authentik; see below.
-
-> The image is built by GitHub Actions to `ghcr.io/rivarob04/jellycreep`. GHCR packages start out private, so either make the package public (GitHub → Packages → jellycreep → Package settings) or let Dockhand build it. The compose file has `build: .` as a fallback.
-
-Plain Docker works the same way: `cp .env.example .env`, edit it, then `docker compose up -d`.
+**Link URL.** For *Watch on Jellyfin* to work away from home, set the Jellyfin connection's **Link URL** (or `JELLYFIN_PUBLIC_URL`) to the address your phone uses, e.g. `https://jellyfin.example.com`.
 
 ---
 
-## Putting JellyCreep behind Authentik
+## Authentik
 
-### Option A: proxy provider / forward auth (recommended)
+### Protecting JellyCreep
 
-**nginx:** a ready-to-use config is in [`deploy/nginx/jellycreep.conf`](deploy/nginx/jellycreep.conf). It protects the UI with Authentik and leaves `/api/` open for token-authenticated webhooks, so you don't need Authentik's Unauthenticated Paths with it.
+**Option A: forward auth / proxy provider (recommended)**
 
+1. In Authentik, go to **Applications → Create with provider → Proxy Provider**. Use *Forward auth (single application)* for nginx, Traefik, Caddy or NPM, or *Proxy* if the outpost serves the traffic.
+2. Create a group named `jellycreep-admins` and add yourself.
+3. Keep `AUTH_MODE=authentik_forward`. JellyCreep only trusts the `X-authentik-*` headers when they come from `TRUSTED_PROXIES` (localhost and Docker networks by default). If your proxy runs on another machine, set `JELLYCREEP_BIND=0.0.0.0` and `TRUSTED_PROXIES=<proxy IP>/32`.
 
-1. In Authentik: **Applications → Create with provider → Proxy Provider**
-   - *Forward auth (single application)* if you use Traefik, Caddy or NPM, or *Proxy* if the outpost serves traffic directly.
-   - External host: `https://jellycreep.example.com`. Internal host (Proxy mode): `http://jellycreep:8484`.
-   - **Unauthenticated Paths:**
-     ```
-     ^/api/.*
-     ^/healthz$
-     ```
-     The API checks its own tokens, so webhooks and other apps get through without MFA. Leave this out if you'd rather send Authentik credentials from those clients too.
-2. Create a group named `jellycreep-admins` and add yourself. Members can change settings and stop streams; everyone else gets read-only access.
-3. Keep `AUTH_MODE=authentik_forward`. JellyCreep only trusts the `X-authentik-username` and `X-authentik-groups` headers from addresses in `TRUSTED_PROXIES`, which defaults to localhost and Docker networks. Its port is bound to `127.0.0.1`, so nothing on your LAN can skip the login.
-   - If your proxy runs on **another machine**, set `JELLYCREEP_BIND=0.0.0.0` and `TRUSTED_PROXIES=<that machine's IP>/32`.
+A ready-to-use **nginx** config is in [`deploy/nginx/jellycreep.conf`](deploy/nginx/jellycreep.conf). It protects the UI and leaves `/api/` (which checks its own tokens) and the viewer pages open. If you use Authentik's *Unauthenticated Paths* instead, add `^/api/.*` and `^/healthz$`.
 
-### Option B: log in with OIDC
+**Option B: OIDC login**
 
-Create an **OAuth2/OpenID provider** in Authentik with the redirect URI `https://jellycreep.example.com/auth/callback`. Give it the `groups` scope mapping if you want admin detection. Then set:
+Create an OAuth2/OpenID provider with the redirect URI `https://jellycreep.example.com/auth/callback` and the `groups` scope, then set:
 
 ```
 AUTH_MODE=oidc
@@ -99,201 +235,114 @@ OIDC_CLIENT_ID=...
 OIDC_CLIENT_SECRET=...
 ```
 
----
+### Letting Jellyfin users in past Authentik
 
-## Connecting Sonarr, Radarr, qBittorrent and the rest *through* Authentik MFA
+Viewer pages need to skip Authentik, because viewers sign in with Jellyfin instead. Put this in your JellyCreep server block, above `location /`. It strips the Authentik headers, so nobody can use it to fake an admin login.
 
-A normal API client can't complete an MFA prompt, so JellyCreep logs in to Authentik as a **service account** for each app that sits behind Authentik.
+```nginx
+location ~ ^/(login|logout|me|partials/me)(/|$) {
+    proxy_set_header X-authentik-username "";
+    proxy_set_header X-authentik-groups   "";
+    proxy_set_header X-authentik-email    "";
+    proxy_pass http://jellycreep;
+}
+location /static/ { proxy_pass http://jellycreep; }
+```
 
-1. In Authentik, **Directory → Users → Create Service Account** (e.g. `svc-jellycreep`). Don't let it create a group.
-2. **Directory → Tokens and App passwords → Create**, choose *App password*, and set the user to `svc-jellycreep`.
-3. Give that account access to each application (Sonarr, Radarr, etc.) by adding it to the group or user bindings on each app's policy.
-4. In JellyCreep **Settings → (service) → Edit**:
-   - **URL:** the public URL behind Authentik, e.g. `https://sonarr.example.com`
-   - **API key:** the app's own key. It's sent as `X-Api-Key`, so it doesn't clash with Authentik.
-   - **Proxy auth:** pick one of the modes below.
+Then turn on **Settings → Sign-in** (or set `JELLYFIN_LOGIN=true`) and send people to `/me`.
+
+### Reaching your *arr apps through Authentik MFA
+
+This is the reason JellyCreep exists. An API client can't answer an MFA prompt, so JellyCreep logs in as an Authentik **service account**:
+
+1. **Directory → Users → Create Service Account** (e.g. `svc-jellycreep`).
+2. **Directory → Tokens and App passwords → Create** an *App password* for it.
+3. Bind that account to each application (Sonarr, Radarr…).
+4. In JellyCreep, open **Settings → (app) → Edit**, use the app's public URL and API key, and pick a **Proxy auth** mode:
 
 | Mode | What JellyCreep sends | Use when |
 |---|---|---|
-| **Authentik – username + app password** | `Authorization: Basic svc-jellycreep:<app password>` | Simplest choice. Works with proxy and forward-auth providers. |
-| **Authentik – OAuth2 client credentials** | Gets a JWT from `/application/o/token/` (needs the proxy provider's *Client ID*) and sends `Authorization: Bearer …`, refreshing it automatically | You want short-lived tokens on the wire. |
-| **Custom headers only** | Whatever you list, e.g. `CF-Access-Client-Id` / `CF-Access-Client-Secret` | Cloudflare Access, Pomerium, a shared-secret header… |
-| **None** | Only the app's own credentials | LAN/Docker network, VPN, or Authentik already bypasses `^/api/.*` for that app |
+| Authentik – username + app password | `Authorization: Basic …` | Simplest; works with proxy and forward-auth providers |
+| Authentik – OAuth2 client credentials | A short-lived JWT, refreshed automatically | You want short-lived tokens on the wire |
+| Custom headers | Whatever you list (e.g. Cloudflare Access) | Cloudflare Access, Pomerium, shared-secret headers |
+| None | Only the app's own key | Same Docker network, LAN or VPN |
 
-Custom headers are added in every mode. The session cookie Authentik sets is reused across requests, as Authentik recommends, so the outpost isn't re-checking credentials on every poll.
-
-**Use Save & test.** If JellyCreep runs into Authentik's login page, it tells you so directly ("Blocked by the login proxy in front of …") instead of showing a confusing JSON error.
-
-> If you use forward auth with Traefik, Caddy or NPM, make sure the proxy passes the `Authorization` header through to the outpost. Authentik needs it to see the app password.
-
-**Same Docker network, no Authentik?** Use the container URL (`http://sonarr:8989`) with proxy auth set to *None*. That's the fastest path.
+The app's own API key goes in `X-Api-Key`, so it doesn't clash with Authentik. The Authentik session cookie is reused between polls. **Save & test** tells you plainly when a request hits Authentik's login page. With forward auth, make sure your proxy passes the `Authorization` header through to the outpost.
 
 ---
 
-## Letting Jellyfin users sign in
+## Push notifications
 
-Your Jellyfin users can get their own dashboard by signing in with their **Jellyfin username and password**. It shows what they're watching, their stats and streaks, their history, upcoming episodes, what's new (only from libraries they can access) and the status of their Seerr requests.
+Tap the **🔔** at the top right, then **Turn on for this device**. It uses standard Web Push, so there's no ntfy, Firebase or extra app to set up.
 
-They never see other users, IP addresses, devices other than their own, downloads, storage, settings or any admin page. The server enforces this with default-deny: viewers are redirected to `/me`, and admin APIs return 403. A Jellyfin *administrator* who signs in this way is also only a viewer. Admin access always goes through Authentik and MFA.
+- JellyCreep must be served over **https://**.
+- The container needs outbound HTTPS to the push services (`fcm.googleapis.com`, `*.push.apple.com`, `updates.push.services.mozilla.com`).
+- iPhone users must **Add to Home Screen** first (iOS 16.4+).
+- Keys are generated automatically. Set `VAPID_SUBJECT=mailto:you@example.com` to add a contact address.
 
-When a viewer's stream is being transcoded, JellyCreep explains why in plain English ("These subtitles have to be burned into the picture", "Your device can't play this audio track (TRUEHD)") and adds a tip they can act on. Their history marks each converted play with its reason, and the home page sums up how many recent plays were converted, the most common cause and the device it happened on.
+---
 
-### Desktop layout
+## Configuration
 
-On wide screens (1000 px and up), JellyCreep uses a Seerr-style layout:
-- A fixed left sidebar with the logo, your name, every page (current one highlighted), Sign out and the version.
-- A full-width search bar along the top. Jellyfin users search Discover, or their library if Seerr isn't set up. Admins search the Jellyfin library.
-- Discover opens with **Recently Added** (from the person's own Jellyfin), then **Recent Requests** as wide cards (backdrop, year, title, who asked, seasons, status, poster), then larger poster rows.
+Everything except the first few variables can also be set in the UI. The full list is in [`.env.example`](.env.example).
 
-Phones and tablets keep the slide-out menu.
+| Variable | Default | What it does |
+|---|---|---|
+| `JELLYCREEP_BASE_URL` | – | Public URL, used for links and push |
+| `JELLYCREEP_SECRET_KEY` | generated | Encrypts stored secrets and signs sessions |
+| `TZ` | `UTC` | Time zone for charts, history and the calendar |
+| `JELLYCREEP_PORT` / `JELLYCREEP_BIND` | `8484` / `127.0.0.1` | Where the container listens |
+| `PROXY_NETWORK` | `proxy` | Existing Docker network shared with your proxy and apps |
+| `AUTH_MODE` | `authentik_forward` | `authentik_forward`, `oidc` or `none` |
+| `TRUSTED_PROXIES` | localhost + Docker | Who may send `X-authentik-*` headers |
+| `ADMIN_GROUP` | `jellycreep-admins` | Authentik group with admin rights |
+| `JELLYFIN_LOGIN` | `false` | Let Jellyfin users sign in at `/login` |
+| `ADMIN_LOGIN_URL` | – | Optional "admin sign-in" link on the login page |
+| `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | – | For `AUTH_MODE=oidc` |
+| `POLL_INTERVAL` | `10` | Seconds between Jellyfin session polls |
+| `MIN_WATCH_SECONDS` | `30` | Shorter plays aren't recorded |
+| `WATCHED_PERCENT` | `90` | Counted as finished at this progress |
+| `HISTORY_RETENTION_DAYS` | `0` | `0` keeps history forever |
+| `GEOIP` | `ipwhois` | Set to `off` to stop looking up IP locations (via ipwho.is) |
+| `VAPID_SUBJECT` | – | Contact address for Web Push |
+| `<APP>_URL`, `<APP>_API_KEY`, `<APP>_PROXY_AUTH`, `<APP>_PUBLIC_URL` | – | Connect an app from variables instead of Settings |
+| `AUTHENTIK_URL`, `AUTHENTIK_SERVICE_USERNAME`, `AUTHENTIK_SERVICE_APP_PASSWORD` | – | Service account for apps behind Authentik |
 
-### Faster Home page & live refresh
+---
 
-- Home appears straight away with what's playing and your stats. The rows that need other apps (Coming up, New on Jellyfin, Requests) fill in a moment later, each on its own. They have an 8-second limit, so a slow or offline Sonarr/Radarr/Seerr never holds up the page.
-- Answers are briefly shared and remembered: what's playing for 2 s, Coming up for 5 min (refreshed in the background), recently added for 2 min, requests for 1 min, stats for 1 min. Many phones polling at once cause one Jellyfin request, not one each.
-- Home and Activity show **● Live · updated Xs ago** with a ↻ button and a picker: 5 s, 10 s (default), 15 s, 30 s, 1 min or Off, remembered per device. Refreshing pauses while the app is in the background and catches up when you come back.
+## Webhooks and API
 
-### Cast in Discover & Requests
-
-Every Discover title page (which Requests open too) has a **Cast** row from TMDB with photos and character names. Tap an actor to see their bio and full filmography from TMDB, with each title's status (Available ✓ / Requested / Pending). From there you can open any title to request it, or watch it if it's already in your libraries.
-
-### Actor pages
-
-Tap any actor in a **Cast** row to see their photo, birth date and place, bio, IMDb/TMDB links, and every **Movie**, **Show** and **Guest appearance** of theirs in your library. Tap a title to open it. Jellyfin users only see titles from libraries their account can access.
-
-### Cast & Coming up details
-
-- Movie, show and episode pages have a **Cast** row of actor cards with photo, name and character (an episode's guest stars too).
-- Every card on **Coming up** opens its own page:
-  - air or release dates
-  - whether it's on Jellyfin yet
-  - the episode summary and an "About the show" section
-  - network or studio, genres, runtime and rating
-  - the Rotten Tomatoes and audience scores (movies, from Radarr)
-  - the cast
-  - links to the trailer, IMDb and TMDB/TheTVDB
-
-  If the title is already in Jellyfin, the same **Watch on Jellyfin** and **Play on…** buttons appear. For an episode that hasn't aired yet they play the next episode you haven't watched, so you can catch up. Jellyfin users can only open items on their own Coming up list, and no Sonarr/Radarr addresses are shown to them.
-
-### "Also playing on the server" (anonymous)
-
-Jellyfin users' home page shows what else is being watched: poster, title, episode, progress, paused, and when it ends. It never shows **who** is watching, on what device or app, or from where (no usernames, IPs or locations). People only see titles their own Jellyfin account could watch; anything else just counts as "N more streams from libraries you don't have". Tapping a title opens its page. It refreshes live with the rest of the page. Turn it off under Settings → Sign-in → *What others are watching*.
-
-### Watch on Jellyfin
-
-Every movie, show, season and episode page has a **▶ Watch on Jellyfin** button. It opens that title in Jellyfin (in a new tab, or in your browser if JellyCreep is installed as an app). For a show or season it picks the next episode to watch, and it says **Resume … from 12:34** when you're part-way through.
-
-**Play on…** lists the Jellyfin apps you have open: TV app, phone app, a browser tab. Pick one and it starts playing there straight away, resuming where you left off. Jellyfin users only see their own devices. Admins see everyone's. Members only get the Watch button.
-
-For the Watch button to work away from home, set the Jellyfin connection's **Link URL** (Settings → Jellyfin → Link URL, or `JELLYFIN_PUBLIC_URL`) to the address your phone uses, e.g. `https://jellyfin.example.com`. Otherwise JellyCreep's internal address is used.
-
-### Phone notifications (everyone)
-
-Tap the **🔔** in the top bar (or **Notifications** in the menu), then tap **Turn on for this device**. JellyCreep then sends real notifications with its own icon to that phone or computer, even while the app is closed, using Web Push. Nothing else is needed: no ntfy, no extra app, and no Firebase account.
-
-- **Jellyfin users** can be told when:
-  - their requests are approved, declined or ready to watch
-  - a new episode of a show they've watched (last 6 months) is added
-  - anything new is added (off by default)
-  - you send an announcement
-
-  They're only told about things their Jellyfin account can access.
-- **Admins and members** get the same alerts as ntfy/Pushover (new Seerr request, download failed, app down/back, new Wizarr user, transcodes, health). They can also get "new movies & episodes" and announcements. Each person picks their own alerts.
-- **Admins** can send an **announcement** to everyone, Jellyfin users only, or staff only.
-- Tapping a notification opens the right page. Signing out on a phone turns that phone's notifications off, so a shared device doesn't get the previous person's alerts.
-
-Requirements: JellyCreep must be opened over **https://**. The container also needs outbound HTTPS to the browser push services (`fcm.googleapis.com` for Chrome/Android, `*.push.apple.com` for Safari, `updates.push.services.mozilla.com` for Firefox). On iPhone, people must first **Add to Home Screen** (iOS 16.4+). The signing keys are created automatically and kept in the data volume. Set `VAPID_SUBJECT=mailto:you@example.com` if you want a contact address on them.
-
-### Navigation on phones
-
-On phones and tablets, tap **☰** in the top-left corner, or swipe in from the left edge, to open the slide-out menu. It lists every page (the current one highlighted) and Sign out. Tap outside it, swipe it left or press Esc to close it. Wide screens keep the menu bar across the top.
-
-### Recently added & library pages (like Tautulli Remote)
-
-Everyone gets a **Recently added** list. Admins and members find it under `/library`; Jellyfin users find it under **More → Recently added**, or tap **All →** on their home page. Filter by All, Movies, Shows or Music. Tap anything to open its page:
-
-- **Details:** tagline, overview, network or studio, air date, runtime, rating, genres, director, writers, cast, the **Rotten Tomatoes** critics score (🍅 fresh / 🤢 rotten) and audience rating, IMDb/TMDB/TVDB links, and **file info** for movies and episodes (container, size, bitrate, video, every audio and subtitle track).
-- **Seasons:** a poster grid for series. Tap a season for its **Episodes** grid, then tap an episode for its own details and file info.
-- **History:** who watched it and when. Jellyfin users see only their own plays.
-
-Jellyfin users browse *as themselves*, so they only see libraries their Jellyfin account can access. File paths are only shown to staff. History rows and home-page posters link straight to these pages.
-
-Rotten Tomatoes and audience scores come from Jellyfin's metadata. If they're missing, enable a metadata provider that supplies critic ratings (e.g. the OMDb plugin) and refresh the library.
-
-### Requesting with Seerr (like Moonfin)
-
-If Seerr is connected, signed-in Jellyfin users also get **Discover** and **Requests** tabs:
-
-- **Discover**: rows for Trending, Popular movies, Popular series, Upcoming movies and Upcoming series, plus search. Each poster shows whether the title is available, requested or pending.
-- **Watch on Jellyfin**: titles already in the person's own Jellyfin libraries get a ▶ button on their poster, and their title page gets **Watch on Jellyfin** (or **Resume**, or the next episode for a series) plus **Play on…** to start it on one of their Jellyfin apps. Matched by TMDB id, as that person, so it never shows titles from libraries they can't open.
-- **Title page**: backdrop, overview, trailer, a **Request** button (and **Request in 4K** when the person is allowed and you have a 4K Radarr/Sonarr), a season picker for series, "Who requested it", and "More like this".
-- **Requests**: everyone's requests with the requester's name, status, seasons, 4K and download progress. Filters: All, Waiting, Approved, Available. People can cancel their own pending requests. Seerr managers can approve or decline.
-- The home page and Discover start with a **Recently requested** row.
-
-**How it works.** JellyCreep matches each person to their own Seerr account (Jellyfin user ID first, then username). It sends their requests with your Seerr API key and the header `X-API-User`, so Seerr records them as the requester and applies their permissions, quotas and auto-approve rules. They never need a separate Seerr password. Only display names are shown, never email addresses.
-
-Settings → Sign-in → **Seerr** has three switches:
-- Discover & request.
-- Show who requested what. Turn it off to show people only their own requests.
-- Create Seerr accounts automatically for Jellyfin users who don't have one. The alternative is to import them yourself in Seerr → Users → Import Jellyfin users.
-
-1. **Settings → Sign-in → Allow Jellyfin users to sign in**, then pick what users can see. Or set `JELLYFIN_LOGIN=true`.
-2. **nginx:** let the user pages bypass Authentik. Everything else stays protected. Add the following to your JellyCreep server block, above `location /`. It's also in [`deploy/nginx/jellycreep.conf`](deploy/nginx/jellycreep.conf).
-   ```nginx
-   location ~ ^/(login|logout|me|partials/me)(/|$) {
-       proxy_set_header X-authentik-username "";
-       proxy_set_header X-authentik-groups   "";
-       proxy_set_header X-authentik-email    "";
-       proxy_pass http://jellycreep;
-   }
-   location /static/ { proxy_pass http://jellycreep; }
-   ```
-3. Send users **`https://<your-jellycreep>/me`**. They'll get the sign-in page, and can then *Add to Home Screen*.
-
-How it works:
-- Passwords are checked by Jellyfin (`/Users/AuthenticateByName`) and never stored.
-- The short-lived Jellyfin session created by the check is logged out straight away, so it doesn't clutter Jellyfin's device list.
-- Failed attempts are rate-limited per IP and per username.
-- Every few hours JellyCreep re-checks that the account still exists and isn't disabled. If it is gone or disabled, they're signed out.
-
-## Inviting users (Wizarr)
-
-Connect Wizarr in **Settings**, then open **More → Invite a user** (admins only):
-
-1. Pick the media server, how long the invite link stays valid (1, 7 or 30 days, or never) and how long the account lasts (blank means unlimited).
-2. Optionally restrict libraries and allow downloads or Live TV.
-3. Tap **Create invite**, then **Share…**. Your phone's share sheet opens so you can send it by Messages, WhatsApp or email. On desktop the link is copied instead.
-
-The same page lists every invitation with its status (pending, used or expired) and every Wizarr user. From there you can **extend** a user by N days, **disable**, **enable** or **delete** them.
-
-## Webhooks → Events
-
-Create an API token in **Settings → API tokens**, then add a webhook in each app pointing to:
+**Webhooks → Events.** Create a token in **Settings → API tokens**, then point each app's webhook at:
 
 ```
 https://jellycreep.example.com/api/v1/webhook/<source>?apikey=<token>
 ```
 
-`<source>` is one of `sonarr`, `radarr`, `lidarr`, `prowlarr`, `jellyseerr` or `jellyfin`. For Jellyfin, install the Webhook plugin and use a Generic destination. Settings shows each URL with a copy button.
+`<source>` is `sonarr`, `radarr`, `lidarr`, `prowlarr`, `jellyseerr` or `jellyfin` (Jellyfin needs the Webhook plugin, using a *Generic* destination). Settings shows every URL with a copy button.
 
-## API
-
-All endpoints are read-only and need `X-Api-Key: <token>` (or `?apikey=`):
+**Read-only REST API.** Send `X-Api-Key: <token>` with each request. It works well with Homepage and scripts. Interactive docs are at `/api/docs`.
 
 | Endpoint | |
 |---|---|
-| `GET /api/v1/activity` | current streams |
-| `GET /api/v1/history?user_name=&type=&q=&method=&limit=&offset=` | watch history |
-| `GET /api/v1/users` | per-user totals |
-| `GET /api/v1/stats?days=30` | aggregates (top users, movies, shows, per day, per hour…) |
-| `GET /api/v1/events?source=` | webhook events |
-| `GET /api/v1/services` | connection status of each service |
+| `GET /api/v1/activity` | Current streams |
+| `GET /api/v1/history` | Watch history (`user_name`, `type`, `q`, `method`, `limit`, `offset`) |
+| `GET /api/v1/users` | Per-user totals |
+| `GET /api/v1/stats?days=30` | Aggregates |
+| `GET /api/v1/events` | Webhook events |
+| `GET /api/v1/services` | Connection status |
 
-Interactive docs: `/api/docs`.
+---
 
-## On your phone
+## Known limitations
 
-Open JellyCreep in your phone's browser, sign in through Authentik, then use **Share → Add to Home Screen** on iOS or **⋮ → Install app** on Android. It opens full-screen with a bottom tab bar for **Activity · History · Stats · Arr · More**.
+- **Wholphin** ignores remote "play" commands, so it's left out of *Play on…*. It does show messages.
+- The official **Jellyfin Android app** can't be opened at a specific title, only launched. **Moonfin** can.
+- The **Jellyfin iOS app** doesn't display messages sent from the server.
+- Roku, Samsung and LG TV apps get a generic TV icon.
+- Rotten Tomatoes scores need a metadata provider that supplies them (e.g. the OMDb plugin).
+- IP locations come from a free lookup service and are approximate. Set `GEOIP=off` if you'd rather not use it.
+
+---
 
 ## Development
 
@@ -303,8 +352,12 @@ pip install -r requirements.txt
 DATA_DIR=./data AUTH_MODE=none COOKIE_SECURE=false uvicorn app.main:app --reload --port 8484
 ```
 
-Stack: FastAPI, SQLite (WAL), httpx and Jinja. No JavaScript framework and no CDN, so it works fully offline on your LAN.
+**Stack:** FastAPI, Jinja2, SQLAlchemy on SQLite (WAL) and httpx. The front end is plain CSS and a small vanilla JS file, with no framework and no CDN, so everything is served locally. Responses are gzipped and static files are cached forever with versioned URLs.
 
-### Look
+## Credits
 
-JellyCreep is always dark with the glass effect on; there are no theme or glass switches.
+- Service logos: [homarr-labs/dashboard-icons](https://github.com/homarr-labs/dashboard-icons)
+- Movie and show artwork and metadata: [TMDB](https://www.themoviedb.org/), via Seerr. *This product uses the TMDB API but is not endorsed or certified by TMDB.*
+- IP locations: [ipwho.is](https://ipwho.is)
+- Inspired by [Tautulli](https://tautulli.com), [Tautulli Remote](https://github.com/Tautulli/Tautulli-Remote), [Jellyseerr/Seerr](https://github.com/Fallenbagel/jellyseerr), [Jellystat](https://github.com/CyferShepard/Jellystat) and Moonfin
+- Written with [Claude](https://claude.ai) 🤖
