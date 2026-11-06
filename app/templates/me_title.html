@@ -93,6 +93,23 @@
           {% if s.tag %}<span class="badge {{ s.tag[1] }}">{{ s.tag[0] }}</span>{% endif %}
         </label>
         {% endfor %}
+        {% if matches %}
+        <fieldset class="tv-match">
+          <legend>Which show is it?</legend>
+          <p class="small muted">Seerr couldn't match this show automatically. Pick the right one so it can be downloaded.</p>
+          <input type="hidden" name="needs_match" value="1">
+          {% for m in matches %}
+          <label class="tv-opt">
+            <input type="radio" name="tvdb" value="{{ m.tvdb }}" required>
+            <span class="tv-poster">{% if m.poster %}<img loading="lazy" src="{{ m.poster }}" alt="" onerror="this.remove()">{% endif %}</span>
+            <span class="tv-body"><b>{{ m.title }}</b><small>{{ [m.year, m.network]|select|join(' · ') }}</small>
+              {% if m.overview %}<span class="tv-ov">{{ m.overview }}</span>{% endif %}</span>
+          </label>
+          {% endfor %}
+        </fieldset>
+        {% elif not t.tvdb %}
+        <p class="small muted">Seerr couldn't find this show in Sonarr's search, so a request may not download. Ask the admin if it doesn't show up.</p>
+        {% endif %}
         <div class="req-buttons">
           <button class="btn primary">＋ Request selected</button>
           {% if can4k %}<button class="btn" name="is4k" value="1">＋ Request in 4K</button>{% endif %}

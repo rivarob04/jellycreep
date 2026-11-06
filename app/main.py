@@ -2385,9 +2385,11 @@ async def page_title(request: Request, mt: str, tmdb: int, user: User = Depends(
     if err or not t:
         raise HTTPException(404, "Couldn't load that title from Seerr")
     similar = _mark_watchable(jf, similar)
-    watch = await _title_watch(user, jf, t)
+    watch, matches = await asyncio.gather(
+        _title_watch(user, jf, t),
+        seerr_portal.tvdb_matches(c, sid, tmdb) if mt == "tv" and not t.get("tvdb") and t.get("free_seasons") else asyncio.sleep(0, []))
     return render(request, "me_title.html", user, seerr=sc, t=t, similar=similar, has4k=has4k, quota=quota,
-                  watch=watch, sid=jf["svc"].id if jf else None, lib=_lib_base(user), ambient=t.get("backdrop"))
+                  watch=watch, matches=matches, sid=jf["svc"].id if jf else None, lib=_lib_base(user), ambient=t.get("backdrop"))
 
 
 async def _title_watch(user: User, jf: dict | None, t: dict) -> dict | None:
@@ -2426,8 +2428,16 @@ async def act_request(request: Request, mt: str, tmdb: int, user: User = Depends
     if mt == "tv" and not seasons:
         request.session["flash"] = {"ok": False, "msg": "Pick at least one season."}
         return back
+    tvdb = None
+    if mt == "tv" and str(form.get("tvdb") or "").isdigit():
+        # only accept one of the matches Seerr offered for this show
+        offered = await seerr_portal.tvdb_matches(sc["client"], sc["svc"].id, tmdb)
+        tvdb = next((m["tvdb"] for m in offered if m["tvdb"] == int(form["tvdb"])), None)
+    elif mt == "tv" and form.get("needs_match"):
+        request.session["flash"] = {"ok": False, "msg": "Pick which show this is first."}
+        return back
     try:
-        res = await seerr_portal.make_request(sc["client"], sc["uid"], mt, tmdb, seasons, is4k)
+        res = await seerr_portal.make_request(sc["client"], sc["uid"], mt, tmdb, seasons, is4k, tvdb)
     except UpstreamError as e:
         request.session["flash"] = {"ok": False, "msg": seerr_portal.err_text(e)}
         return back

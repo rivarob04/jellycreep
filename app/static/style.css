@@ -2217,3 +2217,17 @@ details.play-on { min-width: 0; max-width: 100%; }
 .ti-fact:first-child { border-top: 0; }
 .ti-fact .muted { flex: none; }
 .ti-fact b { text-align: right; min-width: 0; overflow-wrap: anywhere; font-weight: 650; }
+
+/* v0.18.69 — "Which show is it?" when Seerr can't match a series to TVDB */
+.tv-match { border: 0; padding: 0; margin: 12px 0 4px; min-width: 0; }
+.tv-match legend { font-weight: 700; padding: 0; margin-bottom: 2px; }
+.tv-match > p { margin: 0 0 10px; }
+.tv-opt { display: grid; grid-template-columns: auto 46px minmax(0, 1fr); gap: 10px; align-items: start; padding: 8px; margin-top: 8px;
+  border-radius: 12px; border: 1px solid var(--glass-line, rgba(255,255,255,.1)); background: rgba(255,255,255,.03); cursor: pointer; }
+.tv-opt:has(input:checked) { border-color: #9b6bff; background: rgba(155,107,255,.14); }
+.tv-opt input { margin-top: 4px; accent-color: #9b6bff; }
+.tv-poster { width: 46px; aspect-ratio: 2/3; border-radius: 6px; overflow: hidden; background: #1b2030; }
+.tv-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tv-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tv-body b { overflow-wrap: anywhere; }
+.tv-ov { font-size: 12px; color: var(--muted, #9aa3b5); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

@@ -563,7 +563,8 @@ async def detail(client, svc_id: int, mt: str, tmdb: int, me: int | None, *, eve
            "runtime": d.get("runtime") or ((d.get("episodeRunTime") or [None])[0]),
            "requests": reqs, "hidden_requests": max(0, hidden), "trailer": trailer,
            "network": ((d.get("networks") or [{}])[0] or {}).get("name") if mt == "tv" else None,
-           "cast": cast(d), "release": _safe_release(d, mt, reg), "facts": _safe_facts(d, mt), "seasons": []}
+           "cast": cast(d), "release": _safe_release(d, mt, reg), "facts": _safe_facts(d, mt), "seasons": [],
+           "tvdb": (((d.get("externalIds") or {}).get("tvdbId") or mi.get("tvdbId")) if mt == "tv" else None)}
     if mt == "tv":
         # each season's own status from Seerr: 2 pending, 3 requested/processing, 4 partly, 5 available
         avail = {s.get("seasonNumber"): s.get("status") for s in mi.get("seasons") or []}
@@ -715,6 +716,27 @@ async def similar(client, svc_id: int, mt: str, tmdb: int) -> list[dict]:
 
 
 # --------------------------------------------------------------------------- actions (as the viewer)
+async def tvdb_matches(client, svc_id: int, tmdb: int) -> list[dict]:
+    """When TMDB doesn't know a show's TVDB id, Seerr asks the person to pick the show from Sonarr's search.
+    Same list Seerr's own "select the correct match" step shows."""
+    async def load():
+        try:
+            data = await client.get(f"/api/v1/service/sonarr/lookup/{tmdb}") or []
+        except UpstreamError:
+            return []
+        out = []
+        for r in data if isinstance(data, list) else []:
+            if not r.get("tvdbId"):
+                continue
+            poster = r.get("remotePoster") or next((i.get("remoteUrl") or i.get("url") for i in r.get("images") or []
+                                                    if i.get("coverType") == "poster"), None)
+            out.append({"tvdb": int(r["tvdbId"]), "title": r.get("title") or "?", "year": r.get("year") or None,
+                        "overview": (r.get("overview") or "")[:220], "poster": poster if (poster or "").startswith("https://") else None,
+                        "network": r.get("network") or None})
+        return out[:8]
+    return await cached(("tvdbm", svc_id, tmdb), 3600, load)
+
+
 _JUST: dict[tuple, tuple[float, dict]] = {}   # (svc, type, tmdb) -> (until, request) for ~10 minutes
 
 
@@ -722,17 +744,19 @@ def just_requested(svc_id: int, mt: str, tmdb: int, req: dict) -> None:
     _JUST[(svc_id, mt, tmdb)] = (time.time() + 600, req)
 
 
-async def make_request(client, uid: int, mt: str, tmdb: int, seasons: list[int] | None, is4k: bool) -> dict:
+async def make_request(client, uid: int, mt: str, tmdb: int, seasons: list[int] | None, is4k: bool,
+                       tvdb: int | None = None) -> dict:
     """Ask Seerr for a title as this person, the way Seerr's own request dialog does."""
     body: dict[str, Any] = {"mediaType": mt, "mediaId": tmdb, "is4k": is4k}
     if mt == "tv":
         body["seasons"] = seasons or "all"
         # Seerr's own request dialog always sends the TVDB id. Without it, newer Seerr can create the request,
         # fail to hand it to Sonarr and delete it again, while still answering "201 Created".
-        d = await raw_title(client, client.svc.id, mt, tmdb)
-        tvdb = ((d or {}).get("externalIds") or {}).get("tvdbId") or (d or {}).get("tvdbId")
+        if not tvdb:
+            d = await raw_title(client, client.svc.id, mt, tmdb)
+            tvdb = ((d or {}).get("externalIds") or {}).get("tvdbId") or ((d or {}).get("mediaInfo") or {}).get("tvdbId")
         if tvdb:
-            body["tvdbId"] = tvdb
+            body["tvdbId"] = int(tvdb)
     return await client.request("POST", "/api/v1/request", json=body, headers={"X-API-User": str(uid)}) or {}
 
 
