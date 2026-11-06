@@ -562,6 +562,7 @@ async def page_activity(request: Request, user: User = Depends(staff_user)):
         today = stats.summary(db, 1)
     geo = await geoip.lookup([x.get("ip") for x in streams], wait=False) if user.is_admin else {}
     return render(request, "activity.html", user, streams=streams, errors=errors, recent=recent, today=today, geo=geo,
+                  flash=request.session.pop("flash", None),
                   last=recent[0] if recent else None,
                   health=services(),
                   has_servers=bool(services(("jellyfin",), enabled_only=False)))
@@ -576,8 +577,20 @@ async def partial_activity(request: Request, user: User = Depends(staff_user)):
     return render(request, "_live.html", user, streams=streams, errors=errors, last=last, geo=geo)
 
 
-@app.post("/activity/{server_id}/{session_id}/stop")
-async def stop_stream(server_id: int, session_id: str, request: Request, user: User = Depends(admin_user)):
+async def _session_caps(client, session_id: str) -> tuple[dict | None, bool]:
+    """(the Jellyfin session, whether its app says it can show messages)."""
+    try:
+        data = await client.get("/Sessions") or []
+    except UpstreamError:
+        return None, True            # can't tell: try anyway
+    s = next((x for x in data if x.get("Id") == session_id), None)
+    if not s:
+        return None, False
+    cmds = s.get("SupportedCommands") or (s.get("Capabilities") or {}).get("SupportedCommands") or []
+    return s, ("DisplayMessage" in cmds) if cmds else True
+
+
+async def _stream_action(request: Request, server_id: int, session_id: str, user: User, stop: bool):
     await verify_csrf(request)
     form = await request.form()
     with SessionLocal() as db:
@@ -585,14 +598,46 @@ async def stop_stream(server_id: int, session_id: str, request: Request, user: U
     if not svc or svc.kind != "jellyfin":
         raise HTTPException(404)
     client = await client_for(svc)
-    msg = str(form.get("message") or "").strip()
+    msg = str(form.get("message") or "").strip()[:300]
+    sess, can_msg = await _session_caps(client, session_id)
+    who = (sess or {}).get("UserName") or "them"
+    app_name = (sess or {}).get("Client") or "their app"
+    notes, ok = [], True
     if msg:
-        await safe(client.message(session_id, "Stream stopped", msg))
-    _, err = await safe(client.stop(session_id))
-    if err:
-        raise HTTPException(502, err)
-    log.info("%s stopped session %s on %s", user.name, session_id, svc.name)
+        if not can_msg:
+            notes.append(f"{app_name} can't show messages, so {who} won't see it.")
+        _, err = await safe(client.message(session_id, "Message from the server" if not stop else "Stream stopped", msg))
+        if err:
+            ok = False
+            notes.append(f"Couldn't send the message: {err}")
+        elif can_msg:
+            notes.append(f"Message sent to {who} on {app_name}.")
+        if stop:
+            await asyncio.sleep(2)   # let it appear before playback closes
+    elif not stop:
+        request.session["flash"] = {"ok": False, "msg": "Type a message first."}
+        return RedirectResponse("/", status_code=303)
+    if stop:
+        _, err = await safe(client.stop(session_id))
+        if err:
+            ok = False
+            notes.append(f"Couldn't stop the stream: {err}")
+        else:
+            notes.insert(0, f"Stopped {who}'s stream.")
+            log.info("%s stopped session %s on %s", user.name, session_id, svc.name)
+            ttl_forget("activity")
+    request.session["flash"] = {"ok": ok and (can_msg or not msg), "msg": " ".join(notes)}
     return RedirectResponse("/", status_code=303)
+
+
+@app.post("/activity/{server_id}/{session_id}/stop")
+async def stop_stream(server_id: int, session_id: str, request: Request, user: User = Depends(admin_user)):
+    return await _stream_action(request, server_id, session_id, user, stop=True)
+
+
+@app.post("/activity/{server_id}/{session_id}/message")
+async def message_stream(server_id: int, session_id: str, request: Request, user: User = Depends(admin_user)):
+    return await _stream_action(request, server_id, session_id, user, stop=False)
 
 
 @app.get("/img/{server_id}/{item_id}")

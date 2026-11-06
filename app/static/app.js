@@ -145,7 +145,8 @@
   // works for forms that arrive later too (live refresh)
   document.addEventListener("submit", (e) => {
     const f = e.target;
-    if (f.matches && f.matches("form[data-confirm]") && !confirm(f.dataset.confirm)) e.preventDefault();
+    const q = (e.submitter && e.submitter.dataset.confirm) || (f.matches && f.matches("form[data-confirm]") && f.dataset.confirm);
+    if (q && !confirm(q)) e.preventDefault();
   });
 })();
 

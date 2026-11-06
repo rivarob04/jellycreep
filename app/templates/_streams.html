@@ -58,11 +58,13 @@
         {% if s.item_id %}<a class="btn sm" href="/library/{{ s.server_id }}/{{ s.item_id }}">Open in library →</a>{% endif %}
       </div>
       {% if user.is_admin %}
-      <form class="sa-stop" method="post" action="/activity/{{ s.server_id }}/{{ s.session_id }}/stop" data-confirm="Stop {{ s.user_name }}'s stream?">
+      <form class="sa-stop" method="post" action="/activity/{{ s.server_id }}/{{ s.session_id }}/message">
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        <input name="message" placeholder="Optional message to {{ s.user_name }}">
-        <button class="btn sm danger">Stop stream</button>
+        <input name="message" maxlength="300" placeholder="Message to {{ s.user_name }}">
+        <button class="btn sm">Send</button>
+        <button class="btn sm danger" formaction="/activity/{{ s.server_id }}/{{ s.session_id }}/stop" data-confirm="Stop {{ s.user_name }}'s stream?">Stop stream</button>
       </form>
+      <p class="hint" style="margin:6px 0 0">Send pops a message up on their screen. Stop ends playback (with your message, if you typed one).</p>
       {% endif %}
     </div>
   </details>
