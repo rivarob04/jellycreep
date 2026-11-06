@@ -2432,9 +2432,15 @@ async def act_request(request: Request, mt: str, tmdb: int, user: User = Depends
         request.session["flash"] = {"ok": False, "msg": seerr_portal.err_text(e)}
         return back
     if not isinstance(res, dict) or not res.get("id"):
-        log.warning("Seerr request by %s for %s %s came back without a request: %r", user.name, mt, tmdb, res)
-        request.session["flash"] = {"ok": False, "msg": "Seerr didn't confirm the request. Try again, or ask the admin to check Seerr."}
-        return back
+        # some Seerr versions answer without the request itself: check what Seerr now has for this person
+        log.warning("Seerr request by %s for %s %s answered without a request id: %.500r", user.name, mt, tmdb, res)
+        found, _ = await safe(seerr_portal.find_request(sc["client"], sc["uid"], mt, tmdb))
+        if not found:
+            said = (res or {}).get("message") if isinstance(res, dict) else None
+            request.session["flash"] = {"ok": False, "msg": "Seerr didn't create the request" + (f": {str(said)[:160]}" if said else
+                                        ". Try again, or ask the admin to check Seerr.")}
+            return back
+        res = found
     seerr_portal.just_requested(sc["svc"].id, mt, tmdb, res)
     seerr_portal.forget("row")
     seerr_portal.forget("similar")

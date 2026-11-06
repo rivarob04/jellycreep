@@ -721,6 +721,17 @@ async def make_request(client, uid: int, mt: str, tmdb: int, seasons: list[int] 
     return await client.request("POST", "/api/v1/request", json=body, headers={"X-API-User": str(uid)}) or {}
 
 
+async def find_request(client, uid: int, mt: str, tmdb: int) -> dict | None:
+    """The newest request this person has for a title, straight from Seerr (no cache)."""
+    data = await client.get("/api/v1/request", params={"take": "20", "skip": "0", "sort": "added", "filter": "all",
+                                                       "requestedBy": str(uid)}, headers={"X-API-User": str(uid)}) or {}
+    for r in data.get("results") or []:
+        m = r.get("media") or {}
+        if m.get("tmdbId") == tmdb and (r.get("type") or m.get("mediaType")) == mt:
+            return r
+    return None
+
+
 async def cancel(client, uid: int, req_id: int) -> None:
     await client.request("DELETE", f"/api/v1/request/{req_id}", headers={"X-API-User": str(uid)})
 
