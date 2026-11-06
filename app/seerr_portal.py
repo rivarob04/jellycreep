@@ -541,7 +541,9 @@ async def detail(client, svc_id: int, mt: str, tmdb: int, me: int | None, *, eve
     if jr and jr[0] > time.time():
         # Seerr hasn't caught up with a request made here a moment ago: show it anyway
         mi0 = d.get("mediaInfo") or {}
-        if not any(r.get("id") == jr[1].get("id") for r in mi0.get("requests") or []):
+        jid = jr[1].get("id") or -1
+        have = mi0.get("requests") or []
+        if not (any(r.get("id") == jid for r in have) or (jid < 0 and have)):
             d = {**d, "mediaInfo": {**mi0, "status": mi0.get("status") if (mi0.get("status") or 1) > 1 else
                                     (3 if jr[1].get("status") == 2 else 2),
                                     "requests": [*(mi0.get("requests") or []), jr[1]]}}
@@ -723,8 +725,7 @@ async def make_request(client, uid: int, mt: str, tmdb: int, seasons: list[int] 
 
 async def find_request(client, uid: int, mt: str, tmdb: int) -> dict | None:
     """The newest request this person has for a title, straight from Seerr (no cache)."""
-    data = await client.get("/api/v1/request", params={"take": "20", "skip": "0", "sort": "added", "filter": "all",
-                                                       "requestedBy": str(uid)}, headers={"X-API-User": str(uid)}) or {}
+    data = await client.get("/api/v1/request", params={"take": "50", "skip": "0", "sort": "added", "filter": "all"}) or {}
     for r in data.get("results") or []:
         m = r.get("media") or {}
         if m.get("tmdbId") == tmdb and (r.get("type") or m.get("mediaType")) == mt:

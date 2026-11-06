@@ -2433,8 +2433,12 @@ async def act_request(request: Request, mt: str, tmdb: int, user: User = Depends
         return back
     if not isinstance(res, dict) or not res.get("id"):
         # some Seerr versions answer without the request itself: check what Seerr now has for this person
-        log.warning("Seerr request by %s for %s %s answered without a request id: %.500r", user.name, mt, tmdb, res)
+        log.warning("Seerr request by %s for %s %s answered without a request id: %r", user.name, mt, tmdb, res)
         found, _ = await safe(seerr_portal.find_request(sc["client"], sc["uid"], mt, tmdb))
+        media = (res or {}).get("media") if isinstance(res, dict) else None
+        if not found and isinstance(media, dict) and media.get("tmdbId") == tmdb:
+            # newer Seerr replies "201 Created" with the request minus its id: that's still a request
+            found = {**res, "id": res.get("id") or -1, "status": res.get("status") or 1}
         if not found:
             said = (res or {}).get("message") if isinstance(res, dict) else None
             request.session["flash"] = {"ok": False, "msg": "Seerr didn't create the request" + (f": {str(said)[:160]}" if said else
