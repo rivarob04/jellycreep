@@ -35,7 +35,7 @@
     {% if c.in_month %}
     {% for i in c['items'][:4] %}{{ cal_item(i) }}{% endfor %}
     {% if c['items']|length > 4 %}
-    <details class="mcal-more"><summary>+ {{ c['items']|length - 4 }} more</summary>
+    <details class="mcal-more"><summary><span class="mcal-plus">+ {{ c['items']|length - 4 }} more</span><span class="mcal-less">− Show less</span></summary>
       {% for i in c['items'][4:] %}{{ cal_item(i) }}{% endfor %}</details>
     {% endif %}
     {% endif %}

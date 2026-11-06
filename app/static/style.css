@@ -2177,3 +2177,8 @@ details.play-on { min-width: 0; max-width: 100%; }
   .mcal-more[open] { gap: 9px; }
 }
 @media (max-width: 760px) { .mcal-time { display: none; } }
+
+/* v0.18.63 — "+ N more" in the calendar: same spacing as the cards above (details can't be a flex box in every browser) */
+.mcal-more > .mcal-item { margin-top: 4px; }
+@media (max-width: 760px) { .mcal-more > .mcal-item { margin-top: 9px; } .mcal-more[open] summary { margin-bottom: 0; } }
+.mcal-more[open] > summary .mcal-less { display: inline; } .mcal-more[open] > summary .mcal-plus, .mcal-more > summary .mcal-less { display: none; }
