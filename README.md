@@ -67,7 +67,7 @@ Then it grew. It picked up live Jellyfin activity like Tautulli, then watch hist
 
 - **Live activity like Tautulli.** See who's watching what, on which device (with real app logos), Direct Play, Direct Stream or Transcode and the reason why, progress, time left, and LAN/WAN bandwidth. Stop a stream or pop a message up on someone's screen.
 - **Its own watch history.** JellyCreep polls Jellyfin's sessions and records every play, minus paused time. You can import older history from Jellystat.
-- **Your whole *arr stack on one page.** Sonarr, Radarr, Lidarr, Prowlarr, SABnzbd, qBittorrent and Seerr, even when every one of them is behind Authentik MFA.
+- **Your whole *arr stack on one page.** Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, SABnzbd, qBittorrent and Seerr, even when every one of them is behind Authentik MFA.
 - **A real app for your Jellyfin users.** They sign in with their Jellyfin account to discover and request titles, see what's coming, keep track of their history and get push notifications. They never see other people's names, IPs or anything admin.
 - **Fast.** Pages are cached with stale-while-revalidate and warmed in the background, so most pages render in a few milliseconds and a slow or offline app never holds a page up.
 - **Phone-first, desktop-polished.** It installs to the home screen and has swipeable rows on phones. Desktop gets a Seerr-style sidebar layout with arrow-scrolling rows.
@@ -106,6 +106,7 @@ Plays and watch time per day (movies vs TV, with hover tooltips), this period vs
 - The **Queue** across Sonarr, Radarr and Lidarr: retry or remove stuck items.
 - **Downloads** from SABnzbd and qBittorrent: pause or resume everything or a single item. Failed jobs are flagged.
 - A **Calendar** of upcoming episodes and movies, plus health checks and Prowlarr indexer status.
+- **Subtitles** from Bazarr: what's still missing subtitles (and in which languages), recent downloads, paused providers and health. Kick off a search for everything missing.
 - **Seerr requests**: approve or decline from your phone.
 - **Search & add** shows and movies straight to Sonarr or Radarr.
 - Each service is shown with its real logo, from [homarr-labs/dashboard-icons](https://github.com/homarr-labs/dashboard-icons).
@@ -198,6 +199,7 @@ Every app is an existing install that you connect to, not a container JellyCreep
 | Jellystat | `http://jellystat:3000` | Settings → API Keys |
 | Wizarr | `http://wizarr:5690` | Settings → API Keys |
 | Sonarr / Radarr / Lidarr / Prowlarr | `http://sonarr:8989` or `https://sonarr.example.com` | Settings → General → API Key |
+| Bazarr | `http://bazarr:6767` | Settings → General → Security → API Key |
 | SABnzbd | `http://sabnzbd:8080` | Config → General → **API Key** (not the NZB key) |
 | qBittorrent | `http://qbittorrent:8080` | Web UI username + password |
 | Seerr / Jellyseerr | `http://jellyseerr:5055` | Settings → General → API Key |

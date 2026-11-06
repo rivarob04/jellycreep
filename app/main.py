@@ -880,6 +880,7 @@ AUTOMATION_TABS = {
     "downloads": ("Downloads", ("sabnzbd", "qbittorrent")),
     "requests": ("Requests", ("jellyseerr",)),
     "indexers": ("Indexers", ("prowlarr",)),
+    "subtitles": ("Subtitles", ("bazarr",)),
 }
 
 
@@ -901,6 +902,12 @@ async def _arr_panel(svc: Service, tab: str) -> dict:
         (panel["indexers"], e1), (panel["status"], e2), (panel["health"], e3) = await asyncio.gather(
             safe(client.indexers()), safe(client.indexer_status()), safe(client.health()))
         panel["failing"] = {s.get("indexerId") for s in panel["status"] or []}
+        panel["error"] = e1 or e2 or e3
+    elif svc.kind == "bazarr":
+        (w, e1), (panel["badges"], e2), (panel["history"], e3), (panel["health"], e4), (provs, e5) = await asyncio.gather(
+            safe(client.wanted()), safe(client.badges()), safe(client.history()), safe(client.health()), safe(client.providers()))
+        panel["wanted"], panel["wanted_eps"], panel["wanted_movies"] = w or ([], 0, 0)
+        panel["throttled"] = provs or []
         panel["error"] = e1 or e2 or e3
     elif svc.kind == "qbittorrent":
         (panel["torrents"], e1), (panel["transfer"], e2) = await asyncio.gather(safe(client.torrents()), safe(client.transfer()))
@@ -1157,6 +1164,14 @@ async def act_sab(sid: int, action: str, request: Request, user: User = Depends(
     else:
         raise HTTPException(400)
     return await _act(request, coro, msg, "/automation?tab=downloads")
+
+
+@app.post("/act/bazarr/{sid}/search")
+async def act_bazarr(sid: int, request: Request, user: User = Depends(admin_user)):
+    await verify_csrf(request)
+    client = await client_for(_svc(sid, "bazarr"))
+    log.info("%s started a Bazarr search for wanted subtitles", user.name)
+    return await _act(request, client.search_wanted(), "Bazarr is searching for the missing subtitles.", "/automation?tab=subtitles")
 
 
 @app.post("/act/qbit/{sid}/{action}")

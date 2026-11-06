@@ -368,6 +368,85 @@ class SabnzbdClient(Upstream):
         await self.api("retry", value=nzo_id)
 
 
+class BazarrClient(Upstream):
+    """Bazarr: subtitles for Sonarr / Radarr."""
+    ACTIONS = {0: "Deleted", 1: "Downloaded", 2: "Downloaded manually", 3: "Upgraded", 4: "Uploaded",
+               5: "Synced", 6: "Translated", 7: "Mods applied"}
+
+    def __init__(self, svc: Service) -> None:
+        super().__init__(svc)
+        self.app_headers = {"X-API-KEY": svc.api_key or ""}
+
+    async def test(self) -> str:
+        st = (await self.get("/api/system/status") or {}).get("data") or {}
+        return f"Bazarr {st.get('bazarr_version') or ''}".strip()
+
+    async def badges(self) -> dict:
+        return await self.get("/api/badges") or {}
+
+    async def wanted(self, n: int = 25) -> tuple[list[dict], int, int]:
+        """Episodes and movies that are still missing subtitles (newest first), plus the totals."""
+        eps, mov = await asyncio.gather(self.get("/api/episodes/wanted", params={"start": "0", "length": str(n)}),
+                                        self.get("/api/movies/wanted", params={"start": "0", "length": str(n)}))
+        out = []
+        for e in (eps or {}).get("data") or []:
+            out.append({"kind": "tv", "title": e.get("seriesTitle") or "?", "sub": " · ".join(x for x in (
+                str(e.get("episode_number") or ""), e.get("episodeTitle") or "") if x),
+                "langs": _langs(e.get("missing_subtitles")), "arr_id": e.get("sonarrSeriesId")})
+        for m in (mov or {}).get("data") or []:
+            out.append({"kind": "movie", "title": m.get("title") or "?", "sub": "Movie",
+                        "langs": _langs(m.get("missing_subtitles")), "arr_id": m.get("radarrId")})
+        return out, int((eps or {}).get("total") or 0), int((mov or {}).get("total") or 0)
+
+    async def history(self, n: int = 15) -> list[dict]:
+        eps, mov = await asyncio.gather(self.get("/api/episodes/history", params={"start": "0", "length": str(n)}),
+                                        self.get("/api/movies/history", params={"start": "0", "length": str(n)}))
+        out = []
+        for kind, data in (("tv", eps), ("movie", mov)):
+            for h in (data or {}).get("data") or []:
+                lang = h.get("language") or {}
+                when = h.get("parsed_timestamp") or h.get("timestamp") or ""
+                out.append({"kind": kind, "title": (h.get("seriesTitle") if kind == "tv" else h.get("title")) or "?",
+                            "sub": " · ".join(x for x in (str(h.get("episode_number") or ""), h.get("episodeTitle") or "") if x)
+                            if kind == "tv" else "Movie",
+                            "action": self.ACTIONS.get(h.get("action"), h.get("description") or "Subtitle"),
+                            "lang": lang.get("name") if isinstance(lang, dict) else (lang or None),
+                            "provider": h.get("provider") or None, "score": h.get("score") or None,
+                            "when": when, "ago": h.get("timestamp") if isinstance(h.get("timestamp"), str) else None})
+        out.sort(key=lambda h: str(h["when"]), reverse=True)
+        return out[:n]
+
+    async def health(self) -> list[dict]:
+        data = (await self.get("/api/system/health") or {}).get("data") or []
+        return [{"object": h.get("object") or "", "issue": h.get("issue") or ""} for h in data if isinstance(h, dict)]
+
+    async def providers(self) -> list[dict]:
+        """Providers Bazarr has paused after errors (throttled), with when they'll be retried."""
+        data = (await self.get("/api/providers") or {}).get("data") or []
+        return [{"name": p.get("name") or "?", "status": p.get("status") or "", "retry": p.get("retry") or ""}
+                for p in data if isinstance(p, dict)]
+
+    async def search_wanted(self) -> None:
+        for task in ("wanted_search_missing_subtitles_series", "wanted_search_missing_subtitles_movies"):
+            await self.request("POST", "/api/system/tasks", data={"taskid": task}, expect_json=False)
+
+
+def _langs(subs) -> list[str]:
+    out = []
+    for x in subs or []:
+        if isinstance(x, dict):
+            name = x.get("name") or x.get("code2") or "?"
+            if x.get("forced"):
+                name += " (forced)"
+            elif x.get("hi"):
+                name += " (HI)"
+        else:
+            name = str(x)
+        if name not in out:
+            out.append(name)
+    return out
+
+
 class WizarrClient(Upstream):
     """Wizarr's REST API (/api/docs on your instance). Key from Wizarr → Settings → API Keys."""
 
@@ -419,6 +498,7 @@ FACTORIES = {
     "radarr": ArrClient,
     "lidarr": ArrClient,
     "prowlarr": ArrClient,
+    "bazarr": BazarrClient,
     "sabnzbd": SabnzbdClient,
     "qbittorrent": QbitClient,
     "jellyseerr": SeerrClient,

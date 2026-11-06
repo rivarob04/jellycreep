@@ -60,6 +60,7 @@ SERVICE_KINDS = {
     "radarr": "Radarr",
     "lidarr": "Lidarr",
     "prowlarr": "Prowlarr",
+    "bazarr": "Bazarr",
     "sabnzbd": "SABnzbd",
     "qbittorrent": "qBittorrent",
     "jellyseerr": "Seerr",
