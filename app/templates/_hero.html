@@ -5,6 +5,7 @@
     {% for s in streams %}
     {% set bd = imgp ~ '/' ~ s.server_id ~ '/' ~ s.poster_id %}
     <article class="hero" id="hero-{{ loop.index }}">
+      {% if s.item_id %}<a class="hero-link" href="{{ '/me' if user.is_viewer else '' }}/library/{{ s.server_id }}/{{ s.item_id }}" aria-label="Open {{ s.series_name or s.title }}"></a>{% endif %}
       {% if s.poster_id %}<div class="hero-bg" style="background-image:url('{{ bd }}?t=Backdrop&h=900')"></div>{% endif %}
       <div class="hero-shade"></div>
       <div class="hero-body">
@@ -53,6 +54,8 @@
 {% set bd = imgp ~ '/' ~ last.server_id ~ '/' ~ last.poster_id %}
 <section class="hero-wrap" aria-label="Last watched">
   <article class="hero idle">
+    {% if user.is_viewer %}{% if last.item_id %}<a class="hero-link" href="/me/library/{{ last.server_id }}/{{ last.item_id }}" aria-label="Open {{ last.series_name or last.title }}"></a>{% endif %}
+    {% else %}<a class="hero-link" href="/history/{{ last.id }}" aria-label="See this play"></a>{% endif %}
     <div class="hero-bg" style="background-image:url('{{ bd }}?t=Backdrop&h=900')"></div>
     <div class="hero-shade"></div>
     <div class="hero-body">

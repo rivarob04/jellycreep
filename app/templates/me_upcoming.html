@@ -3,11 +3,12 @@
 {% block content %}
 <h1>Coming Up</h1>
 <p class="muted small" style="margin-top:-6px">{% if view == 'calendar' %}New episodes and movies by day, up to 3 months ahead.{% else %}New episodes and movies expected over the next {{ {'7': 'week', '14': '2 weeks', '30': 'month', '90': '3 months'}[days] }}.{% endif %}</p>
-{% macro cal_item(i) %}{% set multi = i['all']|length > 1 %}<{{ 'a' if i.ref else 'div' }} class="mcal-item k-{{ i.kind }}{{ ' have' if i.has_file }}"{% if i.ref %} href="/me/upcoming/{{ i.sid }}/{{ i.ref }}"{% endif %} title="{{ i.title }}{% if multi %} — {{ i['all']|length }} episodes{% else %} — {{ i.sub }}{% endif %}{{ ' · ' ~ i.time if i.time }}{{ ' · ' ~ i.network if i.network }}">
+{% macro cal_item(i) %}{% set multi = i['all']|length > 1 %}<{{ 'a' if i.ref else 'div' }} class="mcal-item k-{{ i.kind }}{{ ' have' if i.has_file }}"{% if i.ref %} href="/me/upcoming/{{ i.sid }}/{{ i.ref }}"{% endif %}{% if i.poster %} style="--bd:url('{{ i.poster }}?t=fanart')"{% endif %} title="{{ i.title }}{% if multi %} — {{ i['all']|length }} episodes{% else %} — {{ i.sub }}{% endif %}{{ ' · ' ~ i.time if i.time }}{{ ' · ' ~ i.network if i.network }}">
   <span class="mcal-th k-bg-{{ i.kind }}">{% if i.poster %}<img loading="lazy" src="{{ i.poster }}" alt="" onerror="this.remove()">{% endif %}</span>
   <span class="mcal-tx"><span class="mcal-t">{{ i.title }}</span>
-  <span class="mcal-s">{% if multi %}<b class="mcal-n">{{ i['all']|length }} eps</b> {{ i.range }}{% else %}{{ ep_pretty(i.sub.split(' · ')[0]) }}{% endif %}{% if i.time %} · {{ i.time }}{% endif %}</span></span>
-  {% if i.has_file %}<i class="mcal-ok" title="Available">✓</i>{% elif i.premiere %}<i class="mcal-new" title="Premiere">NEW</i>{% endif %}</{{ 'a' if i.ref else 'div' }}>{% endmacro %}
+  <span class="mcal-s">{% if multi %}<b class="mcal-n">{{ i['all']|length }} eps</b> {{ i.range }}{% else %}{{ ep_pretty(i.sub.split(' · ')[0]) }}{% endif %}{% if i.time %}<span class="mcal-time"> · {{ i.time }}</span>{% endif %}</span></span>
+  {% if i.has_file %}<i class="mcal-ok" title="Available">✓</i>{% elif i.premiere %}<i class="mcal-new" title="Premiere">NEW</i>{% endif %}
+  <span class="mcal-net">{% if i.has_file %}<span class="badge b-ok">Available</span>{% endif %}{% if i.premiere %}<span class="badge b-acc">Premiere</span>{% endif %}<span class="mcal-when">{{ i.time or ('Movie' if i.kind == 'movie' else '') }}{% if i.network %} · {{ i.network }}{% endif %}</span></span></{{ 'a' if i.ref else 'div' }}>{% endmacro %}
 <div class="up-views mb">
   <a class="{{ 'on' if view == 'list' }}" href="?view=list&kind={{ kind }}"><svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>List</a>
   <a class="{{ 'on' if view == 'calendar' }}" href="?view=calendar&kind={{ kind }}"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Calendar</a>

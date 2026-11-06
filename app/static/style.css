@@ -2147,3 +2147,33 @@ main h2.row { flex-wrap: wrap; min-width: 0; }
 details.play-on { min-width: 0; max-width: 100%; }
 .lib-tabs a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hi-who { max-width: 60%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: bottom; } .hi-who .avatar { vertical-align: middle; margin-right: 4px; }
+
+/* v0.18.62 — the whole hero card is tappable */
+.hero { position: relative; }
+.hero-link { position: absolute; inset: 0; z-index: 3; border-radius: inherit; }
+.hero-link:focus-visible { outline: 3px solid #7fdcff; outline-offset: -3px; }
+.hero .hero-why, .hero .hero-who a, .hero-dots { position: relative; z-index: 4; }
+.hero:has(.hero-link) { cursor: pointer; }
+@media (hover: hover) { .hero:has(.hero-link):hover .hero-poster { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(0,0,0,.6); } .hero-poster { transition: transform .15s, box-shadow .15s; } }
+
+/* v0.18.62 — Coming Up calendar on phones: big cards like the list view */
+.mcal-net { display: none; }
+@media (max-width: 760px) {
+  .mcal-day { padding: 12px; gap: 9px; }
+  .mcal-item { position: relative; display: grid; grid-template-columns: 64px 1fr; grid-template-rows: auto 1fr; column-gap: 12px; align-items: start;
+    padding: 6px 12px 6px 6px; min-height: 108px; border-radius: 14px; border-left-width: 3px; overflow: hidden; isolation: isolate; color: #fff; background: #151a24; }
+  .mcal-item::before { content: ""; position: absolute; inset: 0; z-index: -2; background: var(--bd, none) center/cover no-repeat;
+    filter: blur(18px) saturate(1.3); transform: scale(1.25); opacity: .7; }
+  .mcal-item::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(10,12,18,.6), rgba(10,12,18,.35)); }
+  .mcal-item.have { background: #151a24; }
+  .mcal-th { grid-row: 1 / span 2; width: 64px; height: 96px; border-radius: 9px; box-shadow: 0 4px 12px rgba(0,0,0,.45); }
+  .mcal-tx { padding-top: 4px; gap: 2px; }
+  .mcal-t { font-size: 16.5px; font-weight: 650; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .mcal-s { font-size: 13.5px; color: rgba(255,255,255,.85); white-space: normal; }
+  .mcal-net { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 5px; align-self: end; padding-bottom: 4px; font-size: 13px; color: rgba(255,255,255,.85); }
+  .mcal-net .badge { font-size: 10.5px; padding: 1px 8px; }
+  .mcal-ok, .mcal-new { display: none; }
+  .mcal-more summary { padding: 10px 12px; font-size: 14px; background: rgba(255,255,255,.05); border-radius: 12px; }
+  .mcal-more[open] { gap: 9px; }
+}
+@media (max-width: 760px) { .mcal-time { display: none; } }
