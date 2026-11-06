@@ -18,9 +18,11 @@
   <label class="live-every"><span class="sr-only">Refresh every</span>
     <select aria-label="Refresh every"><option value="5">5 s</option><option value="10">10 s</option><option value="15">15 s</option><option value="30">30 s</option><option value="60">1 min</option><option value="0">Off</option></select></label>
 </div>
+<div class="me-top">
 <div id="live-streams" data-src="/partials/me">{% include "_hero.html" %}</div>
 
 {% if u %}
+<div class="me-side">
 <div class="grid g4 mb">
   <div class="card tile"><div class="n">{{ u.seconds|duration }}</div><div class="l">Time watched</div></div>
   <div class="card tile"><div class="n">{{ u.plays }}</div><div class="l">Plays · {{ u.completed }} finished</div></div>
@@ -31,7 +33,9 @@
 <div class="card mb binge"><span class="binge-emoji">🍿</span>
   <div><strong>Your biggest binge:</strong> {{ u.binge.count }} episodes of <strong>{{ u.binge.series }}</strong> on {{ u.binge.day.strftime('%a, %b %-d') }}</div></div>
 {% endif %}
+</div>
 {% endif %}
+</div>
 
 {% if tips and tips.transcodes %}
 <div class="card mb tip-card">

@@ -74,6 +74,7 @@
 {% endif %}
 
 {% if user.is_viewer and anon is defined %}
+<div class="anon-sec">
 {% set hidden_n = (others or 0) - (anon|length) %}
 {% if anon or hidden_n > 0 %}
 <div class="spread section-title"><h2 style="margin:0">Also Playing on the Server</h2>
@@ -98,4 +99,5 @@
 <div class="card mb anon-empty"><span class="anon-empty-ico">🛋️</span><div><strong>Nobody else is watching right now.</strong>
   <div class="small muted">The server's all yours — this updates live when someone starts something.</div></div></div>
 {% endif %}
+</div>
 {% endif %}

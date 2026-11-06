@@ -2182,3 +2182,31 @@ details.play-on { min-width: 0; max-width: 100%; }
 .mcal-more > .mcal-item { margin-top: 4px; }
 @media (max-width: 760px) { .mcal-more > .mcal-item { margin-top: 9px; } .mcal-more[open] summary { margin-bottom: 0; } }
 .mcal-more[open] > summary .mcal-less { display: inline; } .mcal-more[open] > summary .mcal-plus, .mcal-more > summary .mcal-less { display: none; }
+
+/* v0.18.64 — viewer Home on desktop: hero on the left, your stats and "Also playing" in a column on the right */
+@media (min-width: 1000px) {
+  .me-top { display: grid; grid-template-columns: minmax(0, 1fr) clamp(320px, 26vw, 400px); grid-template-rows: auto 1fr;
+    grid-template-areas: "hero side" "hero anon"; column-gap: 18px; margin-bottom: 18px; align-items: start; }
+  .me-top:not(:has(.hero-wrap)) { grid-template-columns: 1fr 1fr; grid-template-areas: "side anon"; }
+  .me-top > #live-streams { display: contents; }
+  .me-top .hero-wrap { grid-area: hero; align-self: stretch; margin: 0; display: flex; flex-direction: column; }
+  .me-top .hero-track { flex: 1; }
+  .me-top .hero { min-height: 400px; }
+  .me-top .hero-body { padding: 90px 32px 30px; gap: 26px; }
+  .me-top .hero-sub { font-size: 19px; }
+  .me-top .hero-who { font-size: 14.5px; }
+  .me-top .hero-logo { max-height: 96px; max-width: min(60%, 380px); }
+  .me-top .live-chip { font-size: 13px; }
+  .me-side { grid-area: side; }
+  .me-side .grid.g4 { grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .me-side .tile { padding: 14px 16px; }
+  .me-side .tile .n { font-size: 24px; }
+  .me-side .binge { margin-bottom: 0; padding: 14px 16px; font-size: 14px; line-height: 1.4; }
+  .me-side .binge-emoji { font-size: 24px; }
+  .anon-sec { grid-area: anon; min-width: 0; padding-top: 6px; }
+  .me-top .anon-sec .section-title { margin-top: 8px; }
+  .me-top .anon-sec .section-title h2 { font-size: 17px; }
+  .me-top .anon-list { grid-template-columns: 1fr; margin-bottom: 0; }
+  .me-top .anon-empty { margin-bottom: 0; padding: 14px 16px; }
+  .me-top .anon-empty .small { font-size: 12.5px; }
+}
