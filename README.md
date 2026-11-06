@@ -40,23 +40,19 @@ Then it grew. It picked up live Jellyfin activity like Tautulli, then watch hist
     <td width="50%"><img src="docs/screenshots/user-home.png" alt="Home"><br><sub><b>Home</b> (Jellyfin user): Continue Watching, Next Up, Coming Up and what else is playing</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/user-discover.png" alt="Discover"><br><sub><b>Discover</b>: Seerr rows, genres, networks and studios, with hover cards</sub></td>
-    <td><img src="docs/screenshots/user-title.png" alt="Title page"><br><sub><b>Title page</b>: request, watch on Jellyfin, open in app, or play on a TV</sub></td>
+    <td width="50%"><img src="docs/screenshots/user-discover.png" alt="Discover"><br><sub><b>Discover</b>: Seerr rows, genres, networks and studios, with hover cards</sub></td>
+    <td width="50%"><img src="docs/screenshots/user-title.png" alt="Title page"><br><sub><b>Title page</b>: request, watch on Jellyfin, open in app, or play on a TV</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/user-requests.png" alt="Requests"><br><sub><b>Requests</b>: Seerr-style filters by type and status</sub></td>
-    <td><img src="docs/screenshots/user-recently-added.png" alt="Recently Added"><br><sub><b>Recently Added</b>: one row per day</sub></td>
+    <td width="50%"><img src="docs/screenshots/user-requests.png" alt="Requests"><br><sub><b>Requests</b>: Seerr-style filters by type and status</sub></td>
+    <td width="50%"><img src="docs/screenshots/user-recently-added.png" alt="Recently Added"><br><sub><b>Recently Added</b>: one row per day</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/user-coming-up.png" alt="Coming Up"><br><sub><b>Coming Up</b>: list or monthly calendar</sub></td>
-    <td><img src="docs/screenshots/admin-history.png" alt="History"><br><sub><b>History</b>: filters, binge grouping, IP and location per play</sub></td>
+    <td width="50%"><img src="docs/screenshots/user-coming-up.png" alt="Coming Up"><br><sub><b>Coming Up</b>: list or monthly calendar</sub></td>
+    <td width="50%"><img src="docs/screenshots/admin-statistics.png" alt="Statistics"><br><sub><b>Statistics</b>: plays per day, peak hours, weekdays, top titles</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/admin-users.png" alt="Users"><br><sub><b>Users</b>: who's active, sparklines and share of watch time</sub></td>
-    <td><img src="docs/screenshots/admin-statistics.png" alt="Statistics"><br><sub><b>Statistics</b>: plays per day, peak hours, weekdays, top titles</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/admin-automation.png" alt="Automation"><br><sub><b>Automation</b>: queue, downloads, calendar, requests, indexers</sub></td>
+    <td width="50%"><img src="docs/screenshots/admin-automation.png" alt="Automation"><br><sub><b>Automation</b>: queue, downloads, calendar, requests, indexers</sub></td>
     <td>
       <table><tr>
         <td><img src="docs/screenshots/mobile-home.png" alt="Home on a phone"></td>
