@@ -34,7 +34,7 @@ Then it grew. It picked up live Jellyfin activity like Tautulli, then watch hist
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/admin-activity.png" alt="Activity"><br><sub><b>Activity</b>: live streams with device logos, Direct Play / Transcode, LAN/WAN bandwidth, stop and message</sub></td>
+    <td width="50%"><img src="docs/screenshots/activity.png" alt="Activity"><br><sub><b>Activity</b>: live streams with device logos, Direct Play / Transcode, LAN/WAN bandwidth, stop and message</sub></td>
     <td width="50%"><img src="docs/screenshots/user-home.png" alt="Home"><br><sub><b>Home</b> (Jellyfin user): Continue Watching, Next Up, Coming Up and what else is playing</sub></td>
   </tr>
   <tr>
@@ -47,14 +47,14 @@ Then it grew. It picked up live Jellyfin activity like Tautulli, then watch hist
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/user-coming-up.png" alt="Coming Up"><br><sub><b>Coming Up</b>: list or monthly calendar</sub></td>
-    <td width="50%"><img src="docs/screenshots/admin-statistics.png" alt="Statistics"><br><sub><b>Statistics</b>: plays per day, peak hours, weekdays, top titles</sub></td>
+    <td width="50%"><img src="docs/screenshots/stats.png" alt="Statistics"><br><sub><b>Statistics</b>: plays per day, peak hours, weekdays, top titles</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/admin-automation.png" alt="Automation"><br><sub><b>Automation</b>: queue, downloads, calendar, requests, indexers</sub></td>
     <td>
       <table><tr>
         <td><img src="docs/screenshots/phone-home.png" alt="Home on a phone"></td>
-        <td><img src="docs/screenshots/mobile-activity.png" alt="Activity on a phone"></td>
+        <td><img src="docs/screenshots/phone-activity.png" alt="Activity on a phone"></td>
       </tr></table>
       <sub><b>On a phone</b>: installs as an app, with push notifications</sub>
     </td>
