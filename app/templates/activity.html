@@ -34,7 +34,7 @@
 <div class="posters one-row">
   {% for p in recent %}
   <a href="/history/{{ p.id }}" title="{{ p.display_title }} — {{ p.user_name }}"><figure>
-    <img loading="lazy" src="/img/{{ p.server_id }}/{{ p.poster_id }}?h=300" alt="">
+    {% if p.poster_id %}<img loading="lazy" src="/img/{{ p.server_id }}/{{ p.poster_id }}?h=300" alt="" onerror="this.remove()">{% endif %}
     <figcaption>{{ p.series_name or p.title }}<br><span class="muted">{% if p.item_type == 'Episode' and p.season is not none %}S{{ p.season }} • E{{ p.episode or '?' }} · {% endif %}{{ p.user_name }} · {{ p.stopped_at|ago }}</span></figcaption>
   </figure></a>
   {% endfor %}

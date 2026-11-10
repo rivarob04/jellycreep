@@ -1377,7 +1377,8 @@ async def _keep_warm() -> None:
     async def discover_rows():
         for svc in services(("jellyseerr",))[:1]:
             c = await client_for(svc)
-            rows = await seerr_portal.discover(c, svc.id)
+            # Seerr's user list: every viewer page looks the person up in it first
+            rows, _ = await asyncio.gather(seerr_portal.discover(c, svc.id), seerr_portal.users_cached(c, svc.id))
             for gk in ("movie", "tv"):
                 try:
                     await seerr_portal.genres(c, svc.id, gk)
@@ -1412,21 +1413,29 @@ async def _keep_warm() -> None:
             gls = {gk: await seerr_portal.genres(c, svc.id, gk) for gk in ("movie", "tv")}
             await asyncio.gather(*(genre_page(gk, g["id"]) for gk, gl in gls.items() for g in gl))
 
-    await asyncio.sleep(5)
-    while True:
-        await step("play lengths", _backfill_runtimes(), 120)
-        await step("libraries", ttl_cached(("media",), 120, _media_servers, stale=6 * 3600), 60)
-        await step("storage", ttl_cached(("storage",), 600, _storage_report, stale=6 * 3600), 120)
-        await step("queue", asyncio.gather(*(_cached_panel(x, "queue") for x in services(("sonarr", "radarr", "lidarr")))), 60)
+    def steps():
+        out = [("libraries", lambda: ttl_cached(("media",), 120, _media_servers, stale=6 * 3600), 60),
+               ("storage", lambda: ttl_cached(("storage",), 600, _storage_report, stale=6 * 3600), 120),
+               ("queue", lambda: asyncio.gather(*(_cached_panel(x, "queue") for x in services(("sonarr", "radarr", "lidarr")))), 60)]
         if services(("sonarr", "radarr", "lidarr")):
-            await step("calendar", _calendar_cached(None), 60)
+            out.append(("calendar", lambda: _calendar_cached(None), 60))
         if services(("jellyseerr",)):
-            await step("requests", asyncio.gather(*(_cached_panel(x, "requests") for x in services(("jellyseerr",)))), 60)
+            out.append(("requests", lambda: asyncio.gather(*(_cached_panel(x, "requests") for x in services(("jellyseerr",)))), 60))
         if login_settings()["enabled"] and login_settings()["seerr_discover"]:
-            await step("discover", discover_rows(), 60)
+            out.append(("discover", discover_rows, 60))
         if login_settings()["enabled"] and login_settings()["upcoming"]:
-            await step("coming up", upcoming(), 60)
+            out.append(("coming up", upcoming, 60))
+        return out
+
+    # Right after a (re)deploy everything is cold: warm it all at once so the first visitors don't wait.
+    await asyncio.sleep(1)
+    await asyncio.gather(*(step(n, c(), t) for n, c, t in steps()))
+    await step("play lengths", _backfill_runtimes(), 120)
+    while True:
         await asyncio.sleep(240)
+        await step("play lengths", _backfill_runtimes(), 120)
+        for n, c, t in steps():
+            await step(n, c(), t)
 
 
 async def _upcoming_fetch(days: int) -> list[dict]:
@@ -2420,16 +2429,18 @@ async def page_title(request: Request, mt: str, tmdb: int, user: User = Depends(
     if not sc:
         return RedirectResponse("/me", status_code=303)
     c, sid = sc["client"], sc["svc"].id
-    (t, err), similar, has4k, quota, jf = await asyncio.gather(
+    jf = await _jf_lookup(user)   # cached library index
+    # Seerr and Jellyfin at the same time: the Watch bar is looked up by TMDB id while Seerr loads the title
+    (t, err), similar, has4k, quota, watch = await asyncio.gather(
         safe(seerr_portal.detail(c, sid, mt, tmdb, sc["uid"], everyone=sc["everyone"], can_manage=sc["manage"])),
         seerr_portal.similar(c, sid, mt, tmdb), seerr_portal.has_4k(c, sid),
         ttl_cached(("quota", sid, sc["uid"]), 60, lambda: seerr_portal.quota(c, sc["uid"]), stale=3600)
-        if sc["uid"] else asyncio.sleep(0), _jf_lookup(user))
+        if sc["uid"] else asyncio.sleep(0), _title_watch(user, jf, {"type": mt, "id": tmdb}))
     if err or not t:
         raise HTTPException(404, "Couldn't load that title from Seerr")
     similar = _mark_watchable(jf, similar)
     watch, matches = await asyncio.gather(
-        _title_watch(user, jf, t),
+        asyncio.sleep(0, watch) if watch or not t.get("jf_hint") else _title_watch(user, jf, t),   # retry with IMDb/TVDB ids
         seerr_portal.tvdb_matches(c, sid, tmdb) if mt == "tv" and not t.get("tvdb") and t.get("free_seasons") else asyncio.sleep(0, []))
     return render(request, "me_title.html", user, seerr=sc, t=t, similar=similar, has4k=has4k, quota=quota,
                   watch=watch, matches=matches, sid=jf["svc"].id if jf else None, lib=_lib_base(user), ambient=t.get("backdrop"))
@@ -2633,19 +2644,24 @@ async def upcoming_arr(svc: Service, sid: int, ref: str) -> dict:
 async def _upcoming_page(request: Request, user: User, sid: int, ref: str):
     if not (len(ref) > 1 and ref[0] in "em" and ref[1:].isdigit()):
         raise HTTPException(404)
-    if user.is_viewer:
-        # only things that are actually on this person's Coming up list
-        if not login_settings()["upcoming"] or not any(i.get("sid") == sid and i.get("ref") == ref for i in await _upcoming(90)):
-            raise HTTPException(404)
+    if user.is_viewer and not login_settings()["upcoming"]:
+        raise HTTPException(404)
     with SessionLocal() as db:
         svc = db.get(Service, sid)
     if not svc or svc.kind not in ("sonarr", "radarr") or (svc.kind == "sonarr") != (ref[0] == "e"):
         raise HTTPException(404)
     arrimg = "/me/arrimg" if user.is_viewer else "/arrimg"
-    try:
-        got = await upcoming_arr(svc, sid, ref)
-    except UpstreamError as e:
-        raise HTTPException(404, f"Couldn't load that from {svc.name}: {e}")
+    jsvc = _lib_server(user, None)
+    jc = await client_for(jsvc) if jsvc else None
+    # the Sonarr/Radarr item, the "is it on their list" check and their Jellyfin user, all at once
+    (got, gerr), listed, (uid, _) = await asyncio.gather(
+        safe(upcoming_arr(svc, sid, ref)),
+        _upcoming(90) if user.is_viewer else asyncio.sleep(0, None),
+        safe(library.browse_as(jc, jsvc.id, user)) if jc else asyncio.sleep(0, (None, None)))
+    if user.is_viewer and not any(i.get("sid") == sid and i.get("ref") == ref for i in listed or []):
+        raise HTTPException(404)   # only things that are actually on this person's Coming up list
+    if gerr or not got:
+        raise HTTPException(404, f"Couldn't load that from {svc.name}: {gerr}")
     u = copy.deepcopy(got["u"])
     ids, jf_kind = got["ids"], got["jf_kind"]
     for k in ("poster", "fanart"):
@@ -2658,10 +2674,7 @@ async def _upcoming_page(request: Request, user: User, sid: int, ref: str):
     # Is it (or the show) in Jellyfin? Then offer Watch / Play on, the cast and a link to its library page.
     ctx: dict[str, Any] = {"u": u, "lib": _lib_base(user), "watch": None, "jf": None, "d": None, "on_jellyfin": False,
                            "flash": request.session.pop("flash", None)}
-    jsvc = _lib_server(user, None)
     if jsvc:
-        jc = await client_for(jsvc)
-        uid, _ = await safe(library.browse_as(jc, jsvc.id, user))
         if uid:
             async def lookup():
                 hit = await library.find(jc, uid, jf_kind, u["title"], u.get("year"), ids)

@@ -431,6 +431,10 @@ def _match(users: list[dict], jf_id: str, name: str) -> dict | None:
     return None
 
 
+async def users_cached(client, svc_id: int) -> list[dict]:
+    return await cached(("users", svc_id), 300, lambda: _all_users(client))
+
+
 async def account(client, svc_id: int, user, autolink: bool) -> dict | None:
     """The viewer's Seerr user, creating it from Jellyfin if allowed."""
     users = await cached(("users", svc_id), 300, lambda: _all_users(client))

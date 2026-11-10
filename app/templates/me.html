@@ -62,7 +62,7 @@
 <div class="posters one-row mb">
   {% for p in recent %}
   <a href="{{ '/me/library/' ~ p.server_id ~ '/' ~ p.item_id if p.item_id else '#' }}"><figure title="{{ p.display_title }}">
-    <img loading="lazy" src="{{ imgp }}/{{ p.server_id }}/{{ p.poster_id }}?h=300" alt="">
+    {% if p.poster_id %}<img loading="lazy" src="{{ imgp }}/{{ p.server_id }}/{{ p.poster_id }}?h=300" alt="" onerror="this.remove()">{% endif %}
     <figcaption>{{ p.series_name or p.title }}<br><span class="muted">{% if p.item_type == 'Episode' and p.season is not none %}S{{ '%02d'|format(p.season) }}E{{ '%02d'|format(p.episode or 0) }} · {% endif %}{{ p.stopped_at|ago }}</span></figcaption>
   </figure></a>
   {% endfor %}
