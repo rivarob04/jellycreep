@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_seerr.html" import pcard, rcard, rwide, quota_line, not_linked, phover %}
+{% from "_seerr.html" import pcard, rcard, rwide, quota_line, not_linked, phover with context %}
 {% block title %}Discover{% endblock %}
 {% block content %}
 {% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}

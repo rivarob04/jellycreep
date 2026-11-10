@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_seerr.html" import quota_line, not_linked %}
+{% from "_seerr.html" import quota_line, not_linked with context %}
 {% block title %}Requests{% endblock %}
 {% block content %}
 {% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}

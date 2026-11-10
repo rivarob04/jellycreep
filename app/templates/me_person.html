@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_seerr.html" import pcard %}
+{% from "_seerr.html" import pcard with context %}
 {% block title %}{{ p.name }}{% endblock %}
 {% block content %}
 <a class="small back-link" href="javascript:history.back()">← Back</a>
