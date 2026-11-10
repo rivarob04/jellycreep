@@ -167,6 +167,27 @@ def prune() -> None:
         db.commit()
 
 
+_poll_lock = asyncio.Lock()
+_poll_again = False
+
+
+async def poll_soon() -> None:
+    """Record a start/stop right away (asked for by the live WebSocket); one poll at a time, none lost."""
+    global _poll_again
+    if _poll_lock.locked():
+        _poll_again = True
+        return
+    async with _poll_lock:
+        while True:
+            _poll_again = False
+            try:
+                await poll_once()
+            except Exception:  # noqa: BLE001
+                log.exception("Instant poll failed")
+            if not _poll_again:
+                break
+
+
 async def poll_once() -> None:
     with SessionLocal() as db:
         servers = list(db.scalars(select(Service).where(Service.kind == "jellyfin", Service.enabled.is_(True))))
@@ -178,6 +199,8 @@ async def poll_once() -> None:
             log.warning("Polling %s failed: %s", svc.name, e)
             continue
         started = await asyncio.to_thread(process_sessions, svc.id, sessions)
+        from . import live
+        await live.sessions_seen(svc.id, sessions, "poll")
         for snap in started:
             what = snap["title"] if snap["item_type"] != "Episode" else f"{snap['series_name']} – {snap['title']}"
             line = f"{snap['user_name']} · {what}\n{snap['client'] or '?'} on {snap['device'] or '?'}"

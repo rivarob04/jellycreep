@@ -18,14 +18,14 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import case, func, or_, select
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import __version__, calendar_view, explain, geoip, importer, library, notify, quality, seerr_portal, webpush, stats, storage, tracker, webhooks
+from . import __version__, calendar_view, explain, geoip, importer, library, live, logbuf, notify, quality, seerr_portal, webpush, stats, storage, tracker, updates, webhooks
 from .auth import (CSRF_COOKIE, LoginRequired, User, ViewerOnly, admin_user, api_user, bust_login_cache, client_ip,
                    csrf_token, current_user, jellyfin_login_enabled, limiter, login_settings, oauth, staff_user,
                    user_from_claims, verify_csrf)
@@ -173,10 +173,51 @@ async def lifespan(app: FastAPI):
     _fix_progress()
     task = asyncio.create_task(tracker.run_forever())
     warm = asyncio.create_task(_keep_warm())
+    socks = asyncio.create_task(_live_watchers())
+    logbuf.install()
+    upd = asyncio.create_task(updates.run_forever())
     yield
+    upd.cancel()
     task.cancel()
     warm.cancel()
+    socks.cancel()
     await pool.close()
+
+
+async def _on_live_change(source: str) -> None:
+    ttl_forget("activity")
+    ttl_forget("live:")
+    if source != "poll":
+        await tracker.poll_soon()   # record the start / stop now, not at the next poll
+
+
+live.on_change(_on_live_change)
+
+
+async def _live_watchers() -> None:
+    """One WebSocket per Jellyfin server; picks up servers added later in Settings."""
+    tasks: dict[int, tuple[str, asyncio.Task]] = {}
+    while True:
+        try:
+            want = {s.id: s for s in services(("jellyfin",))}
+            for sid, (sig, t) in list(tasks.items()):
+                svc = want.get(sid)
+                if not svc or f"{svc.url}|{svc.api_key}|{svc.proxy_auth}" != sig or t.done():
+                    t.cancel()
+                    del tasks[sid]
+            for sid, svc in want.items():
+                if sid not in tasks:
+                    client = await client_for(svc)
+                    tasks[sid] = (f"{svc.url}|{svc.api_key}|{svc.proxy_auth}",
+                                  asyncio.create_task(live.watch_jellyfin(svc, client)))
+        except Exception:  # noqa: BLE001
+            log.exception("Live watchers")
+        try:
+            await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            for _, t in tasks.values():
+                t.cancel()
+            raise
 
 
 app = FastAPI(title="JellyCreep", version=__version__, lifespan=lifespan, docs_url=None, redoc_url=None,
@@ -458,7 +499,8 @@ def ambient_url(user: User | None = None) -> str | None:
 
 def render(request: Request, name: str, user: User, **ctx: Any) -> HTMLResponse:
     ctx.update(request=request, user=user, csrf=csrf_token(request), auth_mode=settings.auth_mode,
-               ambient=ctx.get("ambient") or ambient_url(user), imgp="/me/img" if user.is_viewer else "/img")
+               ambient=ctx.get("ambient") or ambient_url(user), imgp="/me/img" if user.is_viewer else "/img",
+               update=updates.info() if user.is_admin else None)
     if user.is_viewer:
         ctx.setdefault("portal_seerr", login_settings()["seerr_discover"] and bool(services(("jellyseerr",))))
         ctx.setdefault("flash", request.session.pop("flash", None))
@@ -3043,6 +3085,74 @@ def _play_dict(p: Play) -> dict:
     return d
 
 
+async def _live_stream(request: Request):
+    """Server-Sent Events: 'change' the moment playback starts, pauses or stops; a ping every 25 s."""
+    async def gen():
+        yield f"retry: 4000\nevent: hello\ndata: {__version__}\n\n"
+        seen = live.VERSION
+        while True:
+            if await request.is_disconnected():
+                break
+            now = await live.wait(seen, 25)
+            if now != seen:
+                seen = now
+                yield f"event: change\ndata: {now}\n\n"
+            else:
+                yield ": ping\n\n"
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
+
+
+@app.get("/live/events", include_in_schema=False)
+async def live_events_staff(request: Request, user: User = Depends(staff_user)):
+    return await _live_stream(request)
+
+
+@app.get("/me/live/events", include_in_schema=False)
+async def live_events_viewer(request: Request, user: User = Depends(current_user)):
+    return await _live_stream(request)
+
+
+@app.get("/version", include_in_schema=False)
+async def running_version(user: User = Depends(staff_user)):
+    """Which JellyCreep is running: open pages compare it with theirs and offer a reload after an update."""
+    return JSONResponse({"version": __version__}, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/me/version", include_in_schema=False)
+async def running_version_viewer(user: User = Depends(current_user)):
+    return JSONResponse({"version": __version__}, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/logs", response_class=HTMLResponse)
+async def page_logs(request: Request, level: str = "info", kind: str = "", q: str = "", user: User = Depends(admin_user)):
+    level = level if level in logbuf.LEVELS else "info"
+    kind = kind if kind in ("all", "app", "web", "upstream", "server") else ""
+    rows, counts = logbuf.query(level, kind, q[:200])
+    return render(request, "logs.html", user, rows=rows, counts=counts, level=level, kind=kind, q=q[:200],
+                  flash=request.session.pop("flash", None),
+                  levels=("debug", "info", "warning", "error"), total=logbuf.MAX)
+
+
+@app.get("/logs/download", include_in_schema=False)
+async def logs_download(level: str = "debug", kind: str = "", q: str = "", user: User = Depends(admin_user)):
+    rows, _ = logbuf.query(level if level in logbuf.LEVELS else "debug", kind, q[:200], limit=logbuf.MAX)
+    name = f"jellycreep-{datetime.now(TZ).strftime('%Y%m%d-%H%M')}.log"
+    return Response(logbuf.as_text(rows), media_type="text/plain; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@app.post("/settings/check-updates")
+async def act_check_updates(request: Request, user: User = Depends(admin_user)):
+    await verify_csrf(request)
+    await updates.check()
+    i = updates.info()
+    request.session["flash"] = {"ok": not i["error"], "msg": (f"v{i['latest']} is available." if i["newer"] else
+                                f"You're up to date (v{i['current']}).") if not i["error"] else f"Couldn't check: {i['error']}"}
+    back = urlsplit(request.headers.get("referer", "")).path
+    return RedirectResponse(back if _local_path(back) else "/logs", status_code=303)
+
+
 @app.get("/api-docs", include_in_schema=False)
 async def api_docs(user: User = Depends(staff_user)):
     from fastapi.openapi.docs import get_swagger_ui_html
@@ -3133,6 +3243,8 @@ async def api_webhook(source: str, request: Request, user: User = Depends(api_us
         db.commit()
         ev_id = ev.id
     et = str(etype)
+    if source == "jellyfin" and ("playback" in et.lower() or et.lower() in ("play", "stop", "pause", "resume")):
+        asyncio.create_task(live.changed("jellyfin webhook"))
     base = settings.base_url or ""
     if source in ("sonarr", "radarr", "lidarr") and et in ("DownloadFailed", "ManualInteractionRequired", "ImportFailed"):
         notify.send_later("download_failed", f"❌ {source.capitalize()}: download failed", f"{title}\n{detail or ''}".strip(),

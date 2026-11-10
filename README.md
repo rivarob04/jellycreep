@@ -80,6 +80,7 @@ Admins and members sign in through **Authentik** (forward auth or OIDC). Members
 
 ### Activity
 - A Tautulli Remote-style card for each stream: poster, title, episode, the person, a **platform logo** (Android TV, Shield, Apple TV, iOS, Android, Roku, Fire TV, web browsers, Moonfin, Wholphin, Infuse, Kodi and more), type and play-method icons, and time left.
+- **Instant updates**: JellyCreep listens to Jellyfin's own live connection (no plugin), so streams appear, pause and disappear within a second or two, on both the admin and viewer pages, with no refreshing.
 - A summary line, e.g. *"3 streams (1 Direct Stream, 1 Direct Play, 1 Transcode) · 29.1 Mbps (LAN 15.1, WAN 14.0)"*.
 - Expand a card for the player, the source → transcoded codecs and resolution, the bitrate, the **transcode reason in plain English**, the IP address with **location and ISP**, and the server.
 - **Send message** pops a note up on the player. **Stop stream** ends it, with your message if you typed one.
@@ -113,6 +114,10 @@ Plays and watch time per day (movies vs TV, with hover tooltips), this period vs
 
 ### Invites (Wizarr)
 Create an invite on your phone (server, libraries, expiry, access length, downloads and Live TV), then share it with your phone's share sheet. You can extend, disable, enable or delete Wizarr users.
+
+### Logs and updates
+- **Logs**: the last 3,000 log lines in the app, filterable by level and source (JellyCreep, calls to your apps, web requests), searchable, with Follow and Download. API keys and tokens are hidden.
+- **Update check**: admins see a banner when a newer JellyCreep is on GitHub. After you redeploy, anyone with JellyCreep open gets a "JellyCreep has been updated: Reload" prompt.
 
 ### Events and notifications
 - An **Events** timeline of grabs, imports, requests and health alerts, pushed in by webhooks from the *arrs, Seerr and Jellyfin.
@@ -301,6 +306,7 @@ Everything except the first few variables can also be set in the UI. The full li
 | `WATCHED_PERCENT` | `90` | Counted as finished at this progress |
 | `HISTORY_RETENTION_DAYS` | `0` | `0` keeps history forever |
 | `GEOIP` | `ipwhois` | Set to `off` to stop looking up IP locations (via ipwho.is) |
+| `UPDATE_CHECK` | `on` | Checks GitHub every 6 hours for a newer JellyCreep and tells admins. `off` to disable |
 | `VAPID_SUBJECT` | – | Contact address for Web Push |
 | `<APP>_URL`, `<APP>_API_KEY`, `<APP>_PROXY_AUTH`, `<APP>_PUBLIC_URL` | – | Connect an app from variables instead of Settings |
 | `AUTHENTIK_URL`, `AUTHENTIK_SERVICE_USERNAME`, `AUTHENTIK_SERVICE_APP_PASSWORD` | – | Service account for apps behind Authentik |

@@ -41,41 +41,76 @@
         wireHero();
       } catch (_) { /* keep last view */ }
     };
-    // Live refresh: every N seconds (chosen per device), never overlapping, paused while the app is hidden.
+    // Live: the server tells us the moment a stream starts, pauses or stops (Server-Sent Events), and we
+    // re-fetch then. A quiet refresh every 30 s keeps progress bars moving. Falls back to polling if the
+    // event stream can't stay connected (e.g. a proxy that buffers it).
     const ctl = document.querySelector("[data-live-ctl]");
-    const sel = ctl && ctl.querySelector("select");
     const label = ctl && ctl.querySelector("[data-live-label]");
-    const getEvery = () => { try { const v = localStorage.getItem("jc-live"); return v === null ? 10 : +v; } catch (_) { return 10; } };
-    let every = getEvery(), timer = null, busy = false, lastAt = Date.now();
-    if (sel) sel.value = String(every);
-    const paint = () => {
-      if (!label) return;
-      const s = Math.round((Date.now() - lastAt) / 1000);
-      label.textContent = every ? (s < 3 ? "Live · just updated" : `Live · updated ${s}s ago`) : "Auto-refresh off";
-      ctl.classList.toggle("off", !every);
+    let busy = false, again = false, lastAt = Date.now(), poll = null, es = null, fails = 0;
+    const run = async () => {
+      if (busy) { again = true; return; }
+      busy = true;
+      do { again = false; await refresh(); } while (again);
+      busy = false; lastAt = Date.now();
     };
-    const tick = async () => {
-      clearTimeout(timer);
-      if (!every) { paint(); return; }
-      if (!document.hidden && !busy) {
-        busy = true; ctl && ctl.classList.add("busy");
-        await refresh();
-        busy = false; lastAt = Date.now(); ctl && ctl.classList.remove("busy");
-      }
-      timer = setTimeout(tick, every * 1000);
+    let soon = null, later = null;
+    // fetch right away, and once more a moment later in case Jellyfin was still catching up
+    const kick = () => { clearTimeout(soon); clearTimeout(later); soon = setTimeout(run, 250); later = setTimeout(run, 3000); };
+    const setMode = (m) => { if (ctl) { ctl.dataset.mode = m; ctl.classList.toggle("off", m === "off"); }
+      if (label) label.textContent = m === "instant" ? "Live" : m === "polling" ? "Live · every 15 s" : "Reconnecting…"; };
+    const startPolling = () => { if (!poll) { poll = setInterval(() => { if (!document.hidden) run(); }, 15000); setMode("polling"); } };
+    const connect = () => {
+      if (!window.EventSource) { startPolling(); return; }
+      const url = live.dataset.events || (location.pathname.startsWith("/me") ? "/me/live/events" : "/live/events");
+      es = new EventSource(url);
+      es.addEventListener("open", () => { fails = 0; setMode("instant"); if (poll) { clearInterval(poll); poll = null; } });
+      es.addEventListener("change", kick);
+      es.addEventListener("hello", (e) => { window.jcSawVersion && window.jcSawVersion(e.data); });
+      es.addEventListener("error", () => {
+        fails += 1;
+        if (fails >= 3) { es.close(); startPolling(); setTimeout(() => { fails = 0; connect(); }, 120000); }
+      });
     };
-    sel && sel.addEventListener("change", () => {
-      every = +sel.value; try { localStorage.setItem("jc-live", String(every)); } catch (_) {}
-      tick();
-    });
-    ctl && ctl.querySelector("[data-live-now]")?.addEventListener("click", async () => {
-      busy = true; ctl.classList.add("busy"); await refresh(); busy = false; lastAt = Date.now(); ctl.classList.remove("busy"); paint();
-    });
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
-    setInterval(paint, 1000);
-    timer = setTimeout(tick, every * 1000);
-    paint();
+    connect();
+    // progress bars and "time left" drift slowly: a quiet refresh every 30 s while the page is visible
+    setInterval(() => { if (!document.hidden && Date.now() - lastAt > 28000) run(); }, 5000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() - lastAt > 5000) run(); });
   }
+
+  // A newer JellyCreep is running than the one this page came from (it was redeployed): offer a reload.
+  const mine = document.documentElement.dataset.v;
+  const toast = document.querySelector("[data-reload-toast]");
+  const sawVersion = (v) => { if (v && mine && v !== mine && toast) toast.hidden = false; };
+  window.jcSawVersion = sawVersion;
+  toast && toast.querySelector("[data-reload]").addEventListener("click", () => location.reload());
+  let verAt = Date.now();
+  const checkVersion = async () => {
+    verAt = Date.now();
+    try { const r = await fetch(location.pathname.startsWith("/me") ? "/me/version" : "/version", { cache: "no-store" });
+      if (r.ok) sawVersion((await r.json()).version); } catch (_) {}
+  };
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() - verAt > 60000) checkVersion(); });
+  setInterval(() => { if (!document.hidden) checkVersion(); }, 15 * 60 * 1000);
+
+  // Admins: "new version on GitHub" banner, dismissible per version.
+  const upd = document.querySelector("[data-upd]");
+  if (upd) {
+    const k = "jc-upd-dismissed";
+    let gone = null; try { gone = localStorage.getItem(k); } catch (_) {}
+    if (gone !== upd.dataset.upd) upd.hidden = false;
+    upd.querySelector(".upd-x").addEventListener("click", () => { upd.hidden = true; try { localStorage.setItem(k, upd.dataset.upd); } catch (_) {} });
+  }
+
+  // Logs: follow (reload every 5 s while ticked); filters apply as soon as they change.
+  const follow = document.querySelector("[data-follow]");
+  if (follow) {
+    try { follow.checked = localStorage.getItem("jc-follow") === "1"; } catch (_) {}
+    let ft = null;
+    const sched = () => { clearTimeout(ft); if (follow.checked) ft = setTimeout(() => { if (!document.hidden && !document.querySelector(".lg-list details[open]")) location.reload(); else sched(); }, 5000); };
+    follow.addEventListener("change", () => { try { localStorage.setItem("jc-follow", follow.checked ? "1" : "0"); } catch (_) {} sched(); });
+    sched();
+  }
+  document.querySelectorAll("form[data-autosubmit] input[type=radio]").forEach((r) => r.addEventListener("change", () => r.form.submit()));
 
   // Home page rows that need other apps load after the page is on screen.
   document.querySelectorAll("[data-lazy]").forEach(async (box) => {

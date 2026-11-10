@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="dark" data-v="{{ version }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -63,6 +63,9 @@
 </header>
 
 <main>
+{% if update and update.newer %}<div class="upd-banner" data-upd="{{ update.latest }}" hidden>
+  <span>✨ <b>JellyCreep v{{ update.latest }}</b> is available (you're on v{{ update.current }}). In Dockhand: Pull, then Redeploy.</span>
+  <a href="{{ update.url }}" target="_blank" rel="noopener">What's new ↗</a><button type="button" class="upd-x" aria-label="Dismiss">✕</button></div>{% endif %}
 {% block content %}{% endblock %}
 </main>
 
@@ -79,6 +82,7 @@
   'stats': '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   'media': '<rect x="3" y="7" width="14" height="13" rx="2"/><path d="M7 4h12a2 2 0 0 1 2 2v11"/><path d="M6 17l3-4 3 3 2-2 3 3"/>',
   'automation': '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/>',
+  'logs': '<path d="M4 5h16M4 10h16M4 15h10M4 20h7"/>',
   'events': '<path d="M3 11v2a2 2 0 0 0 2 2h2l5 4V5L7 9H5a2 2 0 0 0-2 2z"/><path d="M16 8a5 5 0 0 1 0 8"/>',
   'add': '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
   'invites': '<path d="M3 7l9 6 9-6"/><rect x="3" y="5" width="18" height="14" rx="2"/>',
@@ -99,7 +103,7 @@
                      ('/media', 'Libraries', 'media', False), ('/users', 'Users', 'users', False), ('/stats', 'Statistics', 'stats', False),
                      ('/automation', 'Automation', 'automation', False), ('/events', 'Events', 'events', False),
                      ('/notifications', 'Notifications', 'bell', False)] %}
-  {% set nav_extra = ([('/add', 'Add a Show or Movie', 'add', False), ('/invites', 'Invite a User', 'invites', False), ('/settings', 'Settings', 'settings', False)] if user.is_admin else []) %}
+  {% set nav_extra = ([('/add', 'Add a Show or Movie', 'add', False), ('/invites', 'Invite a User', 'invites', False), ('/logs', 'Logs', 'logs', False), ('/settings', 'Settings', 'settings', False)] if user.is_admin else []) %}
 {% endif %}
 <div class="drawer-scrim" data-drawer-close></div>
 <aside class="drawer" id="drawer" aria-label="Menu" aria-hidden="true">
@@ -119,8 +123,9 @@
     {% if user.is_viewer %}<a href="/logout"><svg viewBox="0 0 24 24">{{ ico.logout|safe }}</svg>Sign Out</a>
     {% elif auth_mode != 'none' %}<a href="/auth/logout"><svg viewBox="0 0 24 24">{{ ico.logout|safe }}</svg>Sign Out</a>{% endif %}
   </nav>
-  <div class="drawer-foot">JellyCreep v{{ version }}</div>
+  <div class="drawer-foot">JellyCreep v{{ version }}{% if update and update.newer %} · <a href="/logs">v{{ update.latest }} available</a>{% endif %}</div>
 </aside>
+<div class="upd-toast" data-reload-toast hidden><span>JellyCreep has been updated.</span><button type="button" class="btn sm primary" data-reload>Reload</button></div>
 <script src="/static/app.js?v={{ version }}" defer></script>
 </body>
 </html>

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Logs{% endblock %}
+{% block content %}
+<div class="lg-head">
+  <h1>Logs</h1>
+  <div class="row" style="gap:8px">
+    <label class="hi-switch lg-follow"><input type="checkbox" data-follow><span></span>Follow</label>
+    <a class="btn sm" href="/logs/download?{{ {'level': level, 'kind': kind, 'q': q}|urlencode }}">Download</a>
+  </div>
+</div>
+{% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}
+
+<div class="card lg-ver">
+  <div>
+    <b>JellyCreep v{{ update.current }}</b>
+    {% if not update.enabled %}<span class="muted small"> · update check is off (UPDATE_CHECK=off)</span>
+    {% elif update.newer %}<span class="badge b-acc">v{{ update.latest }} available</span> <a class="small" href="{{ update.url }}" target="_blank" rel="noopener">What's new ↗</a>
+      <div class="small muted">In Dockhand: Pull, then Redeploy.</div>
+    {% elif update.latest %}<span class="badge b-ok">Up to date</span>
+    {% elif update.error %}<span class="muted small"> · couldn't check GitHub: {{ update.error }}</span>{% endif %}
+  </div>
+  {% if update.enabled %}
+  <form method="post" action="/settings/check-updates"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm">Check for updates</button></form>
+  {% endif %}
+</div>
+
+<form method="get" class="lg-filters" data-autosubmit>
+  <div class="hi-opts">
+    {% for l in levels %}<label class="hi-opt"><input type="radio" name="level" value="{{ l }}" {{ 'checked' if level == l }}><span>{{ {'debug': 'All levels', 'info': 'Info+', 'warning': 'Warnings', 'error': 'Errors'}[l] }}{% if l == 'warning' and counts.warning %} · {{ counts.warning }}{% elif l == 'error' and counts.error %} · {{ counts.error }}{% endif %}</span></label>{% endfor %}
+  </div>
+  <div class="hi-opts">
+    {% for k, v in (('', 'Important'), ('app', 'JellyCreep'), ('upstream', 'Calls to your apps'), ('web', 'Web requests'), ('server', 'Server'), ('all', 'Everything')) %}
+    <label class="hi-opt"><input type="radio" name="kind" value="{{ k }}" {{ 'checked' if kind == k }}><span>{{ v }}</span></label>{% endfor %}
+  </div>
+  <div class="hi-search lg-search">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <input type="search" name="q" value="{{ q }}" placeholder="Search the logs" aria-label="Search the logs">
+  </div>
+</form>
+
+<p class="small muted">Newest first · the last {{ total }} lines since JellyCreep started. API keys and tokens are hidden.</p>
+<div class="card lg-list">
+  {% for r in rows %}
+  {% set multi = '\n' in r.msg %}
+  <div class="lg-row lg-{{ r.level|lower }}">
+    <span class="lg-time" title="{{ r.ts|local }}">{{ r.ts|local('%b %-d %-I:%M:%S %p') }}</span>
+    <span class="lg-lvl">{{ r.level }}</span>
+    <span class="lg-src">{{ r.name }}</span>
+    {% if multi %}<details class="lg-msg"><summary>{{ r.msg.split('\n')[0] }}</summary><pre>{{ r.msg }}</pre></details>
+    {% else %}<span class="lg-msg">{{ r.msg }}</span>{% endif %}
+  </div>
+  {% else %}<div class="empty">Nothing matches these filters.</div>{% endfor %}
+</div>
+{% endblock %}

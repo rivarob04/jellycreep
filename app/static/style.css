@@ -2242,3 +2242,40 @@ details.play-on { min-width: 0; max-width: 100%; }
 .dl-row.bad .dl-state { color: #ff8a8a; }
 .dl-bar { grid-column: 1 / -1; height: 3px; border-radius: 99px; background: rgba(255,255,255,.1); overflow: hidden; }
 .dl-bar i { display: block; height: 100%; background: linear-gradient(90deg, #aa5cc3, #00a4dc); }
+/* v0.18.74 — live indicator: green = instant updates, amber = falling back to every 15 s */
+.live-ctl[data-mode="polling"] .live-dot { background: #e0a43b; box-shadow: 0 0 0 3px rgba(224,164,59,.2); animation: none; }
+
+/* v0.18.74 — Logs page, update banner, "JellyCreep has been updated" toast */
+.lg-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.lg-follow { margin: 0; }
+.lg-ver { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.lg-ver .badge { margin-left: 6px; }
+.lg-filters { display: grid; gap: 10px; margin-bottom: 10px; }
+.lg-search { max-width: 420px; }
+.lg-list { padding: 4px 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+.lg-row { display: grid; grid-template-columns: 150px 74px minmax(90px, 170px) minmax(0, 1fr); gap: 10px; padding: 6px 14px;
+  border-top: 1px solid var(--glass-line, rgba(255,255,255,.06)); align-items: baseline; min-width: 0; }
+.lg-row:first-child { border-top: 0; }
+.lg-time { color: var(--muted); white-space: nowrap; }
+.lg-lvl { font-weight: 700; font-size: 11px; letter-spacing: .04em; }
+.lg-src { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-msg { overflow-wrap: anywhere; min-width: 0; }
+.lg-msg summary { cursor: pointer; }
+.lg-msg pre { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11.5px; color: var(--muted); }
+.lg-debug .lg-lvl { color: var(--muted); }
+.lg-info .lg-lvl { color: #6cb6ff; }
+.lg-warning { background: rgba(224,164,59,.07); } .lg-warning .lg-lvl { color: #e0a43b; }
+.lg-error, .lg-critical { background: rgba(255,90,90,.09); } .lg-error .lg-lvl, .lg-critical .lg-lvl { color: #ff7a7a; }
+@media (max-width: 760px) {
+  .lg-row { grid-template-columns: auto auto minmax(0, 1fr); padding: 8px 12px; }
+  .lg-src { grid-column: 3; }
+  .lg-msg { grid-column: 1 / -1; }
+}
+.upd-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 14px; border-radius: 12px;
+  background: linear-gradient(90deg, rgba(170,92,195,.22), rgba(0,164,220,.18)); border: 1px solid rgba(170,92,195,.4); font-size: 13.5px; }
+.upd-banner span { flex: 1 1 260px; min-width: 0; }
+.upd-x { border: 0; background: none; color: inherit; cursor: pointer; font-size: 14px; padding: 2px 6px; }
+.upd-toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 90;
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; border-radius: 14px; max-width: calc(100vw - 32px);
+  background: rgba(20,24,36,.96); border: 1px solid rgba(255,255,255,.12); box-shadow: 0 10px 30px rgba(0,0,0,.45); font-size: 14px; }
+.upd-toast[hidden], .upd-banner[hidden] { display: none; }
