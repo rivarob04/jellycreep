@@ -109,7 +109,7 @@ Plays and watch time per day (movies vs TV, with hover tooltips), this period vs
 - A **Calendar** of upcoming episodes and movies, plus health checks and Prowlarr indexer status.
 - **Subtitles** from Bazarr: what's still missing subtitles (and in which languages), recent downloads, paused providers and health. Kick off a search for everything missing.
 - **Seerr requests**: approve or decline from your phone.
-- **Search & add** shows and movies straight to Sonarr or Radarr.
+- **Discover for admins**: the same Seerr-style Discover as your users (search, trending, genres, networks, studios, title pages) at `/discover`. Your requests go in as Seerr's admin, so they're approved straight away. Adding straight to Sonarr / Radarr is still there for when Seerr isn't connected.
 - Each service is shown with its real logo, from [homarr-labs/dashboard-icons](https://github.com/homarr-labs/dashboard-icons).
 
 ### Invites (Wizarr)

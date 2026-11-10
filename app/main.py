@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import quote, urlencode, urlsplit
 import copy
 import json
 import logging
@@ -500,9 +500,13 @@ def ambient_url(user: User | None = None) -> str | None:
 def render(request: Request, name: str, user: User, **ctx: Any) -> HTMLResponse:
     ctx.update(request=request, user=user, csrf=csrf_token(request), auth_mode=settings.auth_mode,
                ambient=ctx.get("ambient") or ambient_url(user), imgp="/me/img" if user.is_viewer else "/img",
-               update=updates.info() if user.is_admin else None)
+               update=updates.info() if user.is_admin else None,
+               dp=_disc_prefix(user), rq="/me/requests" if user.is_viewer else "/discover/requests",
+               admin_seerr=user.is_admin and bool(services(("jellyseerr",))))
     if user.is_viewer:
         ctx.setdefault("portal_seerr", login_settings()["seerr_discover"] and bool(services(("jellyseerr",))))
+        ctx.setdefault("flash", request.session.pop("flash", None))
+    elif name.startswith("me_"):   # Discover pages, shared with admins
         ctx.setdefault("flash", request.session.pop("flash", None))
     return templates.TemplateResponse(request, name, ctx)
 
@@ -1273,7 +1277,10 @@ async def act_arr_queue(sid: int, qid: int, action: str, request: Request, user:
 
 # --- search & add ----------------------------------------------------------------------
 @app.get("/add", response_class=HTMLResponse)
-async def page_add(request: Request, q: str = "", kind: str = "tv", user: User = Depends(admin_user)):
+async def page_add(request: Request, q: str = "", kind: str = "tv", direct: str = "", user: User = Depends(admin_user)):
+    if not direct and services(("jellyseerr",)):
+        # with Seerr connected, adding goes through Discover (search, browse, request = auto-approved for admins)
+        return RedirectResponse("/discover" + (f"?q={quote(q)}" if q else ""), status_code=303)
     kind = "movie" if kind == "movie" else "tv"
     svcs = services(("sonarr",) if kind == "tv" else ("radarr",))
     svc = svcs[0] if svcs else None
@@ -1304,7 +1311,7 @@ async def do_add(sid: int, request: Request, user: User = Depends(admin_user)):
     kind = "tv" if svc.kind == "sonarr" else "movie"
     if err or not found:
         request.session["flash"] = {"ok": False, "msg": err or "Couldn't find that title any more."}
-        return RedirectResponse(f"/add?kind={kind}&q={q}", status_code=303)
+        return RedirectResponse(f"/add?direct=1&kind={kind}&q={quote(q)}", status_code=303)
     try:
         profile_id = int(str(form.get("profile")))
     except ValueError:
@@ -1319,7 +1326,7 @@ async def do_add(sid: int, request: Request, user: User = Depends(admin_user)):
                                 + (" and started searching." if form.get("search") == "on" else ".")}
     if not err:
         log.info("%s added %s to %s", user.name, title, svc.name)
-    return RedirectResponse(f"/add?kind={kind}&q={q}", status_code=303)
+    return RedirectResponse(f"/add?direct=1&kind={kind}&q={quote(q)}", status_code=303)
 
 
 # --- user pages -------------------------------------------------------------------------
@@ -2284,9 +2291,15 @@ async def page_my_library_item(request: Request, sid: int, item_id: str, tab: st
 async def _seerr(user: User, need_discover: bool = True) -> dict | None:
     cfg = login_settings()
     svc = next(iter(services(("jellyseerr",))), None)
-    if not svc or (need_discover and not cfg["seerr_discover"]):
+    if not svc or (need_discover and not cfg["seerr_discover"] and user.is_viewer):
         return None
     client = await client_for(svc)
+    if not user.is_viewer:
+        # JellyCreep admins request as Seerr's admin (the API key's owner) and see everyone's requests
+        acct, err = await safe(seerr_portal.key_owner(client, svc.id))
+        p = seerr_portal.perms(acct)
+        return {"svc": svc, "client": client, "acct": acct, "uid": (acct or {}).get("id"), "perms": p,
+                "everyone": True, "error": err, "manage": bool(acct) and p["manage"]}
     acct, err = await safe(seerr_portal.account(client, svc.id, user, cfg["seerr_autolink"]))
     p = seerr_portal.perms(acct)
     return {"svc": svc, "client": client, "acct": acct, "uid": (acct or {}).get("id"), "perms": p,
@@ -2354,6 +2367,22 @@ def _mark_watchable(jf: dict | None, cards: list[dict] | None, tmdb_key: str = "
     return out
 
 
+def _disc_prefix(user: User) -> str:
+    return "/me/discover" if user.is_viewer else "/discover"
+
+
+def _discover_gate(request: Request, user: User):
+    """Discover is /me/discover for Jellyfin users and /discover for JellyCreep admins."""
+    staff_path = not request.url.path.startswith("/me/")
+    if user.is_viewer and staff_path:
+        return RedirectResponse("/me" + request.url.path + (("?" + request.url.query) if request.url.query else ""), status_code=303)
+    if not user.is_viewer and not user.is_admin:
+        raise HTTPException(403, "Discover is for admins")
+    if not user.is_viewer and not staff_path:
+        return RedirectResponse(request.url.path[3:], status_code=303)
+    return None
+
+
 def _viewer_page(user: User, fallback: str = "/automation?tab=requests"):
     return None if user.is_viewer else RedirectResponse(fallback, status_code=303)
 
@@ -2361,7 +2390,7 @@ def _viewer_page(user: User, fallback: str = "/automation?tab=requests"):
 async def _discover_data(user: User, sc: dict):
     """Everything the Discover front page needs, fetched at the same time (and mostly cached)."""
     c, sid = sc["client"], sc["svc"].id
-    want_added = login_settings()["recent"]
+    want_added = login_settings()["recent"] and user.is_viewer
 
     async def added():
         try:
@@ -2402,9 +2431,10 @@ def warm_discover(user: User) -> None:
 
 
 @app.get("/me/discover", response_class=HTMLResponse)
+@app.get("/discover", response_class=HTMLResponse)
 async def page_discover(request: Request, q: str = "", row: str = "", page: int = 1, network: int = 0, studio: int = 0,
                         genre: int = 0, kind: str = "movie", user: User = Depends(current_user)):
-    if (r := _viewer_page(user)):
+    if (r := _discover_gate(request, user)):
         return r
     sc = await _seerr(user)
     ctx: dict[str, Any] = {"seerr": sc, "q": q.strip()[:100], "row": row if row in seerr_portal.ROW_BY_KEY else "",
@@ -2424,7 +2454,7 @@ async def page_discover(request: Request, q: str = "", row: str = "", page: int 
             gl, _ = await safe(seerr_portal.genres(c, sid, gk))
             name = next((g["name"] for g in gl or [] if g["id"] == genre), None)
             if gl and not name:
-                return RedirectResponse("/me/discover", status_code=303)
+                return RedirectResponse(request.url.path, status_code=303)
             ctx["results"], ctx["error"] = await safe(seerr_portal.browse_genre(c, sid, gk, genre, ctx["page"]))
             ctx.update(row_title=f"{name or 'Genre'} {'Movies' if gk == 'movie' else 'Series'}", row=f"kind={gk}&genre={genre}")
         elif co:
@@ -2447,9 +2477,10 @@ async def page_discover(request: Request, q: str = "", row: str = "", page: int 
 
 
 @app.get("/me/discover/person/{pid}", response_class=HTMLResponse)
+@app.get("/discover/person/{pid}", response_class=HTMLResponse)
 async def page_seerr_person(request: Request, pid: int, user: User = Depends(current_user)):
     """An actor's page in Discover: bio + every movie and show on TMDB, with request / Jellyfin status."""
-    if (r := _viewer_page(user)):
+    if (r := _discover_gate(request, user)):
         return r
     sc = await _seerr(user)
     if not sc:
@@ -2462,8 +2493,9 @@ async def page_seerr_person(request: Request, pid: int, user: User = Depends(cur
 
 
 @app.get("/me/discover/{mt}/{tmdb}", response_class=HTMLResponse)
+@app.get("/discover/{mt}/{tmdb}", response_class=HTMLResponse)
 async def page_title(request: Request, mt: str, tmdb: int, user: User = Depends(current_user)):
-    if (r := _viewer_page(user)):
+    if (r := _discover_gate(request, user)):
         return r
     if mt not in ("movie", "tv"):
         raise HTTPException(404)
@@ -2509,12 +2541,14 @@ async def _title_watch(user: User, jf: dict | None, t: dict) -> dict | None:
 
 
 @app.post("/me/discover/{mt}/{tmdb}/request")
+@app.post("/discover/{mt}/{tmdb}/request")
 async def act_request(request: Request, mt: str, tmdb: int, user: User = Depends(current_user)):
     await verify_csrf(request)
-    if not user.is_viewer or mt not in ("movie", "tv"):
+    if mt not in ("movie", "tv") or (not user.is_viewer and not user.is_admin) or \
+            user.is_viewer != request.url.path.startswith("/me/"):
         raise HTTPException(404)
     sc = await _seerr(user)
-    back = RedirectResponse(f"/me/discover/{mt}/{tmdb}", status_code=303)
+    back = RedirectResponse(f"{_disc_prefix(user)}/{mt}/{tmdb}", status_code=303)
     if not sc or not sc["uid"]:
         request.session["flash"] = {"ok": False, "msg": "Your account isn't linked to Seerr yet — ask the admin."}
         return back
@@ -2599,14 +2633,17 @@ async def page_requests(request: Request, view: str = "everyone", f: str = "all"
 
 
 @app.post("/me/requests/{req_id}/{action}")
+@app.post("/discover/requests/{req_id}/{action}")
 async def act_my_request(request: Request, req_id: int, action: str, user: User = Depends(current_user)):
     await verify_csrf(request)
-    if not user.is_viewer or action not in ("cancel", "approve", "decline"):
+    if action not in ("cancel", "approve", "decline") or (not user.is_viewer and not user.is_admin) or \
+            user.is_viewer != request.url.path.startswith("/me/"):
         raise HTTPException(404)
     form = await request.form()
-    nxt = str(form.get("next") or "/me/requests")
-    if not nxt.startswith("/me"):
-        nxt = "/me/requests"
+    home = "/me/requests" if user.is_viewer else "/discover"
+    nxt = str(form.get("next") or home)
+    if not _local_path(nxt) or not nxt.startswith("/me" if user.is_viewer else "/discover"):
+        nxt = home
     sc = await _seerr(user, need_discover=False)
     if not sc or not sc["uid"] or (action != "cancel" and not sc["manage"]):
         raise HTTPException(403)

@@ -1,18 +1,19 @@
 {% extends "base.html" %}
 {% block title %}Add{% endblock %}
 {% block content %}
-<div class="spread"><h1>Add a Show or Movie</h1><a class="btn sm" href="/automation">Back</a></div>
+<div class="spread"><h1>Add a Show or Movie</h1><span class="row" style="gap:8px">{% if admin_seerr %}<a class="btn sm" href="/discover">← Discover</a>{% endif %}<a class="btn sm" href="/automation">Back</a></span></div>
+{% if admin_seerr %}<p class="small muted" style="margin-top:-4px">Adds straight to Sonarr / Radarr, skipping Seerr. Use Discover to browse and request instead.</p>{% endif %}
 {% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}
 
 <nav class="seg mb">
-  {% if have_tv %}<a href="/add?kind=tv&q={{ q|urlencode }}" class="{{ 'on' if kind == 'tv' }}">📺 TV show</a>{% endif %}
-  {% if have_movie %}<a href="/add?kind=movie&q={{ q|urlencode }}" class="{{ 'on' if kind == 'movie' }}">🎬 Movie</a>{% endif %}
+  {% if have_tv %}<a href="/add?direct=1&kind=tv&q={{ q|urlencode }}" class="{{ 'on' if kind == 'tv' }}">📺 TV show</a>{% endif %}
+  {% if have_movie %}<a href="/add?direct=1&kind=movie&q={{ q|urlencode }}" class="{{ 'on' if kind == 'movie' }}">🎬 Movie</a>{% endif %}
 </nav>
 
 {% if not svc %}
 <div class="card empty"><div class="empty-icon">🔌</div>Connect {{ 'Sonarr' if kind == 'tv' else 'Radarr' }} in <a href="/settings">Settings</a> to add {{ 'shows' if kind == 'tv' else 'movies' }}.</div>
 {% else %}
-<form method="get" action="/add" class="search-bar mb">
+<form method="get" action="/add" class="search-bar mb"><input type="hidden" name="direct" value="1">
   <input type="hidden" name="kind" value="{{ kind }}">
   <input type="search" name="q" value="{{ q }}" placeholder="Search {{ 'TV shows' if kind == 'tv' else 'movies' }}…" enterkeyhint="search" autofocus autocomplete="off">
   <button class="btn primary">Search</button>

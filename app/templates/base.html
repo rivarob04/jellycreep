@@ -48,10 +48,10 @@
     {% if user.is_admin %}<a href="/settings" class="{{ 'on' if path.startswith('/settings') }}">Settings</a>{% endif %}
   </nav>
   {% endif %}
-  {% set search_to = ('/me/discover' if portal_seerr else '/me/library') if user.is_viewer else '/library' %}
+  {% set search_to = ('/me/discover' if portal_seerr else '/me/library') if user.is_viewer else ('/discover' if path.startswith('/discover') else '/library') %}
   <form class="top-search" method="get" action="{{ search_to }}" role="search">
     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
-    <input type="search" name="q" value="{{ request.query_params.get('q', '') }}" placeholder="{{ 'Search movies & series' if search_to == '/me/discover' else 'Search your library' }}" enterkeyhint="search" autocomplete="off" aria-label="Search">
+    <input type="search" name="q" value="{{ request.query_params.get('q', '') }}" placeholder="{{ 'Search movies & series' if search_to in ('/me/discover', '/discover') else 'Search your library' }}" enterkeyhint="search" autocomplete="off" aria-label="Search">
   </form>
   <div class="spacer"></div>
   {% set on_notif = path.endswith('/notifications') %}
@@ -103,7 +103,7 @@
                      ('/media', 'Libraries', 'media', False), ('/users', 'Users', 'users', False), ('/stats', 'Statistics', 'stats', False),
                      ('/automation', 'Automation', 'automation', False), ('/events', 'Events', 'events', False),
                      ('/notifications', 'Notifications', 'bell', False)] %}
-  {% set nav_extra = ([('/add', 'Add a Show or Movie', 'add', False), ('/invites', 'Invite a User', 'invites', False), ('/logs', 'Logs', 'logs', False), ('/settings', 'Settings', 'settings', False)] if user.is_admin else []) %}
+  {% set nav_extra = ([('/discover', 'Discover', 'discover', False) if admin_seerr else ('/add', 'Add a Show or Movie', 'add', False), ('/invites', 'Invite a User', 'invites', False), ('/logs', 'Logs', 'logs', False), ('/settings', 'Settings', 'settings', False)] if user.is_admin else []) %}
 {% endif %}
 <div class="drawer-scrim" data-drawer-close></div>
 <aside class="drawer" id="drawer" aria-label="Menu" aria-hidden="true">

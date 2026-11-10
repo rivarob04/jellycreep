@@ -6,7 +6,7 @@
 {% macro phover(when, title, overview) %}<span class="phover" aria-hidden="true">{% if when %}<small>{{ when }}</small>{% endif %}<strong>{{ title }}</strong>{% if overview %}<span class="ph-ov">{{ overview }}</span>{% endif %}</span>{% endmacro %}
 
 {% macro pcard(c) %}
-<div class="pcard{{ ' on-jf' if c.jf }}"><a class="pcard-in" href="/me/discover/{{ c.type }}/{{ c.id }}" title="{{ c.title }}{{ ' (' ~ c.year ~ ')' if c.year }}">
+<div class="pcard{{ ' on-jf' if c.jf }}"><a class="pcard-in" href="{{ dp }}/{{ c.type }}/{{ c.id }}" title="{{ c.title }}{{ ' (' ~ c.year ~ ')' if c.year }}">
   <span class="pimg">{% if c.poster %}<img loading="lazy" src="{{ c.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ c.title[:1] }}</b>
     {% if c.badge %}<i class="pchip {{ c.badge[1] }}">{{ '✓' if c.status == 5 else c.badge[0] }}</i>{% endif %}
     <em class="ptype {{ c.type }}">{{ 'Movie' if c.type == 'movie' else 'Series' }}</em>
@@ -18,7 +18,7 @@
 
 {# a request shown as a poster, with who asked for it #}
 {% macro rcard(r) %}
-<div class="pcard{{ ' on-jf' if r.jf }}"><a class="pcard-in" href="/me/discover/{{ r.type }}/{{ r.tmdb }}" title="{{ r.title }} — requested by {{ r.by }}">
+<div class="pcard{{ ' on-jf' if r.jf }}"><a class="pcard-in" href="{{ dp }}/{{ r.type }}/{{ r.tmdb }}" title="{{ r.title }} — requested by {{ r.by }}">
   <span class="pimg">{% if r.poster %}<img loading="lazy" src="{{ r.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ r.title[:1] }}</b>
     <i class="pchip {{ r.badge[1] }}">{{ r.badge[0] if r.badge[0] != 'Waiting for approval' else 'Waiting' }}</i>
     {% if r.progress is not none %}<span class="pbar"><i style="width:{{ r.progress }}%"></i></span>{% endif %}</span>
@@ -52,10 +52,10 @@
 {% macro req_item(r, csrf, nxt, show_title=True) %}
 <div class="req-item">
   {% if show_title %}
-  <a class="req-thumb" href="/me/discover/{{ r.type }}/{{ r.tmdb }}">{% if r.poster %}<img loading="lazy" src="{{ r.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ r.title[:1] }}</b></a>
+  <a class="req-thumb" href="{{ dp }}/{{ r.type }}/{{ r.tmdb }}">{% if r.poster %}<img loading="lazy" src="{{ r.poster }}" alt="" onerror="this.remove()">{% endif %}<b>{{ r.title[:1] }}</b></a>
   {% endif %}
   <div class="req-body">
-    {% if show_title %}<a class="req-title" href="/me/discover/{{ r.type }}/{{ r.tmdb }}">{{ r.title }}{% if r.year %} <span class="muted">({{ r.year }})</span>{% endif %}</a>{% endif %}
+    {% if show_title %}<a class="req-title" href="{{ dp }}/{{ r.type }}/{{ r.tmdb }}">{{ r.title }}{% if r.year %} <span class="muted">({{ r.year }})</span>{% endif %}</a>{% endif %}
     <div class="req-who"><span class="avatar" style="background:{{ r.colour }}">{{ r.initial }}</span>
       <span>{% if r.mine %}<b>You</b> requested{% else %}Requested by <b>{{ r.by }}</b>{% endif %}{% if r.ago %} · {{ r.ago }}{% endif %}</span></div>
     <div class="req-tags">
@@ -68,11 +68,11 @@
     {% if r.can_cancel or r.can_manage %}
     <div class="req-actions">
       {% if r.can_manage %}
-      <form method="post" action="/me/requests/{{ r.id }}/approve"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ nxt }}"><button class="btn sm ok">Approve</button></form>
-      <form method="post" action="/me/requests/{{ r.id }}/decline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ nxt }}"><button class="btn sm danger">Decline</button></form>
+      <form method="post" action="{{ rq }}/{{ r.id }}/approve"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ nxt }}"><button class="btn sm ok">Approve</button></form>
+      <form method="post" action="{{ rq }}/{{ r.id }}/decline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ nxt }}"><button class="btn sm danger">Decline</button></form>
       {% endif %}
       {% if r.can_cancel %}
-      <form method="post" action="/me/requests/{{ r.id }}/cancel" onsubmit="return confirm('Cancel this request?')"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ nxt }}"><button class="btn sm">Cancel request</button></form>
+      <form method="post" action="{{ rq }}/{{ r.id }}/cancel" onsubmit="return confirm('Cancel this request?')"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ nxt }}"><button class="btn sm">Cancel request</button></form>
       {% endif %}
     </div>
     {% endif %}
@@ -96,7 +96,7 @@
 <div class="spread section-title"><h2 style="margin:0">Cast</h2>{% if cast|length > 4 %}<span class="small muted">{{ cast|length }} people</span>{% endif %}</div>
 <div class="cast-row mb">
   {% for c in cast %}
-  <a class="cast-card" href="/me/discover/person/{{ c.id }}" title="{{ c.name }}{{ ' as ' ~ c.role if c.role }} — see everything they're in">
+  <a class="cast-card" href="{{ dp }}/person/{{ c.id }}" title="{{ c.name }}{{ ' as ' ~ c.role if c.role }} — see everything they're in">
     <span class="cast-img"><b>{{ c.name[:1] }}</b>{% if c.photo %}<img loading="lazy" src="{{ c.photo }}" alt="" onerror="this.remove()">{% endif %}</span>
     <span class="cast-name">{{ c.name }}</span>
     {% if c.role %}<span class="cast-role">{{ c.role }}</span>{% endif %}
@@ -108,7 +108,7 @@
 
 {# Seerr-style wide request card: backdrop, year, title, who asked, seasons, status, poster #}
 {% macro rwide(r) %}
-<a class="rwide" href="/me/discover/{{ r.type }}/{{ r.tmdb }}"{% if r.backdrop %} style="--bd:url('{{ r.backdrop }}')"{% endif %}>
+<a class="rwide" href="{{ dp }}/{{ r.type }}/{{ r.tmdb }}"{% if r.backdrop %} style="--bd:url('{{ r.backdrop }}')"{% endif %}>
   <span class="rw-body">
     {% if r.year %}<span class="rw-year">{{ r.year }}</span>{% endif %}
     <span class="rw-title">{{ r.title }}</span>

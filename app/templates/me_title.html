@@ -6,10 +6,10 @@
 {% set p = seerr.perms %}
 {% set can = p.movie if t.type == 'movie' else p.tv %}
 {% set can4k = (p['4k_movie'] if t.type == 'movie' else p['4k_tv']) and (has4k.movie if t.type == 'movie' else has4k.tv) %}
-{% set here = '/me/discover/' ~ t.type ~ '/' ~ t.id %}
+{% set here = dp ~ '/' ~ t.type ~ '/' ~ t.id %}
 
 {% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}
-<a class="small back-link" href="/me/discover">← Discover</a>
+<a class="small back-link" href="{{ dp }}">← Discover</a>
 
 <section class="title-hero"{% if t.backdrop %} style="--bd:url('{{ t.backdrop }}')"{% endif %}>
   <div class="th-inner">

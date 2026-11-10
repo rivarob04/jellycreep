@@ -431,6 +431,20 @@ def _match(users: list[dict], jf_id: str, name: str) -> dict | None:
     return None
 
 
+async def key_owner(client, svc_id: int) -> dict | None:
+    """The Seerr user the API key belongs to (Seerr's admin): used when a JellyCreep admin requests something."""
+    hit = _C.get(("keyowner", svc_id))
+    if hit and hit[0] > time.time():
+        return hit[1]
+    try:
+        me = await client.get("/api/v1/auth/me") or None
+    except UpstreamError:
+        return hit[1] if hit else None
+    if me and me.get("id"):
+        _C[("keyowner", svc_id)] = (time.time() + 3600, me)   # only remember a real answer
+    return me
+
+
 async def users_cached(client, svc_id: int) -> list[dict]:
     return await cached(("users", svc_id), 300, lambda: _all_users(client))
 

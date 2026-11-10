@@ -3,11 +3,15 @@
 {% block title %}Discover{% endblock %}
 {% block content %}
 {% if flash %}<div class="notice {{ 'ok' if flash.ok else 'bad' }}">{{ flash.msg }}</div>{% endif %}
-<form class="disc-search hide-desk" method="get" action="/me/discover" role="search">
+<form class="disc-search hide-desk" method="get" action="{{ dp }}" role="search">
   <input type="search" name="q" value="{{ q }}" placeholder="Search movies & series" enterkeyhint="search" autocomplete="off" aria-label="Search">
   <button class="btn primary">Search</button>
 </form>
 
+{% if not user.is_viewer and seerr and not (q or row) %}
+<div class="disc-admin small muted">Search or browse, then request: as an admin your requests are approved straight away.
+  <a href="/add?direct=1">Add straight to Sonarr / Radarr instead →</a></div>
+{% endif %}
 {% if not seerr %}
 <div class="card empty"><div class="empty-icon">🎬</div>Requests aren't switched on for this server.</div>
 {% else %}
@@ -16,7 +20,7 @@
 {% if q or row %}
 {% if co_logo %}<div class="co-head"><img src="{{ co_logo }}" alt="{{ row_title }}" onerror="this.remove()"></div>{% endif %}
 <div class="spread section-title"><h2 style="margin:0">{% if q %}Results for “{{ q }}”{% else %}{{ row_title }}{% endif %}</h2>
-  <a class="small" href="/me/discover">← Discover</a></div>
+  <a class="small" href="{{ dp }}">← Discover</a></div>
 {% if error %}<div class="notice bad small">Couldn't reach Seerr: {{ error }}</div>{% endif %}
 <div class="pgrid">{% for c in results %}{{ pcard(c) }}{% else %}<p class="muted">Nothing found.</p>{% endfor %}</div>
 {% if results|length >= 20 %}
@@ -39,28 +43,28 @@
 </div>
 {% endif %}
 {% if recent %}
-<div class="spread section-title"><h2 style="margin:0">{{ 'Recent Requests' if seerr.everyone else 'Your requests' }}</h2><a class="small" href="/me/requests">All →</a></div>
+<div class="spread section-title"><h2 style="margin:0">{{ 'Recent Requests' if seerr.everyone else 'Your requests' }}</h2><a class="small" href="{{ '/me/requests' if user.is_viewer else '/automation?tab=requests' }}">All →</a></div>
 <div class="rwide-row mb">{% for r in recent %}{{ rwide(r) }}{% endfor %}</div>
 {% endif %}
 {% if error and not rows %}<div class="notice bad small">Couldn't reach Seerr: {{ error }}</div>{% endif %}
 {% macro co_tiles(kind, title) %}
 <div class="spread section-title"><h2 style="margin:0">{{ title }}</h2></div>
 <div class="co-row mb">{% for t in tiles[kind] %}
-  <a class="co-tile" href="/me/discover?{{ kind }}={{ t.id }}" title="{{ t.name }}"><b>{{ t.name }}</b><img loading="lazy" src="{{ t.logo }}" alt="" onload="this.parentNode.classList.add('ok')" onerror="this.remove()"></a>
+  <a class="co-tile" href="{{ dp }}?{{ kind }}={{ t.id }}" title="{{ t.name }}"><b>{{ t.name }}</b><img loading="lazy" src="{{ t.logo }}" alt="" onload="this.parentNode.classList.add('ok')" onerror="this.remove()"></a>
 {% endfor %}</div>
 {% endmacro %}
 {% macro genre_tiles(kind, title) %}
 {% if genres and genres[kind] %}
 <div class="spread section-title"><h2 style="margin:0">{{ title }}</h2></div>
 <div class="co-row genre-row mb">{% for g in genres[kind] %}
-  <a class="genre-tile" href="/me/discover?kind={{ kind }}&genre={{ g.id }}" style="--tone:{{ g.tone }}"{% if g.img %} data-bg{% endif %}>
+  <a class="genre-tile" href="{{ dp }}?kind={{ kind }}&genre={{ g.id }}" style="--tone:{{ g.tone }}"{% if g.img %} data-bg{% endif %}>
     {% if g.img %}<img loading="lazy" src="{{ g.img }}" alt="" onerror="this.remove()">{% endif %}<b>{{ g.name }}</b></a>
 {% endfor %}</div>
 {% endif %}
 {% endmacro %}
 {% set ns = namespace(studios=False, networks=False) %}
 {% for r in rows %}
-<div class="spread section-title"><h2 style="margin:0">{{ r.title }}</h2><a class="small" href="/me/discover?row={{ r.key }}">See all →</a></div>
+<div class="spread section-title"><h2 style="margin:0">{{ r.title }}</h2><a class="small" href="{{ dp }}?row={{ r.key }}">See all →</a></div>
 <div class="prow mb">{% for c in r['items'] %}{{ pcard(c) }}{% endfor %}</div>
 {% if r.key == 'movies' %}{{ genre_tiles('movie', 'Movie Genres') }}{{ co_tiles('studio', 'Studios') }}{% set ns.studios = True %}{% endif %}
 {% if r.key == 'tv' %}{{ genre_tiles('tv', 'Series Genres') }}{{ co_tiles('network', 'Networks') }}{% set ns.networks = True %}{% endif %}
